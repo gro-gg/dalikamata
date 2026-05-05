@@ -18,12 +18,12 @@ var domainCmd = &cobra.Command{
 		domainApp := app.NewDomainApp()
 
 		natsPort, err := cmd.PersistentFlags().GetInt("nats-port")
+		if err == nil && natsPort != 0 {
+			domainApp.NATSPort = natsPort
+		}
 		natsHost, err := cmd.PersistentFlags().GetString("nats-host")
 		if err == nil && natsHost != "" {
 			domainApp.NATSHost = natsHost
-		}
-		if err == nil && natsPort != 0 {
-			domainApp.NATSPort = natsPort
 		}
 		natsPath, err := cmd.PersistentFlags().GetString("nats-path")
 		if err == nil && natsPath != "" {

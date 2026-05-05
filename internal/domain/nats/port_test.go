@@ -23,6 +23,7 @@ func TestIngestGitRepo(t *testing.T) {
 	ns.Port = 4444
 	ns.DataDir = t.TempDir()
 	shutdownNATS, err := ns.Start()
+	is.NoErr(err)
 	t.Cleanup(shutdownNATS)
 
 	nc, err := nats.Connect(natsURL)
