@@ -76,13 +76,17 @@ func paginate[T any](ctx context.Context, c *httpClient, path string, params url
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				c.logger.Error("closing response body", "error", err)
+			}
 			return nil, fmt.Errorf("unexpected status %d for %s", resp.StatusCode, path)
 		}
 
 		var page pagedResponse[T]
 		err = json.NewDecoder(resp.Body).Decode(&page)
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			c.logger.Error("closing response body", "error", err)
+		}
 		if err != nil {
 			return nil, err
 		}

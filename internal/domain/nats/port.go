@@ -88,10 +88,14 @@ func (s *NATSPort) gitRepoHandler() func(msg jetstream.Msg) {
 		err := json.Unmarshal(msg.Data(), &repo)
 		if err != nil {
 			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
-			msg.Nak()
+			if err := msg.Nak(); err != nil {
+				l.Error("nacking message", "error", err)
+			}
 			return
 		}
 		l.Info("received repo", "payload", repo)
-		msg.Ack()
+		if err := msg.Ack(); err != nil {
+			l.Error("acking message", "error", err)
+		}
 	}
 }
