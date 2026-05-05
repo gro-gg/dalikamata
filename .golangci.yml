@@ -1,0 +1,15 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck       # unchecked errors
+    - govet          # suspicious constructs
+    - staticcheck    # broad static analysis (includes SA, S, ST families)
+    - ineffassign    # assignments whose values are never used
+    - unused         # unused code
+#    - gosimple       # simplification suggestions
+#    - gocritic       # opinionated but useful style checks
+#    - noctx          # http calls without context
+#    - bodyclose      # unclosed http response bodies
+#    - exhaustive     # exhaustive enum switches
+#    - revive         # drop-in golint replacement
