@@ -16,15 +16,16 @@ var metricsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		metricsApp := app.NewMetricsApp()
 
+		var err error
 		metricsURL, err := cmd.Flags().GetString("metrics-addr")
 		if err == nil {
 			metricsApp.MetricsURL = metricsURL
 		}
-		natsHost, err := cmd.Flags().GetString("nats-host")
+		natsHost, err = cmd.Flags().GetString("nats-host")
 		if err == nil {
 			metricsApp.NATSHost = natsHost
 		}
-		natsPort, err := cmd.Flags().GetInt("nats-port")
+		natsPort, err = cmd.Flags().GetInt("nats-port")
 		if err == nil {
 			metricsApp.NATSPort = natsPort
 		}

@@ -17,15 +17,16 @@ var domainCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		domainApp := app.NewDomainApp()
 
-		natsPort, err := cmd.PersistentFlags().GetInt("nats-port")
+		var err error
+		natsPort, err = cmd.PersistentFlags().GetInt("nats-port")
 		if err == nil && natsPort != 0 {
 			domainApp.NATSPort = natsPort
 		}
-		natsHost, err := cmd.PersistentFlags().GetString("nats-host")
+		natsHost, err = cmd.PersistentFlags().GetString("nats-host")
 		if err == nil && natsHost != "" {
 			domainApp.NATSHost = natsHost
 		}
-		natsPath, err := cmd.PersistentFlags().GetString("nats-path")
+		natsPath, err = cmd.PersistentFlags().GetString("nats-path")
 		if err == nil && natsPath != "" {
 			domainApp.DataDir = natsPath
 		}

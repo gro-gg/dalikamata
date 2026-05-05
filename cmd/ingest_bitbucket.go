@@ -16,11 +16,12 @@ var bitbucketCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		app := app.NewIngestBitbucketApp()
 
-		natsHost, err := cmd.Flags().GetString("nats-host")
+		var err error
+		natsHost, err = cmd.Flags().GetString("nats-host")
 		if err == nil {
 			app.NATSHost = natsHost
 		}
-		natsPort, err := cmd.Flags().GetInt("nats-port")
+		natsPort, err = cmd.Flags().GetInt("nats-port")
 		if err == nil {
 			app.NATSPort = natsPort
 		}
