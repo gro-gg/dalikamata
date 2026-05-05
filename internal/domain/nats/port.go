@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 
@@ -26,11 +25,7 @@ const (
 )
 
 type NATSPort struct {
-	logger             *slog.Logger
-	natsAddr           string
-	natsPort           int
-	natsStartupTimeout time.Duration
-	jetstreamDir       string
+	logger *slog.Logger
 }
 
 func NATSConnectionString(natsHost string, natsPort int) string {
