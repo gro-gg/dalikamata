@@ -55,7 +55,7 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false, "enable debug mode")
-	rootCmd.PersistentFlags().BoolVar(&withNatsServer, "nats-server", true, "enable debug mode")
+	rootCmd.PersistentFlags().BoolVar(&withNatsServer, "nats-server", true, "start NATS server?")
 	rootCmd.PersistentFlags().StringVar(&natsHost, "nats-host", "0.0.0.0", "NATS server host name")
 	rootCmd.PersistentFlags().IntVar(&natsPort, "nats-port", 4222, "NATS server port")
 	rootCmd.PersistentFlags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
