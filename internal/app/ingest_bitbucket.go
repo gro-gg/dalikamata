@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/httpclient"
 	"codeberg.org/aeforged/dalikamata/internal/ingest/bitbucket"
 )
 
@@ -15,6 +16,7 @@ type IngestBitbucketApp struct {
 	NATSHost       string
 	NATSPort       int
 	Projects       []string
+	CACertsDir     string
 }
 
 func NewIngestBitbucketApp() *IngestBitbucketApp {
@@ -39,7 +41,11 @@ func (a *IngestBitbucketApp) Run(ctx context.Context, logger *slog.Logger) error
 	defer publisherCloser()
 
 	l.Info("Starten Publisher", "nats_url", natsURL)
-	client := bitbucket.NewClient(a.BitbucketURL, a.BitbucketToken, logger)
+	httpCl, err := httpclient.NewHTTPClient(a.CACertsDir)
+	if err != nil {
+		return fmt.Errorf("building HTTP client: %w", err)
+	}
+	client := bitbucket.NewClient(a.BitbucketURL, a.BitbucketToken, httpCl, logger)
 	crawler := bitbucket.NewCrawler(client, publisher, a.Projects, logger)
 
 	bitbucketService, err := bitbucket.NewIngestBitbucketService(l, crawler)

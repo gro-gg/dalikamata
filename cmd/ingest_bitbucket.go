@@ -37,6 +37,10 @@ var bitbucketCmd = &cobra.Command{
 		if err == nil {
 			app.Projects = projects
 		}
+		caCertsDir, err = cmd.Flags().GetString("ca-certs-dir")
+		if err == nil {
+			app.CACertsDir = caCertsDir
+		}
 
 		err = app.Run(cmd.Root().Context(), slog.Default())
 		if err != nil {

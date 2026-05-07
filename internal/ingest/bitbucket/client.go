@@ -27,11 +27,11 @@ type httpClient struct {
 	logger  *slog.Logger
 }
 
-func NewClient(baseURL, token string, logger *slog.Logger) BitbucketClient {
+func NewClient(baseURL, token string, httpCl *http.Client, logger *slog.Logger) BitbucketClient {
 	return &httpClient{
 		baseURL: baseURL,
 		token:   token,
-		client:  &http.Client{},
+		client:  httpCl,
 		logger:  logger,
 	}
 }

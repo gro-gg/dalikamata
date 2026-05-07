@@ -16,6 +16,7 @@ var (
 	natsPort       int
 	natsPath       string
 	withNatsServer bool
+	caCertsDir     string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -59,4 +60,5 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&natsHost, "nats-host", "0.0.0.0", "NATS server host name")
 	rootCmd.PersistentFlags().IntVar(&natsPort, "nats-port", 4222, "NATS server port")
 	rootCmd.PersistentFlags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
+	rootCmd.PersistentFlags().StringVar(&caCertsDir, "ca-certs-dir", "", "directory containing custom CA certificates (.pem, .crt, .cer)")
 }
