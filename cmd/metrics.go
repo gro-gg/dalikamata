@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"codeberg.org/aeforged/dalikamata/internal/app"
-	"codeberg.org/aeforged/dalikamata/internal/metrics"
 )
 
 var metricsCmd = &cobra.Command{
@@ -18,18 +17,9 @@ var metricsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		metricsApp := app.NewMetricsApp(slog.Default())
 
-		metricsURL, err := cmd.Flags().GetString("metrics-addr")
-		if err == nil {
-			metricsApp.MetricsURL = metricsURL
-		}
-		natsHost, err := cmd.Flags().GetString("nats-host")
-		if err == nil {
-			metricsApp.NATSHost = natsHost
-		}
-		natsPort, err := cmd.Flags().GetInt("nats-port")
-		if err == nil {
-			metricsApp.NATSPort = natsPort
-		}
+		metricsApp.MetricsURL = metricsAddr
+		metricsApp.NATSHost = natsURL
+		metricsApp.NATSPort = natsPort
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
 		var runErr error
@@ -57,5 +47,4 @@ var metricsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(metricsCmd)
-	metricsCmd.Flags().String("metrics-addr", metrics.DefaultMetricsAddr, "metrics HTTP listen address")
 }

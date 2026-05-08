@@ -11,17 +11,22 @@ import (
 
 	"codeberg.org/aeforged/dalikamata/internal/app"
 	"codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/metrics"
 	"github.com/spf13/cobra"
 )
 
 var (
-	debugMode      bool
-	natsURL        string
-	natsPort       int
-	natsPath       string
-	withNatsServer bool
-	caCertsDir     string
-	gracePeriod    time.Duration
+	debugMode         bool
+	natsURL           string
+	natsPort          int
+	natsPath          string
+	withNatsServer    bool
+	caCertsDir        string
+	gracePeriod       time.Duration
+	metricsAddr       string
+	bitbucketURL      string
+	bitbucketToken    string
+	bitbucketProjects []string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -89,4 +94,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
 	rootCmd.PersistentFlags().StringVar(&caCertsDir, "ca-certs-dir", "", "directory containing custom CA certificates (.pem, .crt, .cer)")
 	rootCmd.PersistentFlags().DurationVar(&gracePeriod, "grace-period", 10*time.Second, "grace period for shutdown")
+	rootCmd.PersistentFlags().StringVar(&metricsAddr, "metrics-addr", metrics.DefaultMetricsAddr, "metrics HTTP listen address")
+	rootCmd.PersistentFlags().StringVar(&bitbucketURL, "bitbucket-url", "", "Bitbucket Server base URL (e.g. https://bitbucket.example.com)")
+	rootCmd.PersistentFlags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
+	rootCmd.PersistentFlags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
 }

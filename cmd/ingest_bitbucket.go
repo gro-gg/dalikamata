@@ -16,32 +16,20 @@ var bitbucketCmd = &cobra.Command{
 	Short: "start a bitbucket data ingestion service",
 	Long:  `start a bitbucket data ingestion service`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		app := app.NewIngestBitbucketApp(slog.Default())
+		if bitbucketURL == "" {
+			return fmt.Errorf("--bitbucket-url is required")
+		}
+		if bitbucketToken == "" {
+			return fmt.Errorf("--bitbucket-token is required")
+		}
 
-		natsHost, err := cmd.Flags().GetString("nats-host")
-		if err == nil {
-			app.NATSHost = natsHost
-		}
-		natsPort, err := cmd.Flags().GetInt("nats-port")
-		if err == nil {
-			app.NATSPort = natsPort
-		}
-		bbURL, err := cmd.Flags().GetString("bitbucket-url")
-		if err == nil {
-			app.BitbucketURL = bbURL
-		}
-		bbToken, err := cmd.Flags().GetString("bitbucket-token")
-		if err == nil {
-			app.BitbucketToken = bbToken
-		}
-		projects, err := cmd.Flags().GetStringSlice("bitbucket-projects")
-		if err == nil {
-			app.Projects = projects
-		}
-		caCertsDir, err = cmd.Flags().GetString("ca-certs-dir")
-		if err == nil {
-			app.CACertsDir = caCertsDir
-		}
+		app := app.NewIngestBitbucketApp(slog.Default())
+		app.NATSHost = natsURL
+		app.NATSPort = natsPort
+		app.BitbucketURL = bitbucketURL
+		app.BitbucketToken = bitbucketToken
+		app.Projects = bitbucketProjects
+		app.CACertsDir = caCertsDir
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
 		var runErr error
@@ -69,11 +57,4 @@ var bitbucketCmd = &cobra.Command{
 
 func init() {
 	ingestCmd.AddCommand(bitbucketCmd)
-
-	bitbucketCmd.Flags().String("bitbucket-url", "", "Bitbucket Server base URL (e.g. https://bitbucket.example.com)")
-	bitbucketCmd.Flags().String("bitbucket-token", "", "Bitbucket personal access token")
-	bitbucketCmd.Flags().StringSlice("bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
-
-	_ = bitbucketCmd.MarkFlagRequired("bitbucket-url")
-	_ = bitbucketCmd.MarkFlagRequired("bitbucket-token")
 }

@@ -4,7 +4,8 @@ services:
     build:
       context: ../../
       dockerfile: deploy/docker/Dockerfile
-    command: ["domain"]
+    command:
+      - "domain"
     ports:
       - "4222:4222"
     networks:
@@ -12,7 +13,11 @@ services:
 
   dalikamata-fake-bitbucket:
     image: dalikamata:latest
-    command: ["--nats-server=false", "fake", "bitbucket","--addr=0.0.0.0:7990"]
+    command:
+      - "--nats-server=false"
+      - "fake"
+      - "bitbucket"
+      - "--addr=0.0.0.0:7990"
     ports:
       - "7990:7990"
     networks:
@@ -20,7 +25,14 @@ services:
 
   dalikamata-ingest-bitbucket:
     image: dalikamata:latest
-    command: ["--nats-server=false", "ingest", "bitbucket", "--bitbucket-url=http://dalikamata-fake-bitbucket:7990", "--bitbucket-token=x", "--bitbucket-projects=PROJ,INFR", "--nats-host=dalikamata"]
+    command:
+      - "--nats-server=false"
+      - "--bitbucket-url=http://dalikamata-fake-bitbucket:7990"
+      - "--bitbucket-token=x"
+      - "--bitbucket-projects=PROJ,INFR"
+      - "--nats-host=dalikamata"
+      - "ingest"
+      - "bitbucket"
     depends_on:
       - dalikamata-fake-bitbucket
       - dalikamata
@@ -29,7 +41,11 @@ services:
 
   dalikamata-metrics:
     image: dalikamata:latest
-    command: ["--nats-server=false", "metrics", "--debug", "--nats-port=4222", "--nats-host=dalikamata"]
+    command:
+      - "--nats-server=false"
+      - "--nats-host=dalikamata"
+      - "metrics"
+      - "--debug"
     depends_on:
       - dalikamata
     ports:
