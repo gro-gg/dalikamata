@@ -66,11 +66,10 @@ func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) e
 		return fmt.Errorf("starting consumer: %w", err)
 	}
 
-	go func() {
-		<-ctx.Done()
-		consumeCtx.Drain()
-		nc.Close()
-	}()
+	<-ctx.Done()
+
+	consumeCtx.Drain()
+	nc.Close()
 
 	return nil
 }

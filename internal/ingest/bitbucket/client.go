@@ -32,7 +32,7 @@ func NewClient(baseURL, token string, httpCl *http.Client, logger *slog.Logger) 
 		baseURL: baseURL,
 		token:   token,
 		client:  httpCl,
-		logger:  logger,
+		logger:  logger.With("connection", "http", "client", "bitbucket"),
 	}
 }
 
@@ -76,17 +76,13 @@ func paginate[T any](ctx context.Context, c *httpClient, path string, params url
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			if err := resp.Body.Close(); err != nil {
-				c.logger.Error("closing response body", "error", err)
-			}
+			resp.Body.Close()
 			return nil, fmt.Errorf("unexpected status %d for %s", resp.StatusCode, path)
 		}
 
 		var page pagedResponse[T]
 		err = json.NewDecoder(resp.Body).Decode(&page)
-		if err := resp.Body.Close(); err != nil {
-			c.logger.Error("closing response body", "error", err)
-		}
+		resp.Body.Close()
 		if err != nil {
 			return nil, err
 		}

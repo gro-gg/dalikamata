@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -15,32 +17,39 @@ var domainCmd = &cobra.Command{
 	Short: "start the domain service",
 	Long:  `start the domain service`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		domainApp := app.NewDomainApp()
+		domainApp := app.NewDomainApp(slog.Default())
 
-		var err error
-		natsPort, err = cmd.PersistentFlags().GetInt("nats-port")
-		if err == nil && natsPort != 0 {
-			domainApp.NATSPort = natsPort
-		}
-		natsHost, err = cmd.PersistentFlags().GetString("nats-host")
-		if err == nil && natsHost != "" {
+		if natsHost, err := cmd.PersistentFlags().GetString("nats-host"); err == nil && natsHost != "" {
 			domainApp.NATSHost = natsHost
 		}
-		natsPath, err = cmd.PersistentFlags().GetString("nats-path")
-		if err == nil && natsPath != "" {
-			domainApp.DataDir = natsPath
+		if natsPort, err := cmd.PersistentFlags().GetInt("nats-port"); err == nil && natsPort != 0 {
+			domainApp.NATSPort = natsPort
 		}
-		withNATSServer, err := cmd.PersistentFlags().GetBool("nats-server")
-		if err == nil {
-			domainApp.WithNATSServer = withNATSServer
+		if natsData, err := cmd.PersistentFlags().GetString("nats-data"); err == nil && natsData != "" {
+			domainApp.DataDir = natsData
 		}
+		ctx := cmd.Root().Context()
+		var wg sync.WaitGroup
+		var runErr error
 
-		err = domainApp.Run(cmd.Root().Context(), slog.Default())
-		if err != nil {
-			return fmt.Errorf("starting domain service: %w", err)
-		}
+		wg.Go(func() {
+			runErr = domainApp.Run(ctx)
+		})
 
-		return nil
+		<-ctx.Done()
+
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-time.After(gracePeriod):
+			return fmt.Errorf("shutdown grace period expired")
+		case <-done:
+			return runErr
+		}
 	},
 }
 

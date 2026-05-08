@@ -17,38 +17,39 @@ type IngestBitbucketApp struct {
 	NATSPort       int
 	Projects       []string
 	CACertsDir     string
+	logger         *slog.Logger
 }
 
-func NewIngestBitbucketApp() *IngestBitbucketApp {
+func NewIngestBitbucketApp(logger *slog.Logger) *IngestBitbucketApp {
 	a := &IngestBitbucketApp{
 		BitbucketURL:   "localhost:7999",
 		BitbucketToken: "aToken",
 		NATSHost:       dalinats.DefaultHost,
 		NATSPort:       dalinats.DefaultPort,
 		Projects:       []string{},
+		logger:         logger.With("service", "ingest_bitbucket"),
 	}
 
 	return a
 }
 
-func (a *IngestBitbucketApp) Run(ctx context.Context, logger *slog.Logger) error {
-	l := logger.With("service", "ingest_bitbucket")
+func (a *IngestBitbucketApp) Run(ctx context.Context) error {
 	natsURL := dalinats.NATSConnectionString(a.NATSHost, a.NATSPort)
-	publisher, publisherCloser, err := dalinats.NewPublisher(ctx, natsURL, logger)
+	publisher, publisherCloser, err := dalinats.NewPublisher(ctx, natsURL, a.logger.With("port", "domain", "connection", "nats"))
 	if err != nil {
 		return fmt.Errorf("create publisher: %w", err)
 	}
 	defer publisherCloser()
 
-	l.Info("Starten Publisher", "nats_url", natsURL)
+	a.logger.Info("Starten Publisher", "nats_url", natsURL)
 	httpCl, err := httpclient.NewHTTPClient(a.CACertsDir)
 	if err != nil {
 		return fmt.Errorf("building HTTP client: %w", err)
 	}
-	client := bitbucket.NewClient(a.BitbucketURL, a.BitbucketToken, httpCl, logger)
-	crawler := bitbucket.NewCrawler(client, publisher, a.Projects, logger)
+	client := bitbucket.NewClient(a.BitbucketURL, a.BitbucketToken, httpCl, a.logger)
+	crawler := bitbucket.NewCrawler(client, publisher, a.Projects, a.logger)
 
-	bitbucketService, err := bitbucket.NewIngestBitbucketService(l, crawler)
+	bitbucketService, err := bitbucket.NewIngestBitbucketService(crawler, a.logger)
 	if err != nil {
 		return fmt.Errorf("creating ingest bitbucket service: %w", err)
 	}
@@ -57,8 +58,6 @@ func (a *IngestBitbucketApp) Run(ctx context.Context, logger *slog.Logger) error
 	if err != nil {
 		return fmt.Errorf("starting ingest bitbucket service: %w", err)
 	}
-
-	<-ctx.Done()
 
 	return nil
 }

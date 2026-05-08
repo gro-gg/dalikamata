@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
+	"sync"
+	"time"
 
 	"codeberg.org/aeforged/dalikamata/internal/app"
 	"github.com/spf13/cobra"
@@ -14,14 +16,13 @@ var bitbucketCmd = &cobra.Command{
 	Short: "start a bitbucket data ingestion service",
 	Long:  `start a bitbucket data ingestion service`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		app := app.NewIngestBitbucketApp()
+		app := app.NewIngestBitbucketApp(slog.Default())
 
-		var err error
-		natsHost, err = cmd.Flags().GetString("nats-host")
+		natsHost, err := cmd.Flags().GetString("nats-host")
 		if err == nil {
 			app.NATSHost = natsHost
 		}
-		natsPort, err = cmd.Flags().GetInt("nats-port")
+		natsPort, err := cmd.Flags().GetInt("nats-port")
 		if err == nil {
 			app.NATSPort = natsPort
 		}
@@ -41,13 +42,28 @@ var bitbucketCmd = &cobra.Command{
 		if err == nil {
 			app.CACertsDir = caCertsDir
 		}
+		ctx := cmd.Root().Context()
+		var wg sync.WaitGroup
+		var runErr error
 
-		err = app.Run(cmd.Root().Context(), slog.Default())
-		if err != nil {
-			return fmt.Errorf("starting ingest-bitbucket service: %w", err)
+		wg.Go(func() {
+			runErr = app.Run(ctx)
+		})
+
+		<-ctx.Done()
+
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-time.After(gracePeriod):
+			return fmt.Errorf("shutdown grace period expired")
+		case <-done:
+			return runErr
 		}
-
-		return nil
 	},
 }
 

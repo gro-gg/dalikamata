@@ -23,16 +23,20 @@ func NewCrawler(client BitbucketClient, publisher EventPublisher, projects []str
 		client:    client,
 		publisher: publisher,
 		projects:  projects,
-		logger:    logger,
+		logger:    logger.With("component", "bitbucket_crawler"),
 	}
 }
 
 func (c *Crawler) Crawl(ctx context.Context) error {
+	c.logger.Info("Start Crawling Bitbucket")
+
 	for _, projectKey := range c.projects {
 		if err := c.crawlProject(ctx, projectKey); err != nil {
 			c.logger.Error("failed to crawl project", "project", projectKey, "error", err)
 		}
 	}
+
+	c.logger.Info("Finished Crawling Bitbucket")
 	return nil
 }
 

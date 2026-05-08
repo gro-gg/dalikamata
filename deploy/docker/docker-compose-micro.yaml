@@ -12,7 +12,7 @@ services:
 
   dalikamata-fake-bitbucket:
     image: dalikamata:latest
-    command: ["fake", "bitbucket", "--addr=0.0.0.0:7990"]
+    command: ["--nats-server=false", "fake", "bitbucket","--addr=0.0.0.0:7990"]
     ports:
       - "7990:7990"
     networks:
@@ -20,7 +20,7 @@ services:
 
   dalikamata-ingest-bitbucket:
     image: dalikamata:latest
-    command: ["ingest", "bitbucket", "--bitbucket-url=http://dalikamata-fake-bitbucket:7990", "--bitbucket-token=x", "--bitbucket-projects=PROJ,INFR", "--nats-host=dalikamata"]
+    command: ["--nats-server=false", "ingest", "bitbucket", "--bitbucket-url=http://dalikamata-fake-bitbucket:7990", "--bitbucket-token=x", "--bitbucket-projects=PROJ,INFR", "--nats-host=dalikamata"]
     depends_on:
       - dalikamata-fake-bitbucket
       - dalikamata
@@ -29,7 +29,7 @@ services:
 
   dalikamata-metrics:
     image: dalikamata:latest
-    command: ["metrics", "--debug", "--nats-port=4222", "--nats-host=dalikamata"]
+    command: ["--nats-server=false", "metrics", "--debug", "--nats-port=4222", "--nats-host=dalikamata"]
     depends_on:
       - dalikamata
     ports:

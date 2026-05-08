@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 
@@ -25,7 +26,11 @@ const (
 )
 
 type NATSPort struct {
-	logger *slog.Logger
+	natsAddr           string
+	natsPort           int
+	natsStartupTimeout time.Duration
+	jetstreamDir       string
+	logger             *slog.Logger
 }
 
 func NATSConnectionString(natsHost string, natsPort int) string {
@@ -34,13 +39,13 @@ func NATSConnectionString(natsHost string, natsPort int) string {
 
 func NewPort(logger *slog.Logger) *NATSPort {
 	s := &NATSPort{
-		logger: logger,
+		logger: logger.With("type", "port", "component", "ingest_git", "connection", "nats"),
 	}
 
 	return s
 }
 
-func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) (func(), error) {
+func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	s.logger.Info("Starting NATS Service")
 
 	ingestStream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
@@ -48,7 +53,7 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) (func(), err
 		Subjects: []string{StreamIngest},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating stream %s: %w", StreamIngestName, err)
+		return fmt.Errorf("creating stream %s: %w", StreamIngestName, err)
 	}
 
 	gitRepoConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
@@ -58,20 +63,20 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) (func(), err
 		MaxDeliver:    MaxDeliver,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating ingest-git-repo consumer: %w", err)
+		return fmt.Errorf("creating ingest-git-repo consumer: %w", err)
 	}
 
 	gitRepoConsumeCtx, err := gitRepoConsumer.Consume(s.gitRepoHandler())
 	if err != nil {
-		return nil, fmt.Errorf("starting %s consumer: %w", SubjectRepo, err)
+		return fmt.Errorf("starting %s consumer: %w", SubjectRepo, err)
 	}
 
-	shutdownFunc := func() {
-		gitRepoConsumeCtx.Drain()
-		s.logger.Info("NATS Service Shut Down")
-	}
+	<-ctx.Done()
 
-	return shutdownFunc, nil
+	gitRepoConsumeCtx.Drain()
+	s.logger.Info("NATS Service Shut Down")
+
+	return nil
 }
 
 func (s *NATSPort) gitRepoHandler() func(msg jetstream.Msg) {
@@ -83,14 +88,10 @@ func (s *NATSPort) gitRepoHandler() func(msg jetstream.Msg) {
 		err := json.Unmarshal(msg.Data(), &repo)
 		if err != nil {
 			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
-			if err := msg.Nak(); err != nil {
-				l.Error("nacking message", "error", err)
-			}
+			msg.Nak()
 			return
 		}
 		l.Info("received repo", "payload", repo)
-		if err := msg.Ack(); err != nil {
-			l.Error("acking message", "error", err)
-		}
+		msg.Ack()
 	}
 }

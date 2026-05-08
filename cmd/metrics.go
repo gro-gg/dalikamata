@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -14,27 +16,42 @@ var metricsCmd = &cobra.Command{
 	Use:   "metrics",
 	Short: "Calculate and expose metrics",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		metricsApp := app.NewMetricsApp()
+		metricsApp := app.NewMetricsApp(slog.Default())
 
-		var err error
 		metricsURL, err := cmd.Flags().GetString("metrics-addr")
 		if err == nil {
 			metricsApp.MetricsURL = metricsURL
 		}
-		natsHost, err = cmd.Flags().GetString("nats-host")
+		natsHost, err := cmd.Flags().GetString("nats-host")
 		if err == nil {
 			metricsApp.NATSHost = natsHost
 		}
-		natsPort, err = cmd.Flags().GetInt("nats-port")
+		natsPort, err := cmd.Flags().GetInt("nats-port")
 		if err == nil {
 			metricsApp.NATSPort = natsPort
 		}
+		ctx := cmd.Root().Context()
+		var wg sync.WaitGroup
+		var runErr error
 
-		err = metricsApp.Run(cmd.Root().Context(), slog.Default())
-		if err != nil {
-			return fmt.Errorf("running metrics app: %w", err)
+		wg.Go(func() {
+			runErr = metricsApp.Run(ctx)
+		})
+
+		<-ctx.Done()
+
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-time.After(gracePeriod):
+			return fmt.Errorf("shutdown grace period expired")
+		case <-done:
+			return runErr
 		}
-		return nil
 	},
 }
 

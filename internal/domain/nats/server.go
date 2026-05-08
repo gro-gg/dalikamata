@@ -1,6 +1,7 @@
 package nats
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -12,6 +13,8 @@ type Server struct {
 	Port               int
 	DataDir            string
 	NatsStartupTimeout time.Duration
+	started            chan struct{}
+	startErr           error
 }
 
 func NewServer() *Server {
@@ -20,10 +23,11 @@ func NewServer() *Server {
 		Port:               4222,
 		DataDir:            "./data/nats",
 		NatsStartupTimeout: time.Second,
+		started:            make(chan struct{}),
 	}
 }
 
-func (s *Server) Start() (func(), error) {
+func (s *Server) Start(ctx context.Context) error {
 
 	natsOpts := &server.Options{
 		Host:      s.Host,
@@ -35,16 +39,31 @@ func (s *Server) Start() (func(), error) {
 
 	ns, err := server.NewServer(natsOpts)
 	if err != nil {
-		return nil, fmt.Errorf("creating NATS server: %w", err)
+		s.startErr = fmt.Errorf("creating NATS server: %w", err)
+		close(s.started)
+		return s.startErr
 	}
 
-	go ns.Start()
-	if !ns.ReadyForConnections(s.NatsStartupTimeout) {
-		return nil, fmt.Errorf("ns startup timed out: %s", s.NatsStartupTimeout)
-	}
-
-	return func() {
+	ns.Start()
+	defer func() {
 		ns.Shutdown()
 		ns.WaitForShutdown()
-	}, nil
+	}()
+
+	if !ns.ReadyForConnections(s.NatsStartupTimeout) {
+		s.startErr = fmt.Errorf("ns startup timed out: %s", s.NatsStartupTimeout)
+	}
+	close(s.started)
+	if s.startErr != nil {
+		return s.startErr
+	}
+
+	<-ctx.Done()
+
+	return nil
+}
+
+func (s *Server) WaitForStartup() error {
+	<-s.started
+	return s.startErr
 }

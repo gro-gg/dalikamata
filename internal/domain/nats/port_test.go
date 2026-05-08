@@ -22,9 +22,12 @@ func TestIngestGitRepo(t *testing.T) {
 	ns := domain.NewServer()
 	ns.Port = 4444
 	ns.DataDir = t.TempDir()
-	shutdownNATS, err := ns.Start()
+	go func() {
+		err := ns.Start(t.Context())
+		is.NoErr(err)
+	}()
+	err := ns.WaitForStartup()
 	is.NoErr(err)
-	t.Cleanup(shutdownNATS)
 
 	nc, err := nats.Connect(natsURL)
 	is.NoErr(err)
@@ -37,8 +40,7 @@ func TestIngestGitRepo(t *testing.T) {
 	t.Cleanup(cancel)
 
 	go func() {
-		shutdownSUT, err := sut.Run(ctx, js)
-		t.Cleanup(shutdownSUT)
+		err := sut.Run(ctx, js)
 		is.NoErr(err)
 	}()
 

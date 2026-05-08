@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
@@ -21,14 +20,15 @@ type IngestBitbucketService struct {
 	logger  *slog.Logger
 }
 
-func NewIngestBitbucketService(logger *slog.Logger, crawler *Crawler) (*IngestBitbucketService, error) {
+func NewIngestBitbucketService(crawler *Crawler, logger *slog.Logger) (*IngestBitbucketService, error) {
+	l := logger.With("service", "inget-bitbucket")
 	if crawler == nil {
 		return nil, fmt.Errorf("invalid crawler, must not be nil")
 	}
 
 	s := &IngestBitbucketService{
 		crawler: crawler,
-		logger:  logger,
+		logger:  l,
 	}
 
 	return s, nil
@@ -38,18 +38,14 @@ func (s *IngestBitbucketService) Run(ctx context.Context) error {
 	s.logger.Info("Starting Ingest Bitbucket Service")
 
 	go func() {
-		s.logger.Info("Start Crawling Bitbucket")
-		startTime := time.Now()
 		if err := s.crawler.Crawl(ctx); err != nil {
 			s.logger.Error("crawling", "error", err)
 		}
-		duration := time.Since(startTime)
-		s.logger.Info("Finished Crawling Bitbucket", "duration", duration)
-
 	}()
 
 	s.logger.Info("Nothing left to do")
-	s.logger.Info("Starting Ingest Bitbucket Service")
+	<-ctx.Done()
 
+	s.logger.Info("Stopping Ingest Bitbucket Service")
 	return nil
 }

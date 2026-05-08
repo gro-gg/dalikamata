@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -13,7 +13,7 @@ import (
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
-const DefaultMetricsAddr = ":2112"
+const DefaultMetricsAddr = "0.0.0.0:2112"
 
 // PullRequestSubscriber is the port for receiving pull request events.
 type PullRequestSubscriber interface {
@@ -56,10 +56,12 @@ func NewMetricsService(subscriber PullRequestSubscriber, logger *slog.Logger, me
 	return s
 }
 
-func (s *MetricsService) Run(ctx context.Context) (func(), error) {
-	if err := s.subscriber.Subscribe(ctx, s.handlePullRequest); err != nil {
-		return nil, fmt.Errorf("subscribing to pull requests: %w", err)
-	}
+func (s *MetricsService) Run(ctx context.Context) error {
+	go func() {
+		if err := s.subscriber.Subscribe(ctx, s.handlePullRequest); err != nil {
+			s.logger.Error("subscribing to pull requests", "error", err)
+		}
+	}()
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{}))
@@ -71,19 +73,18 @@ func (s *MetricsService) Run(ctx context.Context) (func(), error) {
 
 	go func() {
 		s.logger.Info("Starting metrics HTTP server", "addr", s.metricsAddr)
-		err := srv.ListenAndServe()
-		if err != nil {
-			s.logger.Error("starting metrics HTTP server", "error", err)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			s.logger.Error("metrics HTTP server error", "error", err)
 		}
 	}()
 
-	return func() {
-		s.logger.Info("Shutting down metrics HTTP server")
-		err := srv.Shutdown(ctx)
-		if err != nil {
-			s.logger.Error("shutting down metrics HTTP server", "error", err)
-		}
-	}, nil
+	<-ctx.Done()
+
+	if err := srv.Shutdown(context.Background()); err != nil {
+		s.logger.Error("shutting down metrics HTTP server", "error", err)
+	}
+
+	return nil
 }
 
 func (s *MetricsService) handlePullRequest(pr model.PullRequest) {
