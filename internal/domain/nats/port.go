@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 
@@ -26,11 +25,7 @@ const (
 )
 
 type NATSPort struct {
-	natsAddr           string
-	natsPort           int
-	natsStartupTimeout time.Duration
-	jetstreamDir       string
-	logger             *slog.Logger
+	logger *slog.Logger
 }
 
 func NATSConnectionString(natsHost string, natsPort int) string {
@@ -88,10 +83,16 @@ func (s *NATSPort) gitRepoHandler() func(msg jetstream.Msg) {
 		err := json.Unmarshal(msg.Data(), &repo)
 		if err != nil {
 			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
-			msg.Nak()
+			err = msg.Nak()
+			if err != nil {
+				l.Error("nak message", "error", err)
+			}
 			return
 		}
 		l.Info("received repo", "payload", repo)
-		msg.Ack()
+		err = msg.Ack()
+		if err != nil {
+			l.Error("ack message", "error", err)
+		}
 	}
 }
