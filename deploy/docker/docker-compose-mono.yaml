@@ -1,7 +1,11 @@
 services:
   dalikamata-fake-bitbucket:
     image: dalikamata:latest
-    command: ["--nats-server=false", "fake", "bitbucket", "--addr=0.0.0.0:7990"]
+    command:
+      - "--nats-server=false"
+      - "fake"
+      - "bitbucket"
+      - "--addr=0.0.0.0:7990"]
     ports:
       - "7990:7990"
     networks:
