@@ -4,16 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
-
-// EventPublisher publishes ingest events to a message broker.
-type EventPublisher interface {
-	PublishCommit(context.Context, model.Commit) error
-	PublishPullRequest(context.Context, model.PullRequest) error
-	PublishRepo(context.Context, model.Repo) error
-}
 
 type IngestBitbucketService struct {
 	crawler *Crawler

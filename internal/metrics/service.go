@@ -10,25 +10,21 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 const DefaultMetricsAddr = "0.0.0.0:2112"
 
-// PullRequestSubscriber is the port for receiving pull request events.
-type PullRequestSubscriber interface {
-	Subscribe(ctx context.Context, handler func(model.PullRequest)) error
-}
-
 type MetricsService struct {
-	subscriber  PullRequestSubscriber
+	subscriber  domain.PullRequestSubscriber
 	logger      *slog.Logger
 	registry    *prometheus.Registry
 	prCycleTime *prometheus.HistogramVec
 	metricsAddr string
 }
 
-func NewMetricsService(subscriber PullRequestSubscriber, logger *slog.Logger, metricsAddr string) *MetricsService {
+func NewMetricsService(subscriber domain.PullRequestSubscriber, logger *slog.Logger, metricsAddr string) *MetricsService {
 	registry := prometheus.NewRegistry()
 
 	prCycleTime := prometheus.NewHistogramVec(
@@ -91,7 +87,7 @@ func (s *MetricsService) handlePullRequest(pr model.PullRequest) {
 	s.logger.Debug("received pull request event", "repo_id", pr.RepoID, "state", pr.State, "created_at", pr.CreatedAt)
 	var cycleTime time.Duration
 	switch pr.State {
-	case "MERGED", "DECLINED":
+	case model.PullRequestStateMerged, model.PullRequestStateDeclined:
 		cycleTime = pr.UpdatedAt.Sub(pr.CreatedAt)
 	default: // OPEN
 		cycleTime = time.Since(pr.CreatedAt)

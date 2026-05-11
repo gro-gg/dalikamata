@@ -9,6 +9,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
@@ -17,7 +18,7 @@ type GITPublisher struct {
 	logger *slog.Logger
 }
 
-func NewPublisher(ctx context.Context, natsURL string, logger *slog.Logger) (*GITPublisher, func(), error) {
+func NewPublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.Publisher, func(), error) {
 	nc, err := nats.Connect(natsURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("publisher connecting to NATS: %w", err)

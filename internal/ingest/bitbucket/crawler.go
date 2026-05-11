@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 // Crawler performs a full crawl of the configured Bitbucket projects.
 type Crawler struct {
 	client    BitbucketClient
-	publisher EventPublisher
+	publisher domain.Publisher
 	projects  []string
 	logger    *slog.Logger
 }
 
-func NewCrawler(client BitbucketClient, publisher EventPublisher, projects []string, logger *slog.Logger) *Crawler {
+func NewCrawler(client BitbucketClient, publisher domain.Publisher, projects []string, logger *slog.Logger) *Crawler {
 	return &Crawler{
 		client:    client,
 		publisher: publisher,
@@ -87,7 +87,7 @@ func (c *Crawler) crawlCommits(ctx context.Context, projectKey, repoSlug string)
 	for _, commit := range commits {
 		event := model.Commit{
 			SHA:       commit.ID,
-			RepoID:    path.Join(projectKey, repoSlug),
+			RepoID:    model.NewRepoID(projectKey, repoSlug),
 			Author:    commit.Author.Name,
 			Timestamp: time.UnixMilli(commit.AuthorTimestamp),
 		}
@@ -107,8 +107,8 @@ func (c *Crawler) crawlPullRequests(ctx context.Context, projectKey, repoSlug st
 
 	for _, pr := range prs {
 		event := model.PullRequest{
-			ID:          path.Join(projectKey, repoSlug, fmt.Sprintf("%d", pr.ID)),
-			RepoID:      path.Join(projectKey, repoSlug),
+			ID:          model.NewPullRequestID(projectKey, repoSlug, fmt.Sprintf("%d", pr.ID)),
+			RepoID:      model.NewRepoID(projectKey, repoSlug),
 			Name:        fmt.Sprintf("%d", pr.ID),
 			Title:       pr.Title,
 			Description: pr.Description,

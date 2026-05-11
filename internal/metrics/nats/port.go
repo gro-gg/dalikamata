@@ -3,8 +3,10 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -43,10 +45,23 @@ func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) e
 		return fmt.Errorf("creating jetstream: %w", err)
 	}
 
-	stream, err := js.Stream(ctx, dalinats.StreamIngestName)
-	if err != nil {
-		nc.Close()
-		return fmt.Errorf("getting %s stream: %w", dalinats.StreamIngestName, err)
+	var stream jetstream.Stream
+	for {
+		stream, err = js.Stream(ctx, dalinats.StreamIngestName)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, jetstream.ErrStreamNotFound) {
+			nc.Close()
+			return fmt.Errorf("getting %s stream: %w", dalinats.StreamIngestName, err)
+		}
+		p.logger.Info("waiting for INGEST stream to be created")
+		select {
+		case <-ctx.Done():
+			nc.Close()
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
 	}
 
 	consumer, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{

@@ -5,7 +5,7 @@ services:
       - "--nats-server=false"
       - "fake"
       - "bitbucket"
-      - "--addr=0.0.0.0:7990"]
+      - "--addr=0.0.0.0:7990"
     ports:
       - "7990:7990"
     networks:
@@ -25,6 +25,7 @@ services:
       - dalikamata-fake-bitbucket
     ports:
       - "2112:2112"
+      - "4222:4222"
     networks:
       - monitoring
 

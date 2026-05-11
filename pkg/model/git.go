@@ -1,8 +1,23 @@
 package model
 
 import (
+	"path"
 	"time"
 )
+
+const (
+	PullRequestStateOpen     = "OPEN"
+	PullRequestStateMerged   = "MERGED"
+	PullRequestStateDeclined = "DECLINED"
+)
+
+func NewRepoID(projectKey, repoSlug string) string {
+	return path.Join(projectKey, repoSlug)
+}
+
+func NewPullRequestID(projectKey, repoSlug, prNumber string) string {
+	return path.Join(projectKey, repoSlug, prNumber)
+}
 
 type Repo struct {
 	RepoID string `json:"repo_id"`
