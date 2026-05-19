@@ -95,7 +95,4 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&caCertsDir, "ca-certs-dir", "", "directory containing custom CA certificates (.pem, .crt, .cer)")
 	rootCmd.PersistentFlags().DurationVar(&gracePeriod, "grace-period", 10*time.Second, "grace period for shutdown")
 	rootCmd.PersistentFlags().StringVar(&metricsAddr, "metrics-addr", metrics.DefaultMetricsAddr, "metrics HTTP listen address")
-	rootCmd.PersistentFlags().StringVar(&bitbucketURL, "bitbucket-url", "", "Bitbucket Server base URL (e.g. https://bitbucket.example.com)")
-	rootCmd.PersistentFlags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
-	rootCmd.PersistentFlags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
 }

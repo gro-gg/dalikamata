@@ -57,4 +57,7 @@ var bitbucketCmd = &cobra.Command{
 
 func init() {
 	ingestCmd.AddCommand(bitbucketCmd)
+	bitbucketCmd.Flags().StringVar(&bitbucketURL, "bitbucket-url", "", "Bitbucket Server base URL (e.g. https://bitbucket.example.com)")
+	bitbucketCmd.Flags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
+	bitbucketCmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
 }
