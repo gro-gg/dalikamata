@@ -31,3 +31,10 @@ type GitEventHandler interface {
 	HandleCommit(context.Context, model.Commit) error
 	HandlePullRequest(context.Context, model.PullRequest) error
 }
+
+// PipelinePublisher is the outgoing port for emitting CI/CD pipeline events.
+type PipelinePublisher interface {
+	PublishJob(context.Context, model.Job) error
+	PublishBuild(context.Context, model.Build) error
+	PublishPipelineStage(context.Context, model.PipelineStage) error
+}

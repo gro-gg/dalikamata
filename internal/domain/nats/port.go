@@ -21,6 +21,10 @@ const (
 	SubjectPullRequest = "ingest.git.pullrequest"
 	SubjectRepo        = "ingest.git.repo"
 
+	SubjectPipelineJob   = "ingest.pipeline.job"
+	SubjectPipelineBuild = "ingest.pipeline.build"
+	SubjectPipelineStage = "ingest.pipeline.stage"
+
 	DefaultHost = "0.0.0.0"
 	DefaultPort = 4222
 
