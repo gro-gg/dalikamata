@@ -18,7 +18,7 @@ type GITPublisher struct {
 	logger *slog.Logger
 }
 
-func NewPublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.Publisher, func(), error) {
+func NewGitPublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.GitPublisher, func(), error) {
 	nc, err := nats.Connect(natsURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("publisher connecting to NATS: %w", err)

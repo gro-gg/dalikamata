@@ -35,7 +35,7 @@ func NewIngestBitbucketApp(logger *slog.Logger) *IngestBitbucketApp {
 
 func (a *IngestBitbucketApp) Run(ctx context.Context) error {
 	natsURL := dalinats.NATSConnectionString(a.NATSHost, a.NATSPort)
-	publisher, publisherCloser, err := dalinats.NewPublisher(ctx, natsURL, a.logger.With("port", "domain", "connection", "nats"))
+	publisher, publisherCloser, err := dalinats.NewGitPublisher(ctx, natsURL, a.logger.With("port", "domain", "connection", "nats"))
 	if err != nil {
 		return fmt.Errorf("create publisher: %w", err)
 	}

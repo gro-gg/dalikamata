@@ -13,12 +13,12 @@ import (
 // Crawler performs a full crawl of the configured Bitbucket projects.
 type Crawler struct {
 	client    BitbucketClient
-	publisher domain.Publisher
+	publisher domain.GitPublisher
 	projects  []string
 	logger    *slog.Logger
 }
 
-func NewCrawler(client BitbucketClient, publisher domain.Publisher, projects []string, logger *slog.Logger) *Crawler {
+func NewCrawler(client BitbucketClient, publisher domain.GitPublisher, projects []string, logger *slog.Logger) *Crawler {
 	return &Crawler{
 		client:    client,
 		publisher: publisher,

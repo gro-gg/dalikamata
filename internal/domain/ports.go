@@ -6,8 +6,8 @@ import (
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
-// Publisher is the outgoing port for emitting Git events.
-type Publisher interface {
+// GitPublisher is the outgoing port for emitting Git events.
+type GitPublisher interface {
 	PublishCommit(context.Context, model.Commit) error
 	PublishPullRequest(context.Context, model.PullRequest) error
 	PublishRepo(context.Context, model.Repo) error
