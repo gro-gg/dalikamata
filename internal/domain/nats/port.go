@@ -23,6 +23,9 @@ const (
 
 	DefaultHost = "0.0.0.0"
 	DefaultPort = 4222
+
+	LogReceivedMessage  = "received message"
+	LogHandlerSettingUp = "Repo Handler Setting Up"
 )
 
 type NATSPort struct {
@@ -109,9 +112,10 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 
 func (s *NATSPort) gitRepoHandler(ctx context.Context) func(msg jetstream.Msg) {
 	l := s.logger.With("subject", SubjectRepo)
-	l.Info("Repo Handler Setting Up")
+	l.Info(LogHandlerSettingUp)
 
 	return func(msg jetstream.Msg) {
+		l.Debug(LogReceivedMessage)
 		var repo model.Repo
 		if err := json.Unmarshal(msg.Data(), &repo); err != nil {
 			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)

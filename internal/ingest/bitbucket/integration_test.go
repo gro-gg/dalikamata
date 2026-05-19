@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/nats"
 	"github.com/matryer/is"
 )
 
@@ -71,7 +72,7 @@ func waitHTTP(t *testing.T, url string) {
 
 // scanDomainOutput pipes the domain subprocess stdout through a scanner that
 // mirrors every line to os.Stderr and signals two channels:
-//   - ready: closed when the NATS consumer is set up ("Repo Handler Settiing Up")
+//   - ready: closed when the NATS consumer is set up
 //   - reposDone: closed when 5 "received repo" log lines have been seen
 //
 // Call before domainSvc.Start(); register domainW.Close() in t.Cleanup AFTER
@@ -88,11 +89,13 @@ func scanDomainOutput(domainSvc *exec.Cmd) (domainW *io.PipeWriter, ready, repos
 		for scanner.Scan() {
 			line := scanner.Text()
 			fmt.Fprintln(os.Stderr, line)
-			if !readyClosed && strings.Contains(line, "Repo Handler Settiing Up") {
+			subject := "subject=ingest.git.repo"
+			if !readyClosed && strings.Contains(line, subject) && strings.Contains(line, nats.LogHandlerSettingUp) {
 				close(chReady)
 				readyClosed = true
 			}
-			if !reposClosed && strings.Contains(line, "subject=ingest.git.repo") {
+			if !reposClosed && strings.Contains(line, subject) && strings.Contains(line, nats.LogReceivedMessage) {
+				fmt.Println("  domain received repo event:", subject)
 				repoCount++
 				if repoCount >= 5 {
 					close(chRepos)
@@ -144,7 +147,7 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	is.NoErr(domainSvc.Start())
 	t.Cleanup(func() { stopSubprocess(domainSvc); domainW.Close() })
 
-	fmt.Println("waiting for domain service to be ready (log: \"Repo Handler Settiing Up\")...")
+	fmt.Println("  waiting for domain service to be ready...")
 	select {
 	case <-domainReady:
 	case <-ctx.Done():
@@ -153,7 +156,7 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 
 	fmt.Println("3. Start ingest service — crawls fake Bitbucket and publishes to NATS.")
 	ingestSvc := goRun(ctx, "ingest", "bitbucket",
-		//"--nats-port", strconv.Itoa(natsPort), // TODO bug: domain starts nats always on 4222
+		"--nats-port", strconv.Itoa(natsPort),
 		"--bitbucket-url", fmt.Sprintf("http://127.0.0.1:%d", bbPort),
 		"--bitbucket-token", "test-token",
 		"--bitbucket-projects", "PROJ,INFRA")
