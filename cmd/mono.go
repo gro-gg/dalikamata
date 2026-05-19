@@ -28,6 +28,7 @@ var monoCmd = &cobra.Command{
 		domainApp.NATSHost = natsURL
 		domainApp.NATSPort = natsPort
 		domainApp.DataDir = natsPath
+		domainApp.WithNATSServer = true
 
 		metricsApp := app.NewMetricsApp(slog.Default())
 		metricsApp.NATSHost = natsURL

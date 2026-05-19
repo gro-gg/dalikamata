@@ -17,18 +17,13 @@ var domainCmd = &cobra.Command{
 	Short: "start the domain service",
 	Long:  `start the domain service`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		domainApp := app.NewDomainApp(slog.Default())
-
-		if natsHost, err := cmd.PersistentFlags().GetString("nats-host"); err == nil && natsHost != "" {
-			domainApp.NATSHost = natsHost
-		}
-		if natsPort, err := cmd.PersistentFlags().GetInt("nats-port"); err == nil && natsPort != 0 {
-			domainApp.NATSPort = natsPort
-		}
-		if natsData, err := cmd.PersistentFlags().GetString("nats-data"); err == nil && natsData != "" {
-			domainApp.DataDir = natsData
-		}
 		ctx := cmd.Root().Context()
+
+		domainApp := app.NewDomainApp(slog.Default())
+		domainApp.NATSHost = natsURL
+		domainApp.NATSPort = natsPort
+		domainApp.DataDir = natsPath
+		domainApp.WithNATSServer = !cmd.Flags().Changed("nats-server") || withNatsServer
 		var wg sync.WaitGroup
 		var runErr error
 
@@ -55,4 +50,6 @@ var domainCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(domainCmd)
+	domainCmd.Flags().BoolVar(&withNatsServer, "nats-server", false, "start NATS server")
+	domainCmd.Flags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
 }

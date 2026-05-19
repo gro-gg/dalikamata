@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -10,14 +9,13 @@ import (
 	"time"
 
 	"codeberg.org/aeforged/dalikamata/internal/app"
-	"codeberg.org/aeforged/dalikamata/internal/domain/nats"
 	"codeberg.org/aeforged/dalikamata/internal/metrics"
 	"github.com/spf13/cobra"
 )
 
 var (
 	debugMode         bool
-	natsURL           string
+	natsURL           string // TODO rename to natsHost
 	natsPort          int
 	natsPath          string
 	withNatsServer    bool
@@ -50,22 +48,6 @@ visions, and is believed to shed tears of dew at night over human suffering.`,
 		// Set as default so third-party libs using slog pick it up
 		slog.SetDefault(logger)
 
-		if withNatsServer {
-			wg := app.WaitGroupFrom(cmd.Context())
-			natsServer := nats.NewServer()
-			natsServer.DataDir = natsPath
-			natsServer.Port = natsPort
-			natsServer.Host = natsURL
-			wg.Go(func() {
-				if err := natsServer.Start(cmd.Context()); err != nil {
-					slog.Error("running NATS server", "error", err)
-				}
-			})
-			if err := natsServer.WaitForStartup(); err != nil {
-				return fmt.Errorf("waiting for NATS server: %w", err)
-			}
-		}
-
 		return nil
 	},
 	SilenceUsage: true,
@@ -88,10 +70,8 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false, "enable debug mode")
-	rootCmd.PersistentFlags().BoolVar(&withNatsServer, "nats-server", true, "start NATS server")
 	rootCmd.PersistentFlags().StringVar(&natsURL, "nats-host", "0.0.0.0", "NATS server host name")
 	rootCmd.PersistentFlags().IntVar(&natsPort, "nats-port", 4222, "NATS server port")
-	rootCmd.PersistentFlags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
 	rootCmd.PersistentFlags().StringVar(&caCertsDir, "ca-certs-dir", "", "directory containing custom CA certificates (.pem, .crt, .cer)")
 	rootCmd.PersistentFlags().DurationVar(&gracePeriod, "grace-period", 10*time.Second, "grace period for shutdown")
 	rootCmd.PersistentFlags().StringVar(&metricsAddr, "metrics-addr", metrics.DefaultMetricsAddr, "metrics HTTP listen address")
