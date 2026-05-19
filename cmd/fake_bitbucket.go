@@ -23,7 +23,7 @@ Point the ingest command at it with:
   dalikamata ingest bitbucket \
     --bitbucket-url http://localhost:7990 \
     --bitbucket-token any-token \
-    --projects PROJ,INFRA`,
+    --bitbucket-projects PROJ,INFRA`,
 	Run: func(cmd *cobra.Command, args []string) {
 		addr, _ := cmd.Flags().GetString("addr")
 
