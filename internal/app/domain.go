@@ -8,7 +8,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain"
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 )
 
 type DomainApp struct {
@@ -39,6 +41,8 @@ func (a *DomainApp) Run(ctx context.Context) error {
 		return fmt.Errorf("creating jetstream: %w", err)
 	}
 
-	domain := dalinats.NewPort(a.logger)
-	return domain.Run(ctx, js)
+	repository := repo.NewMemory()
+	svc := domain.NewDomainService(repository, a.logger)
+	port := dalinats.NewPort(a.logger, svc)
+	return port.Run(ctx, js)
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
@@ -25,19 +26,19 @@ const (
 )
 
 type NATSPort struct {
-	logger *slog.Logger
+	logger  *slog.Logger
+	handler domain.GitEventHandler
 }
 
 func NATSConnectionString(natsHost string, natsPort int) string {
 	return fmt.Sprintf("nats://%s:%d", natsHost, natsPort)
 }
 
-func NewPort(logger *slog.Logger) *NATSPort {
-	s := &NATSPort{
-		logger: logger.With("type", "port", "component", "ingest_git", "connection", "nats"),
+func NewPort(logger *slog.Logger, handler domain.GitEventHandler) *NATSPort {
+	return &NATSPort{
+		logger:  logger.With("type", "port", "component", "ingest_git", "connection", "nats"),
+		handler: handler,
 	}
-
-	return s
 }
 
 func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
@@ -61,37 +62,124 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 		return fmt.Errorf("creating ingest-git-repo consumer: %w", err)
 	}
 
-	gitRepoConsumeCtx, err := gitRepoConsumer.Consume(s.gitRepoHandler())
+	gitCommitConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       "ingest-git-commit",
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		FilterSubject: SubjectCommit,
+		MaxDeliver:    MaxDeliver,
+	})
+	if err != nil {
+		return fmt.Errorf("creating ingest-git-commit consumer: %w", err)
+	}
+
+	gitPRConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       "ingest-git-pullrequest",
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		FilterSubject: SubjectPullRequest,
+		MaxDeliver:    MaxDeliver,
+	})
+	if err != nil {
+		return fmt.Errorf("creating ingest-git-pullrequest consumer: %w", err)
+	}
+
+	gitRepoConsumeCtx, err := gitRepoConsumer.Consume(s.gitRepoHandler(ctx))
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectRepo, err)
+	}
+
+	gitCommitConsumeCtx, err := gitCommitConsumer.Consume(s.gitCommitHandler(ctx))
+	if err != nil {
+		return fmt.Errorf("starting %s consumer: %w", SubjectCommit, err)
+	}
+
+	gitPRConsumeCtx, err := gitPRConsumer.Consume(s.gitPullRequestHandler(ctx))
+	if err != nil {
+		return fmt.Errorf("starting %s consumer: %w", SubjectPullRequest, err)
 	}
 
 	<-ctx.Done()
 
 	gitRepoConsumeCtx.Drain()
+	gitCommitConsumeCtx.Drain()
+	gitPRConsumeCtx.Drain()
 	s.logger.Info("NATS Service Shut Down")
 
 	return nil
 }
 
-func (s *NATSPort) gitRepoHandler() func(msg jetstream.Msg) {
+func (s *NATSPort) gitRepoHandler(ctx context.Context) func(msg jetstream.Msg) {
 	l := s.logger.With("subject", SubjectRepo)
-	l.Info("Repo Handler Settiing Up")
+	l.Info("Repo Handler Setting Up")
 
 	return func(msg jetstream.Msg) {
 		var repo model.Repo
-		err := json.Unmarshal(msg.Data(), &repo)
-		if err != nil {
+		if err := json.Unmarshal(msg.Data(), &repo); err != nil {
 			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
-			err = msg.Nak()
-			if err != nil {
+			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}
 			return
 		}
-		l.Info("received repo", "payload", repo)
-		err = msg.Ack()
-		if err != nil {
+		if err := s.handler.HandleRepo(ctx, repo); err != nil {
+			l.Error("handling repo", "repo_id", repo.RepoID, "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := msg.Ack(); err != nil {
+			l.Error("ack message", "error", err)
+		}
+	}
+}
+
+func (s *NATSPort) gitCommitHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectCommit)
+	l.Info("Commit Handler Setting Up")
+
+	return func(msg jetstream.Msg) {
+		var commit model.Commit
+		if err := json.Unmarshal(msg.Data(), &commit); err != nil {
+			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := s.handler.HandleCommit(ctx, commit); err != nil {
+			l.Error("handling commit", "sha", commit.SHA, "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := msg.Ack(); err != nil {
+			l.Error("ack message", "error", err)
+		}
+	}
+}
+
+func (s *NATSPort) gitPullRequestHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectPullRequest)
+	l.Info("Pull Request Handler Setting Up")
+
+	return func(msg jetstream.Msg) {
+		var pr model.PullRequest
+		if err := json.Unmarshal(msg.Data(), &pr); err != nil {
+			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := s.handler.HandlePullRequest(ctx, pr); err != nil {
+			l.Error("handling pull request", "id", pr.ID, "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := msg.Ack(); err != nil {
 			l.Error("ack message", "error", err)
 		}
 	}

@@ -11,15 +11,17 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	domain "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/domain"
+	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 )
 
 func TestIngestGitRepo(t *testing.T) {
 	is := is.New(t)
 	l := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	natsURL := domain.NATSConnectionString("localhost", 4444)
-	ns := domain.NewServer()
+	natsURL := dalinats.NATSConnectionString("localhost", 4444)
+	ns := dalinats.NewServer()
 	ns.Port = 4444
 	ns.DataDir = t.TempDir()
 	go func() {
@@ -34,7 +36,8 @@ func TestIngestGitRepo(t *testing.T) {
 	js, err := jetstream.New(nc)
 	is.NoErr(err)
 
-	sut := domain.NewPort(l)
+	svc := domain.NewDomainService(repo.NewMemory(), l)
+	sut := dalinats.NewPort(l, svc)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
@@ -47,7 +50,7 @@ func TestIngestGitRepo(t *testing.T) {
 	for i := range 10 {
 		data := []byte("payload")
 		t.Logf("Publishing payload: %d", i)
-		_, err := js.Publish(ctx, domain.SubjectRepo, data)
+		_, err := js.Publish(ctx, dalinats.SubjectRepo, data)
 		is.NoErr(err)
 		time.Sleep(time.Millisecond)
 	}
