@@ -102,6 +102,26 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 		return fmt.Errorf("creating ingest-pipeline-job consumer: %w", err)
 	}
 
+	pipelineBuildConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       "ingest-pipeline-build",
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		FilterSubject: SubjectPipelineBuild,
+		MaxDeliver:    MaxDeliver,
+	})
+	if err != nil {
+		return fmt.Errorf("creating ingest-pipeline-build consumer: %w", err)
+	}
+
+	pipelineStageConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       "ingest-pipeline-stage",
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		FilterSubject: SubjectPipelineStage,
+		MaxDeliver:    MaxDeliver,
+	})
+	if err != nil {
+		return fmt.Errorf("creating ingest-pipeline-stage consumer: %w", err)
+	}
+
 	gitRepoConsumeCtx, err := gitRepoConsumer.Consume(s.gitRepoHandler(ctx))
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectRepo, err)
@@ -122,12 +142,24 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 		return fmt.Errorf("starting %s consumer: %w", SubjectPipelineJob, err)
 	}
 
+	pipelineBuildConsumeCtx, err := pipelineBuildConsumer.Consume(s.pipelineBuildHandler(ctx))
+	if err != nil {
+		return fmt.Errorf("starting %s consumer: %w", SubjectPipelineBuild, err)
+	}
+
+	pipelineStageConsumeCtx, err := pipelineStageConsumer.Consume(s.pipelineStageHandler(ctx))
+	if err != nil {
+		return fmt.Errorf("starting %s consumer: %w", SubjectPipelineStage, err)
+	}
+
 	<-ctx.Done()
 
 	gitRepoConsumeCtx.Drain()
 	gitCommitConsumeCtx.Drain()
 	gitPRConsumeCtx.Drain()
 	pipelineJobConsumeCtx.Drain()
+	pipelineBuildConsumeCtx.Drain()
+	pipelineStageConsumeCtx.Drain()
 	s.logger.Info("NATS Service Shut Down")
 
 	return nil
@@ -203,6 +235,60 @@ func (s *NATSPort) pipelineJobHandler(ctx context.Context) func(msg jetstream.Ms
 		}
 		if err := s.pipelineHandler.HandleJob(ctx, job); err != nil {
 			l.Error("handling job", "job_id", job.JobID, "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := msg.Ack(); err != nil {
+			l.Error("ack message", "error", err)
+		}
+	}
+}
+
+func (s *NATSPort) pipelineBuildHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectPipelineBuild)
+	l.Info("Pipeline Build Handler Setting Up")
+
+	return func(msg jetstream.Msg) {
+		l.Debug(LogReceivedMessage)
+		var build model.Build
+		if err := json.Unmarshal(msg.Data(), &build); err != nil {
+			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := s.pipelineHandler.HandleBuild(ctx, build); err != nil {
+			l.Error("handling build", "build_id", build.ID, "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := msg.Ack(); err != nil {
+			l.Error("ack message", "error", err)
+		}
+	}
+}
+
+func (s *NATSPort) pipelineStageHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectPipelineStage)
+	l.Info("Pipeline Stage Handler Setting Up")
+
+	return func(msg jetstream.Msg) {
+		l.Debug(LogReceivedMessage)
+		var stage model.PipelineStage
+		if err := json.Unmarshal(msg.Data(), &stage); err != nil {
+			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := s.pipelineHandler.HandlePipelineStage(ctx, stage); err != nil {
+			l.Error("handling pipeline stage", "build_id", stage.BuildID, "name", stage.Name, "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}

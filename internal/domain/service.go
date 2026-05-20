@@ -44,3 +44,13 @@ func (s *DomainService) HandleJob(ctx context.Context, job model.Job) error {
 	s.logger.Info("handling job", "job_id", job.JobID)
 	return s.pipeline.AddJob(ctx, job)
 }
+
+func (s *DomainService) HandleBuild(ctx context.Context, build model.Build) error {
+	s.logger.Info("handling build", "build_id", build.ID, "job_id", build.JobID)
+	return s.pipeline.AddBuild(ctx, build)
+}
+
+func (s *DomainService) HandlePipelineStage(ctx context.Context, stage model.PipelineStage) error {
+	s.logger.Info("handling pipeline stage", "build_id", stage.BuildID, "name", stage.Name)
+	return s.pipeline.AddPipelineStage(ctx, stage)
+}

@@ -13,6 +13,8 @@ type MemoryRepository struct {
 	commits      map[string]model.Commit
 	pullRequests map[string]model.PullRequest
 	jobs         map[string]model.Job
+	builds       map[string]model.Build
+	stages       map[string]model.PipelineStage
 }
 
 func NewMemory() *MemoryRepository {
@@ -21,6 +23,8 @@ func NewMemory() *MemoryRepository {
 		commits:      make(map[string]model.Commit),
 		pullRequests: make(map[string]model.PullRequest),
 		jobs:         make(map[string]model.Job),
+		builds:       make(map[string]model.Build),
+		stages:       make(map[string]model.PipelineStage),
 	}
 }
 
@@ -49,5 +53,19 @@ func (r *MemoryRepository) AddJob(_ context.Context, job model.Job) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.jobs[job.JobID] = job
+	return nil
+}
+
+func (r *MemoryRepository) AddBuild(_ context.Context, build model.Build) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.builds[build.ID] = build
+	return nil
+}
+
+func (r *MemoryRepository) AddPipelineStage(_ context.Context, stage model.PipelineStage) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.stages[stage.BuildID+"/"+stage.Name] = stage
 	return nil
 }
