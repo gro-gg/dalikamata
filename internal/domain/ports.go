@@ -32,6 +32,16 @@ type GitEventHandler interface {
 	HandlePullRequest(context.Context, model.PullRequest) error
 }
 
+// Pipeline is the secondary (driven) port for persisting pipeline entities.
+type Pipeline interface {
+	AddJob(context.Context, model.Job) error
+}
+
+// PipelineEventHandler is the primary (driving) port the NATS adapter calls into.
+type PipelineEventHandler interface {
+	HandleJob(context.Context, model.Job) error
+}
+
 // PipelinePublisher is the outgoing port for emitting CI/CD pipeline events.
 type PipelinePublisher interface {
 	PublishJob(context.Context, model.Job) error

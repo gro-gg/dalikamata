@@ -12,14 +12,16 @@ type Service interface {
 }
 
 type DomainService struct {
-	repo   Repository
-	logger *slog.Logger
+	repo     Repository
+	pipeline Pipeline
+	logger   *slog.Logger
 }
 
-func NewDomainService(repo Repository, logger *slog.Logger) *DomainService {
+func NewDomainService(repo Repository, pipeline Pipeline, logger *slog.Logger) *DomainService {
 	return &DomainService{
-		repo:   repo,
-		logger: logger.With("component", "domain_service"),
+		repo:     repo,
+		pipeline: pipeline,
+		logger:   logger.With("component", "domain_service"),
 	}
 }
 
@@ -36,4 +38,9 @@ func (s *DomainService) HandleCommit(ctx context.Context, c model.Commit) error 
 func (s *DomainService) HandlePullRequest(ctx context.Context, pr model.PullRequest) error {
 	s.logger.Info("handling pull request", "id", pr.ID, "repo_id", pr.RepoID)
 	return s.repo.AddPullRequest(ctx, pr)
+}
+
+func (s *DomainService) HandleJob(ctx context.Context, job model.Job) error {
+	s.logger.Info("handling job", "job_id", job.JobID)
+	return s.pipeline.AddJob(ctx, job)
 }

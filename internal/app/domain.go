@@ -63,7 +63,7 @@ func (a *DomainApp) Run(ctx context.Context) error {
 	}
 
 	repository := repo.NewMemory()
-	svc := domain.NewDomainService(repository, a.logger)
-	port := dalinats.NewPort(a.logger, svc)
+	svc := domain.NewDomainService(repository, repository, a.logger)
+	port := dalinats.NewPort(a.logger, svc, svc)
 	return port.Run(ctx, js)
 }

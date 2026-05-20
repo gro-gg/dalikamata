@@ -12,6 +12,7 @@ type MemoryRepository struct {
 	repos        map[string]model.Repo
 	commits      map[string]model.Commit
 	pullRequests map[string]model.PullRequest
+	jobs         map[string]model.Job
 }
 
 func NewMemory() *MemoryRepository {
@@ -19,6 +20,7 @@ func NewMemory() *MemoryRepository {
 		repos:        make(map[string]model.Repo),
 		commits:      make(map[string]model.Commit),
 		pullRequests: make(map[string]model.PullRequest),
+		jobs:         make(map[string]model.Job),
 	}
 }
 
@@ -40,5 +42,12 @@ func (r *MemoryRepository) AddPullRequest(_ context.Context, pr model.PullReques
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.pullRequests[pr.ID] = pr
+	return nil
+}
+
+func (r *MemoryRepository) AddJob(_ context.Context, job model.Job) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.jobs[job.JobID] = job
 	return nil
 }

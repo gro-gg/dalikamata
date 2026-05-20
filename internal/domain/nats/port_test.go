@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matryer/is"
+	testis "github.com/matryer/is"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
 	"codeberg.org/aeforged/dalikamata/internal/domain"
+	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 )
 
 func TestIngestGitRepo(t *testing.T) {
-	is := is.New(t)
+	is := testis.New(t)
 	l := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	natsURL := dalinats.NATSConnectionString("localhost", 4444)
@@ -36,8 +36,9 @@ func TestIngestGitRepo(t *testing.T) {
 	js, err := jetstream.New(nc)
 	is.NoErr(err)
 
-	svc := domain.NewDomainService(repo.NewMemory(), l)
-	sut := dalinats.NewPort(l, svc)
+	memory := repo.NewMemory()
+	svc := domain.NewDomainService(memory, memory, l)
+	sut := dalinats.NewPort(l, svc, svc)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
