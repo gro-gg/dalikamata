@@ -42,13 +42,33 @@ func NATSConnectionString(natsHost string, natsPort int) string {
 	return fmt.Sprintf("nats://%s:%d", natsHost, natsPort)
 }
 
-// TODO split into two ports?
-func NewPort(logger *slog.Logger, gitHandler domain.GitEventHandler, pipelineHandler domain.PipelineEventHandler) *NATSPort {
-	return &NATSPort{
-		logger:          logger.With("type", "port", "component", "ingest_git", "connection", "nats"),
-		gitHandler:      gitHandler,
-		pipelineHandler: pipelineHandler,
+type HandlerOpt func(*NATSPort) error
+
+func WithGitEventHandler(handler domain.GitEventHandler) HandlerOpt {
+	return func(p *NATSPort) error {
+		p.gitHandler = handler
+		return nil
 	}
+}
+
+func WithPipelineEventHandler(handler domain.PipelineEventHandler) HandlerOpt {
+	return func(p *NATSPort) error {
+		p.pipelineHandler = handler
+		return nil
+	}
+}
+
+func NewPort(logger *slog.Logger, handlers ...HandlerOpt) *NATSPort {
+	port := &NATSPort{
+		logger: logger.With("type", "port", "component", "ingest", "connection", "nats"),
+	}
+	for _, handler := range handlers {
+		err := handler(port)
+		if err != nil {
+			port.logger.Error(err.Error())
+		}
+	}
+	return port
 }
 
 func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
