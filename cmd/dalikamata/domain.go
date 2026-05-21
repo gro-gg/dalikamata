@@ -22,8 +22,6 @@ var domainCmd = &cobra.Command{
 		domainApp := app.NewDomainApp(slog.Default())
 		domainApp.NATSHost = natsURL
 		domainApp.NATSPort = natsPort
-		domainApp.DataDir = natsPath
-		domainApp.WithNATSServer = !cmd.Flags().Changed("nats-server") || withNatsServer
 		var wg sync.WaitGroup
 		var runErr error
 
@@ -53,6 +51,4 @@ var domainCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(domainCmd)
-	domainCmd.Flags().BoolVar(&withNatsServer, "nats-server", false, "start NATS server")
-	domainCmd.Flags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
 }

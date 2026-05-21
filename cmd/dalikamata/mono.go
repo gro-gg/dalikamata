@@ -24,11 +24,15 @@ var monoCmd = &cobra.Command{
 		}
 
 		l := slog.Default()
+
+		natsApp := app.NewNATSApp(l)
+		natsApp.Host = natsURL
+		natsApp.Port = natsPort
+		natsApp.DataDir = natsPath
+
 		domainApp := app.NewDomainApp(l)
 		domainApp.NATSHost = natsURL
 		domainApp.NATSPort = natsPort
-		domainApp.DataDir = natsPath
-		domainApp.WithNATSServer = withNatsServer
 
 		metricsApp := app.NewMetricsApp(l)
 		metricsApp.NATSHost = natsURL
@@ -45,6 +49,15 @@ var monoCmd = &cobra.Command{
 
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
+
+		wg.Go(func() {
+			if err := natsApp.Run(ctx); err != nil {
+				l.Error("running NATS", "error", err)
+			}
+		})
+		if err := natsApp.WaitForStartup(); err != nil {
+			return fmt.Errorf("NATS startup: %w", err)
+		}
 
 		wg.Go(func() {
 			domainErr := domainApp.Run(ctx)
@@ -84,7 +97,6 @@ var monoCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(monoCmd)
-	monoCmd.Flags().BoolVar(&withNatsServer, "nats-server", true, "start NATS server")
 	monoCmd.Flags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
 	monoCmd.Flags().StringVar(&bitbucketURL, "bitbucket-url", "", "Bitbucket Server base URL (e.g. https://bitbucket.example.com)")
 	monoCmd.Flags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")

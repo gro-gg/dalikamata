@@ -13,6 +13,7 @@ import (
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 )
 
@@ -21,7 +22,7 @@ func TestIngestGitRepo(t *testing.T) {
 	l := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	natsURL := dalinats.NATSConnectionString("localhost", 4444)
-	ns := dalinats.NewServer()
+	ns := internalnats.NewServer()
 	ns.Port = 4444
 	ns.DataDir = t.TempDir()
 	go func() {

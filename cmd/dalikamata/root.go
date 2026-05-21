@@ -18,7 +18,6 @@ var (
 	natsURL           string // TODO rename to natsHost
 	natsPort          int
 	natsPath          string
-	withNatsServer    bool
 	caCertsDir        string
 	gracePeriod       time.Duration
 	metricsAddr       string
