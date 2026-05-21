@@ -70,6 +70,38 @@ func waitHTTP(t *testing.T, url string) {
 	t.Fatalf("service at %s did not become ready within 30s", url)
 }
 
+// scanOutput pipes a subprocess stdout through a scanner that mirrors every
+// line to os.Stderr and closes ready when a line contains all of the trigger
+// strings. Call before cmd.Start(); register the returned writer's Close() in
+// t.Cleanup AFTER stopSubprocess so the scanner goroutine drains cleanly.
+func scanOutput(cmd *exec.Cmd, triggers ...string) (w *io.PipeWriter, ready <-chan struct{}) {
+	r, pw := io.Pipe()
+	cmd.Stdout = pw
+	ch := make(chan struct{})
+	go func() {
+		closed := false
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			line := scanner.Text()
+			fmt.Fprintln(os.Stderr, line)
+			if !closed {
+				match := true
+				for _, t := range triggers {
+					if !strings.Contains(line, t) {
+						match = false
+						break
+					}
+				}
+				if match {
+					close(ch)
+					closed = true
+				}
+			}
+		}
+	}()
+	return pw, ch
+}
+
 // scanDomainOutput pipes the domain subprocess stdout through a scanner that
 // mirrors every line to os.Stderr and signals two channels:
 //   - ready: closed when the NATS consumer is set up
@@ -138,11 +170,26 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	waitHTTP(t,
 		fmt.Sprintf("http://127.0.0.1:%d/rest/api/1.0/projects/PROJ/repos", bbPort))
 
-	fmt.Println("2. Start domain service (embedded NATS + domain port).")
+	fmt.Println("2. Start NATS service.")
 	natsDataDir := t.TempDir()
-	domainSvc := goRun(ctx, "./cmd/dalikamata", "domain", "--debug",
+	natsSvc := goRun(ctx, "./cmd/dalikamata", "nats",
 		"--nats-port", strconv.Itoa(natsPort),
 		"--nats-data", natsDataDir)
+	natsW, natsReady := scanOutput(natsSvc, "NATS service running")
+	is.NoErr(natsSvc.Start())
+	t.Cleanup(func() { stopSubprocess(natsSvc); natsW.Close() })
+
+	fmt.Println("  waiting for NATS service to be ready...")
+	select {
+	case <-natsReady:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for NATS service to be ready")
+	}
+
+	fmt.Println("3. Start domain service.")
+	domainSvc := goRun(ctx, "./cmd/dalikamata", "domain", "--debug",
+		"--nats-host", "127.0.0.1",
+		"--nats-port", strconv.Itoa(natsPort))
 	domainW, domainReady, reposDone := scanDomainOutput(domainSvc)
 	is.NoErr(domainSvc.Start())
 	t.Cleanup(func() { stopSubprocess(domainSvc); domainW.Close() })
@@ -154,8 +201,9 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 		t.Fatal("timed out waiting for domain service to be ready")
 	}
 
-	fmt.Println("3. Start ingest service — crawls fake Bitbucket and publishes to NATS.")
+	fmt.Println("4. Start ingest service — crawls fake Bitbucket and publishes to NATS.")
 	ingestSvc := goRun(ctx, "./cmd/dalikamata", "ingest", "bitbucket", "--debug",
+		"--nats-host", "127.0.0.1",
 		"--nats-port", strconv.Itoa(natsPort),
 		"--bitbucket-url", fmt.Sprintf("http://127.0.0.1:%d", bbPort),
 		"--bitbucket-token", "test-token",
@@ -163,7 +211,7 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	is.NoErr(ingestSvc.Start())
 	t.Cleanup(func() { stopSubprocess(ingestSvc) })
 
-	fmt.Println("4. Wait for domain to log 5 received repo events (subject=ingest.git.repo).")
+	fmt.Println("5. Wait for domain to log 5 received repo events (subject=ingest.git.repo).")
 	select {
 	case <-reposDone:
 	case <-ctx.Done():

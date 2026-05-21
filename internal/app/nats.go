@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 )
 
 type NATSApp struct {
@@ -12,16 +12,16 @@ type NATSApp struct {
 	Port    int
 	DataDir string
 	logger  *slog.Logger
-	srv     *internalnats.Server
+	srv     *nats.Server
 }
 
 func NewNATSApp(logger *slog.Logger) *NATSApp {
 	return &NATSApp{
-		Host:    "0.0.0.0",
-		Port:    4222,
+		Host:    nats.DefaultHost,
+		Port:    nats.DefaultPort,
 		DataDir: "./data/nats",
 		logger:  logger.With("service", "nats"),
-		srv:     internalnats.NewServer(),
+		srv:     nats.NewServer(),
 	}
 }
 

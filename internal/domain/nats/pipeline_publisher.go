@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
@@ -19,13 +19,9 @@ type PipelinePublisher struct {
 }
 
 func NewPipelinePublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.PipelinePublisher, func(), error) {
-	nc, err := nats.Connect(natsURL)
+	js, closeConn, err := nats.Connect(ctx, natsURL, logger)
 	if err != nil {
 		return nil, nil, fmt.Errorf("pipeline publisher connecting to NATS: %w", err)
-	}
-	js, err := jetstream.New(nc)
-	if err != nil {
-		return nil, nil, fmt.Errorf("pipeline publisher connecting to JetStream: %w", err)
 	}
 
 	p := &PipelinePublisher{
@@ -33,7 +29,7 @@ func NewPipelinePublisher(ctx context.Context, natsURL string, logger *slog.Logg
 		logger: logger,
 	}
 
-	return p, func() { nc.Close() }, nil
+	return p, closeConn, nil
 }
 
 func (p *PipelinePublisher) PublishJob(ctx context.Context, job model.Job) error {

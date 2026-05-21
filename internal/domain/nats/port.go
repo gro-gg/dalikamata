@@ -25,20 +25,14 @@ const (
 	SubjectPipelineBuild = "ingest.pipeline.build"
 	SubjectPipelineStage = "ingest.pipeline.stage"
 
-	DefaultHost = "0.0.0.0"
-	DefaultPort = 4222
-
-	LogReceivedMessage = "received message"
+	LogReceivedMessage  = "received message"
+	LogHandlerSettingUp = "setting up handler"
 )
 
 type NATSPort struct {
 	logger          *slog.Logger
 	gitHandler      domain.GitEventHandler
 	pipelineHandler domain.PipelineEventHandler
-}
-
-func NATSConnectionString(natsHost string, natsPort int) string {
-	return fmt.Sprintf("nats://%s:%d", natsHost, natsPort)
 }
 
 type HandlerOpt func(*NATSPort) error
@@ -145,6 +139,7 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectRepo, err)
 	}
+	s.logger.Info(LogHandlerSettingUp, "subject", SubjectRepo)
 
 	gitCommitConsumeCtx, err := gitCommitConsumer.Consume(s.gitCommitHandler(ctx))
 	if err != nil {

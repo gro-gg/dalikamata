@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/httpclient"
 	"codeberg.org/aeforged/dalikamata/internal/ingest/bitbucket"
 )
@@ -24,8 +25,8 @@ func NewIngestBitbucketApp(logger *slog.Logger) *IngestBitbucketApp {
 	a := &IngestBitbucketApp{
 		BitbucketURL:   "localhost:7999",
 		BitbucketToken: "aToken",
-		NATSHost:       dalinats.DefaultHost,
-		NATSPort:       dalinats.DefaultPort,
+		NATSHost:       nats.DefaultHost,
+		NATSPort:       nats.DefaultPort,
 		Projects:       []string{},
 		logger:         logger.With("service", "ingest_bitbucket"),
 	}
@@ -34,7 +35,7 @@ func NewIngestBitbucketApp(logger *slog.Logger) *IngestBitbucketApp {
 }
 
 func (a *IngestBitbucketApp) Run(ctx context.Context) error {
-	natsURL := dalinats.NATSConnectionString(a.NATSHost, a.NATSPort)
+	natsURL := nats.NATSConnectionString(a.NATSHost, a.NATSPort)
 	publisher, publisherCloser, err := dalinats.NewGitPublisher(ctx, natsURL, a.logger.With("port", "domain", "connection", "nats"))
 	if err != nil {
 		return fmt.Errorf("create publisher: %w", err)

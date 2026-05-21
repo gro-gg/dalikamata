@@ -8,10 +8,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
@@ -34,27 +34,12 @@ func NewPort(logger *slog.Logger, natsURL string) *Port {
 }
 
 func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) (err error) {
-	var nc *nats.Conn
-	for {
-		nc, err = nats.Connect(p.natsURL)
-		if err == nil {
-			break
-		}
-
-		p.logger.Error("connecting to NATS", "error", err)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(1 * time.Second):
-		}
-	}
-	defer nc.Close()
-	p.logger.Info("connected to NATS")
-
-	js, err := jetstream.New(nc)
+	js, closeConn, err := nats.Connect(ctx, p.natsURL, p.logger)
 	if err != nil {
-		return fmt.Errorf("creating jetstream: %w", err)
+		return err
 	}
+	defer closeConn()
+	p.logger.Info("connected to NATS")
 
 	var stream jetstream.Stream
 	for {
@@ -80,13 +65,11 @@ func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) (
 		MaxDeliver:    dalinats.MaxDeliver,
 	})
 	if err != nil {
-		nc.Close()
 		return fmt.Errorf("creating consumer %s: %w", consumerName, err)
 	}
 
 	consumeCtx, err := consumer.Consume(p.pullRequestHandler(handler))
 	if err != nil {
-		nc.Close()
 		return fmt.Errorf("starting consumer: %w", err)
 	}
 
@@ -95,7 +78,6 @@ func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) (
 	<-ctx.Done()
 
 	consumeCtx.Drain()
-	nc.Close()
 
 	return nil
 }

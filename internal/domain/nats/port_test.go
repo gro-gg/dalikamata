@@ -21,7 +21,7 @@ func TestIngestGitRepo(t *testing.T) {
 	is := testis.New(t)
 	l := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	natsURL := dalinats.NATSConnectionString("localhost", 4444)
+	natsURL := internalnats.NATSConnectionString("localhost", 4444)
 	ns := internalnats.NewServer()
 	ns.Port = 4444
 	ns.DataDir = t.TempDir()

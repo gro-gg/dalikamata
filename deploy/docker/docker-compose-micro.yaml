@@ -14,7 +14,7 @@ services:
   dalikamata:
     image: dalikamata:latest
     command:
-      - "--nats-host=dalikamata-nats-nats"
+      - "--nats-host=dalikamata-nats"
       - "domain"
     depends_on:
       - dalikamata-nats

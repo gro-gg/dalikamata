@@ -5,56 +5,38 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 type GITPublisher struct {
-	stream jetstream.JetStream
-	logger *slog.Logger
+	stream  jetstream.JetStream
+	logger  *slog.Logger
+	closeConn func()
 }
 
 func NewGitPublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.GitPublisher, func(), error) {
-	var nc *nats.Conn
-	var err error
-	for {
-		nc, err = nats.Connect(natsURL)
-		if err == nil {
-			break
-		}
-
-		logger.Error("connecting to NATS", "error", err)
-		select {
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		case <-time.After(1 * time.Second):
-		}
+	js, closeConn, err := nats.Connect(ctx, natsURL, logger)
+	if err != nil {
+		return nil, nil, fmt.Errorf("git publisher connecting to NATS: %w", err)
 	}
 	logger.Info("Connected to NATS")
 
-	js, err := jetstream.New(nc)
-	if err != nil {
-		nc.Close()
-		return nil, nil, fmt.Errorf("publisher connecting to JetStream: %w", err)
-	}
-
 	p := &GITPublisher{
-		logger: logger,
-		stream: js,
+		logger:    logger,
+		stream:    js,
+		closeConn: closeConn,
 	}
 
-	return p,
-		p.Close,
-		nil
+	return p, p.Close, nil
 }
 
 func (p *GITPublisher) Close() {
-	p.stream.Conn().Close()
+	p.closeConn()
 }
 
 func (p *GITPublisher) PublishCommit(ctx context.Context, commit model.Commit) error {

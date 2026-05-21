@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
-
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 )
 
@@ -21,23 +19,18 @@ type DomainApp struct {
 
 func NewDomainApp(logger *slog.Logger) *DomainApp {
 	return &DomainApp{
-		NATSHost: dalinats.DefaultHost,
-		NATSPort: dalinats.DefaultPort,
+		NATSHost: nats.DefaultHost,
+		NATSPort: nats.DefaultPort,
 		logger:   logger.With("service", "domain"),
 	}
 }
 
 func (a *DomainApp) Run(ctx context.Context) error {
-	nc, err := nats.Connect(dalinats.NATSConnectionString(a.NATSHost, a.NATSPort))
+	js, closeConn, err := nats.Connect(ctx, nats.NATSConnectionString(a.NATSHost, a.NATSPort), a.logger)
 	if err != nil {
 		return fmt.Errorf("connecting to NATS server: %w", err)
 	}
-	defer nc.Close()
-
-	js, err := jetstream.New(nc)
-	if err != nil {
-		return fmt.Errorf("creating jetstream: %w", err)
-	}
+	defer closeConn()
 
 	repository := repo.NewMemory()
 	svc := domain.NewDomainService(repository, a.logger)
