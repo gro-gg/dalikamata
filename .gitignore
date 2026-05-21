@@ -8,7 +8,6 @@
 *.dll
 *.so
 *.dylib
-dalikamata
 
 # Test binary, built with `go test -c`
 *.test
@@ -31,3 +30,6 @@ go.work.sum
 data/**
 
 dalifakes
+dalikamata
+!dalifakes/
+!dalikamata/
