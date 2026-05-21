@@ -32,7 +32,7 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 
 	for _, projectKey := range c.projects {
 		if err := c.crawlProject(ctx, projectKey); err != nil {
-			c.logger.Error("failed to crawl project", "project", projectKey, "error", err)
+			c.logger.Error("crawling project", "project", projectKey, "error", err)
 		}
 	}
 

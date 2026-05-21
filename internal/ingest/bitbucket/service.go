@@ -12,7 +12,7 @@ type IngestBitbucketService struct {
 }
 
 func NewIngestBitbucketService(crawler *Crawler, logger *slog.Logger) (*IngestBitbucketService, error) {
-	l := logger.With("service", "inget-bitbucket")
+	l := logger.With("service", "ingest-bitbucket")
 	if crawler == nil {
 		return nil, fmt.Errorf("invalid crawler, must not be nil")
 	}

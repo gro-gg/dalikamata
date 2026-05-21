@@ -28,8 +28,7 @@ const (
 	DefaultHost = "0.0.0.0"
 	DefaultPort = 4222
 
-	LogReceivedMessage  = "received message"
-	LogHandlerSettingUp = "Repo Handler Setting Up"
+	LogReceivedMessage = "received message"
 )
 
 type NATSPort struct {
@@ -72,7 +71,7 @@ func NewPort(logger *slog.Logger, handlers ...HandlerOpt) *NATSPort {
 }
 
 func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
-	s.logger.Info("Starting NATS Service")
+	s.logger.Info("Starting Event Handling")
 
 	ingestStream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     StreamIngestName,
@@ -180,14 +179,13 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	pipelineJobConsumeCtx.Drain()
 	pipelineBuildConsumeCtx.Drain()
 	pipelineStageConsumeCtx.Drain()
-	s.logger.Info("NATS Service Shut Down")
 
+	s.logger.Info("Event Handling Shut Down")
 	return nil
 }
 
 func (s *NATSPort) gitRepoHandler(ctx context.Context) func(msg jetstream.Msg) {
 	l := s.logger.With("subject", SubjectRepo)
-	l.Info(LogHandlerSettingUp)
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)
@@ -214,7 +212,6 @@ func (s *NATSPort) gitRepoHandler(ctx context.Context) func(msg jetstream.Msg) {
 
 func (s *NATSPort) gitCommitHandler(ctx context.Context) func(msg jetstream.Msg) {
 	l := s.logger.With("subject", SubjectCommit)
-	l.Info("Commit Handler Setting Up")
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)
@@ -241,7 +238,6 @@ func (s *NATSPort) gitCommitHandler(ctx context.Context) func(msg jetstream.Msg)
 
 func (s *NATSPort) pipelineJobHandler(ctx context.Context) func(msg jetstream.Msg) {
 	l := s.logger.With("subject", SubjectPipelineJob)
-	l.Info("Pipeline Job Handler Setting Up")
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)
@@ -268,7 +264,6 @@ func (s *NATSPort) pipelineJobHandler(ctx context.Context) func(msg jetstream.Ms
 
 func (s *NATSPort) pipelineBuildHandler(ctx context.Context) func(msg jetstream.Msg) {
 	l := s.logger.With("subject", SubjectPipelineBuild)
-	l.Info("Pipeline Build Handler Setting Up")
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)
@@ -295,7 +290,6 @@ func (s *NATSPort) pipelineBuildHandler(ctx context.Context) func(msg jetstream.
 
 func (s *NATSPort) pipelineStageHandler(ctx context.Context) func(msg jetstream.Msg) {
 	l := s.logger.With("subject", SubjectPipelineStage)
-	l.Info("Pipeline Stage Handler Setting Up")
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)
@@ -322,7 +316,6 @@ func (s *NATSPort) pipelineStageHandler(ctx context.Context) func(msg jetstream.
 
 func (s *NATSPort) gitPullRequestHandler(ctx context.Context) func(msg jetstream.Msg) {
 	l := s.logger.With("subject", SubjectPullRequest)
-	l.Info("Pull Request Handler Setting Up")
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)

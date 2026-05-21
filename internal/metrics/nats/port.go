@@ -33,15 +33,26 @@ func NewPort(logger *slog.Logger, natsURL string) *Port {
 	return p
 }
 
-func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) error {
-	nc, err := nats.Connect(p.natsURL)
-	if err != nil {
-		return fmt.Errorf("connecting to NATS: %w", err)
+func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) (err error) {
+	var nc *nats.Conn
+	for {
+		nc, err = nats.Connect(p.natsURL)
+		if err == nil {
+			break
+		}
+
+		p.logger.Error("connecting to NATS", "error", err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(1 * time.Second):
+		}
 	}
+	defer nc.Close()
+	p.logger.Info("connected to NATS")
 
 	js, err := jetstream.New(nc)
 	if err != nil {
-		nc.Close()
 		return fmt.Errorf("creating jetstream: %w", err)
 	}
 
@@ -52,15 +63,13 @@ func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) e
 			break
 		}
 		if !errors.Is(err, jetstream.ErrStreamNotFound) {
-			nc.Close()
 			return fmt.Errorf("getting %s stream: %w", dalinats.StreamIngestName, err)
 		}
 		p.logger.Info("waiting for INGEST stream to be created")
 		select {
 		case <-ctx.Done():
-			nc.Close()
 			return ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-time.After(1 * time.Second):
 		}
 	}
 
@@ -80,6 +89,8 @@ func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) e
 		nc.Close()
 		return fmt.Errorf("starting consumer: %w", err)
 	}
+
+	p.logger.Info("Handling Events")
 
 	<-ctx.Done()
 

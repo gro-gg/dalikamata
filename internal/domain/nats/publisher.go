@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -19,12 +20,26 @@ type GITPublisher struct {
 }
 
 func NewGitPublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.GitPublisher, func(), error) {
-	nc, err := nats.Connect(natsURL)
-	if err != nil {
-		return nil, nil, fmt.Errorf("publisher connecting to NATS: %w", err)
+	var nc *nats.Conn
+	var err error
+	for {
+		nc, err = nats.Connect(natsURL)
+		if err == nil {
+			break
+		}
+
+		logger.Error("connecting to NATS", "error", err)
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case <-time.After(1 * time.Second):
+		}
 	}
+	logger.Info("Connected to NATS")
+
 	js, err := jetstream.New(nc)
 	if err != nil {
+		nc.Close()
 		return nil, nil, fmt.Errorf("publisher connecting to JetStream: %w", err)
 	}
 

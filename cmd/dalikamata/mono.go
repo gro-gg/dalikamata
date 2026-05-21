@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -24,18 +23,19 @@ var monoCmd = &cobra.Command{
 			return fmt.Errorf("--bitbucket-token is required")
 		}
 
-		domainApp := app.NewDomainApp(slog.Default())
+		l := slog.Default()
+		domainApp := app.NewDomainApp(l)
 		domainApp.NATSHost = natsURL
 		domainApp.NATSPort = natsPort
 		domainApp.DataDir = natsPath
-		domainApp.WithNATSServer = true
+		domainApp.WithNATSServer = withNatsServer
 
-		metricsApp := app.NewMetricsApp(slog.Default())
+		metricsApp := app.NewMetricsApp(l)
 		metricsApp.NATSHost = natsURL
 		metricsApp.NATSPort = natsPort
 		metricsApp.MetricsURL = metricsAddr
 
-		ingestApp := app.NewIngestBitbucketApp(slog.Default())
+		ingestApp := app.NewIngestBitbucketApp(l)
 		ingestApp.NATSHost = natsURL
 		ingestApp.NATSPort = natsPort
 		ingestApp.BitbucketURL = bitbucketURL
@@ -45,15 +45,25 @@ var monoCmd = &cobra.Command{
 
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
-		var (
-			domainErr  error
-			metricsErr error
-			ingestErr  error
-		)
 
-		wg.Go(func() { domainErr = domainApp.Run(ctx) })
-		wg.Go(func() { metricsErr = metricsApp.Run(ctx) })
-		wg.Go(func() { ingestErr = ingestApp.Run(ctx) })
+		wg.Go(func() {
+			domainErr := domainApp.Run(ctx)
+			if domainErr != nil {
+				l.Error("running domain service", "error", domainErr)
+			}
+		})
+		wg.Go(func() {
+			metricsErr := metricsApp.Run(ctx)
+			if metricsErr != nil {
+				l.Error("running domain service", "error", metricsErr)
+			}
+		})
+		wg.Go(func() {
+			ingestErr := ingestApp.Run(ctx)
+			if ingestErr != nil {
+				l.Error("running domain service", "error", ingestErr)
+			}
+		})
 
 		<-ctx.Done()
 
@@ -67,7 +77,7 @@ var monoCmd = &cobra.Command{
 		case <-time.After(gracePeriod):
 			return fmt.Errorf("shutdown grace period expired")
 		case <-done:
-			return errors.Join(domainErr, metricsErr, ingestErr)
+			return nil
 		}
 	},
 }

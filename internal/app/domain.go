@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -33,22 +32,21 @@ func NewDomainApp(logger *slog.Logger) *DomainApp {
 
 func (a *DomainApp) Run(ctx context.Context) error {
 	if a.WithNATSServer {
+		a.logger.Info("Starting NATS Service")
 		natsServer := dalinats.NewServer()
 		natsServer.Host = a.NATSHost
 		natsServer.Port = a.NATSPort
 		natsServer.DataDir = a.DataDir
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg := WaitGroupFrom(ctx)
+		wg.Go(func() {
 			if err := natsServer.Start(ctx); err != nil {
 				slog.Error("running NATS server", "error", err)
 			}
-		}()
-		defer wg.Wait()
+		})
 		if err := natsServer.WaitForStartup(); err != nil {
 			return fmt.Errorf("waiting for NATS server: %w", err)
 		}
+		a.logger.Info("NATS Service Running")
 	}
 
 	nc, err := nats.Connect(dalinats.NATSConnectionString(a.NATSHost, a.NATSPort))

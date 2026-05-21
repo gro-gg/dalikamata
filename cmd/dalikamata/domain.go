@@ -28,7 +28,10 @@ var domainCmd = &cobra.Command{
 		var runErr error
 
 		wg.Go(func() {
-			runErr = domainApp.Run(ctx)
+			err := domainApp.Run(ctx)
+			if err != nil {
+				slog.Default().Error("running domain app", "error", err)
+			}
 		})
 
 		<-ctx.Done()
