@@ -10,21 +10,25 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 const DefaultMetricsAddr = "0.0.0.0:2112"
 
+// PullRequestSubscriber is the incoming port for receiving pull request events.
+type PullRequestSubscriber interface {
+	Subscribe(ctx context.Context, handler func(model.PullRequest)) error
+}
+
 type MetricsService struct {
-	subscriber  domain.PullRequestSubscriber
+	subscriber  PullRequestSubscriber
 	logger      *slog.Logger
 	registry    *prometheus.Registry
 	prCycleTime *prometheus.HistogramVec
 	metricsAddr string
 }
 
-func NewMetricsService(subscriber domain.PullRequestSubscriber, logger *slog.Logger, metricsAddr string) *MetricsService {
+func NewMetricsService(subscriber PullRequestSubscriber, logger *slog.Logger, metricsAddr string) *MetricsService {
 	registry := prometheus.NewRegistry()
 
 	prCycleTime := prometheus.NewHistogramVec(

@@ -5,6 +5,10 @@ import (
 	"sync"
 )
 
+type Service interface {
+	Run(context.Context) error
+}
+
 type waitGroupKey struct{}
 
 func WithWaitGroup(ctx context.Context, wg *sync.WaitGroup) context.Context {

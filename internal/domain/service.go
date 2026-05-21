@@ -7,8 +7,18 @@ import (
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
-type Service interface {
-	Run(context.Context) error
+// GitEventHandler is the primary (driving) port the NATS adapter calls into.
+type GitEventHandler interface {
+	HandleRepo(context.Context, model.Repo) error
+	HandleCommit(context.Context, model.Commit) error
+	HandlePullRequest(context.Context, model.PullRequest) error
+}
+
+// PipelineEventHandler is the primary (driving) port the NATS adapter calls into.
+type PipelineEventHandler interface {
+	HandleJob(context.Context, model.Job) error
+	HandleBuild(context.Context, model.Build) error
+	HandlePipelineStage(context.Context, model.PipelineStage) error
 }
 
 type DomainService struct {
