@@ -37,7 +37,7 @@ func TestIngestGitRepo(t *testing.T) {
 	is.NoErr(err)
 
 	memory := repo.NewMemory()
-	svc := domain.NewDomainService(memory, memory, l)
+	svc := domain.NewDomainService(memory, l)
 	sut := dalinats.NewPort(l, svc, svc)
 
 	ctx, cancel := context.WithCancel(t.Context())

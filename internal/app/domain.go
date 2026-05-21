@@ -27,7 +27,7 @@ func NewDomainApp(logger *slog.Logger) *DomainApp {
 		NATSHost: dalinats.DefaultHost,
 		NATSPort: dalinats.DefaultPort,
 		DataDir:  "./data/nats",
-		logger:   logger.With("service", "dalikamata"),
+		logger:   logger.With("service", "domain"),
 	}
 }
 
@@ -63,7 +63,7 @@ func (a *DomainApp) Run(ctx context.Context) error {
 	}
 
 	repository := repo.NewMemory()
-	svc := domain.NewDomainService(repository, repository, a.logger)
+	svc := domain.NewDomainService(repository, a.logger)
 	port := dalinats.NewPort(a.logger, svc, svc)
 	return port.Run(ctx, js)
 }

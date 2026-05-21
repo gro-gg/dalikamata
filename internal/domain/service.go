@@ -12,16 +12,14 @@ type Service interface {
 }
 
 type DomainService struct {
-	repo     Repository
-	pipeline Pipeline
-	logger   *slog.Logger
+	repo   Repository
+	logger *slog.Logger
 }
 
-func NewDomainService(repo Repository, pipeline Pipeline, logger *slog.Logger) *DomainService {
+func NewDomainService(repo Repository, logger *slog.Logger) *DomainService {
 	return &DomainService{
-		repo:     repo,
-		pipeline: pipeline,
-		logger:   logger.With("component", "domain_service"),
+		repo:   repo,
+		logger: logger.With("component", "domain_service"),
 	}
 }
 
@@ -42,15 +40,15 @@ func (s *DomainService) HandlePullRequest(ctx context.Context, pr model.PullRequ
 
 func (s *DomainService) HandleJob(ctx context.Context, job model.Job) error {
 	s.logger.Info("handling job", "job_id", job.JobID)
-	return s.pipeline.AddJob(ctx, job)
+	return s.repo.AddJob(ctx, job)
 }
 
 func (s *DomainService) HandleBuild(ctx context.Context, build model.Build) error {
 	s.logger.Info("handling build", "build_id", build.ID, "job_id", build.JobID)
-	return s.pipeline.AddBuild(ctx, build)
+	return s.repo.AddBuild(ctx, build)
 }
 
 func (s *DomainService) HandlePipelineStage(ctx context.Context, stage model.PipelineStage) error {
 	s.logger.Info("handling pipeline stage", "build_id", stage.BuildID, "name", stage.Name)
-	return s.pipeline.AddPipelineStage(ctx, stage)
+	return s.repo.AddPipelineStage(ctx, stage)
 }
