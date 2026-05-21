@@ -4,7 +4,7 @@ WORKDIR /go/src/app
 COPY . .
 
 RUN go mod download
-RUN CGO_ENABLED=0 go build -o /go/bin/dalikamata
+RUN CGO_ENABLED=0 go build -o /go/bin/dalikamata ./cmd/dalikamata
 
 FROM gcr.io/distroless/static-debian13
 

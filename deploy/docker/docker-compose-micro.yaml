@@ -12,10 +12,11 @@ services:
       - monitoring
 
   dalikamata-fake-bitbucket:
-    image: dalikamata:latest
+    image: dalifakes:latest
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.fakes
     command:
-      - "--nats-server=false"
-      - "fake"
       - "bitbucket"
       - "--addr=0.0.0.0:7990"
     ports:
@@ -26,7 +27,6 @@ services:
   dalikamata-ingest-bitbucket:
     image: dalikamata:latest
     command:
-      - "--nats-server=false"
       - "--bitbucket-url=http://dalikamata-fake-bitbucket:7990"
       - "--bitbucket-token=x"
       - "--bitbucket-projects=PROJ,INFR"
@@ -42,7 +42,6 @@ services:
   dalikamata-metrics:
     image: dalikamata:latest
     command:
-      - "--nats-server=false"
       - "--nats-host=dalikamata"
       - "metrics"
       - "--debug"

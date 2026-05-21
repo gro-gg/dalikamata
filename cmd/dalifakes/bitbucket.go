@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"log/slog"
@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var fakeBitbucketCmd = &cobra.Command{
+var bitbucketCmd = &cobra.Command{
 	Use:   "bitbucket",
 	Short: "start a fake Bitbucket Server for development and testing",
 	Long: `start a fake Bitbucket Server for development and testing
@@ -35,7 +35,7 @@ Point the ingest command at it with:
 }
 
 func init() {
-	fakeCmd.AddCommand(fakeBitbucketCmd)
+	rootCmd.AddCommand(bitbucketCmd)
 
-	fakeBitbucketCmd.Flags().String("addr", "localhost:7990", "address to listen on (host:port)")
+	bitbucketCmd.Flags().String("addr", "localhost:7990", "address to listen on (host:port)")
 }

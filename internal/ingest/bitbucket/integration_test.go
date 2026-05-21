@@ -33,8 +33,8 @@ func moduleRoot() string {
 // Setpgid places the process (and the binary it forks) in their own process
 // group so stopSubprocess can kill the whole group, preventing orphaned
 // children from keeping I/O pipes open after the test exits.
-func goRun(ctx context.Context, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "go", append([]string{"run", ".", "--debug"}, args...)...)
+func goRun(ctx context.Context, bin string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "go", append([]string{"run", bin}, args...)...)
 	cmd.Dir = moduleRoot()
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
@@ -130,7 +130,7 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	natsPort := freePort(t)
 
 	fmt.Println("1. Start fake Bitbucket first — no dependencies on NATS.")
-	fakeBB := goRun(ctx, "fake", "bitbucket",
+	fakeBB := goRun(ctx, "./cmd/dalifakes", "bitbucket",
 		"--addr", fmt.Sprintf("127.0.0.1:%d", bbPort))
 	is.NoErr(fakeBB.Start())
 	t.Cleanup(func() { stopSubprocess(fakeBB) })
@@ -140,7 +140,7 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 
 	fmt.Println("2. Start domain service (embedded NATS + domain port).")
 	natsDataDir := t.TempDir()
-	domainSvc := goRun(ctx, "domain",
+	domainSvc := goRun(ctx, "./cmd/dalikamata", "domain", "--debug",
 		"--nats-port", strconv.Itoa(natsPort),
 		"--nats-data", natsDataDir)
 	domainW, domainReady, reposDone := scanDomainOutput(domainSvc)
@@ -155,7 +155,7 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	}
 
 	fmt.Println("3. Start ingest service — crawls fake Bitbucket and publishes to NATS.")
-	ingestSvc := goRun(ctx, "ingest", "bitbucket",
+	ingestSvc := goRun(ctx, "./cmd/dalikamata", "ingest", "bitbucket", "--debug",
 		"--nats-port", strconv.Itoa(natsPort),
 		"--bitbucket-url", fmt.Sprintf("http://127.0.0.1:%d", bbPort),
 		"--bitbucket-token", "test-token",
