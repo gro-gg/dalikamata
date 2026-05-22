@@ -1,0 +1,30 @@
+services:
+  dalikamata-fake-bitbucket:
+    image: dalifakes:latest
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.fakes
+    command:
+      - "bitbucket"
+      - "--addr=0.0.0.0:17990"
+    ports:
+      - "17990:17990"
+
+  dalikamata:
+    image: dalikamata:latest
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile
+    command:
+      - "--nats-port=14222"
+      - "--metrics-addr=0.0.0.0:12112"
+      - "mono"
+      - "--nats-data=/tmp/nats"
+      - "--bitbucket-url=http://dalikamata-fake-bitbucket:17990"
+      - "--bitbucket-token=test-token"
+      - "--bitbucket-projects=PROJ,INFRA"
+    depends_on:
+      - dalikamata-fake-bitbucket
+    ports:
+      - "14222:14222"
+      - "12112:12112"

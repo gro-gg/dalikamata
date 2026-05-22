@@ -21,7 +21,7 @@ Pre-populated jobs:
 
 Point the ingest command at it with:
   dalikamata ingest jenkins \
-    --jenkins-url http://localhost:8080 \
+    --jenkins-url http://localhost:7991 \
     --jenkins-user any \
     --jenkins-token any`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -35,5 +35,5 @@ Point the ingest command at it with:
 
 func init() {
 	rootCmd.AddCommand(dalifakesJenkinsCmd)
-	dalifakesJenkinsCmd.Flags().String("addr", "localhost:8080", "address to listen on (host:port)")
+	dalifakesJenkinsCmd.Flags().String("addr", "localhost:7991", "address to listen on (host:port)")
 }
