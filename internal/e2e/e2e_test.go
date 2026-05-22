@@ -88,10 +88,10 @@ func runE2E(t *testing.T, project, file string, metricsPort, natsPort int) {
 func dockerComposeUp(t *testing.T, project, file string) {
 	t.Helper()
 
-	run(t, "docker-compose", "-p", project, "-f", file, "up", "-d")
+	run(t, "docker", "compose", "-p", project, "-f", file, "up", "-d")
 
 	t.Cleanup(func() {
-		run(t, "docker-compose", "-p", project, "-f", file, "down", "--volumes", "--remove-orphans")
+		run(t, "docker", "compose", "-p", project, "-f", file, "down", "--volumes", "--remove-orphans")
 	})
 }
 
