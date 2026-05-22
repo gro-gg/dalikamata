@@ -69,7 +69,7 @@ jobs:
         run: |
           docker load -i dalikamata.tar
           docker load -i dalifakes.tar
-      - run: go test -tags=e2e ./internal/e2e/... -v -timeout 2m
+      - run: go test -tags=e2e ./internal/e2e/... -v -timeout 2m -skip-docker-build
 
   publish:
     needs: [e2e-test]

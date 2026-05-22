@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -27,18 +28,23 @@ func moduleRoot() string {
 	return filepath.Join(wd, "../..")
 }
 
+var skipDockerBuild = flag.Bool("skip-docker-build", false, "skip docker build (use when images are already loaded)")
+
 func TestMain(m *testing.M) {
-	root := moduleRoot()
-	for _, img := range []struct{ tag, dockerfile string }{
-		{"dalikamata:latest", "deploy/docker/Dockerfile"},
-		{"dalifakes:latest", "deploy/docker/Dockerfile.fakes"},
-	} {
-		cmd := exec.Command("docker", "build", "-t", img.tag, "-f", img.dockerfile, ".")
-		cmd.Dir = root
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			log.Fatalf("building image %s: %v", img.tag, err)
+	flag.Parse()
+	if !*skipDockerBuild {
+		root := moduleRoot()
+		for _, img := range []struct{ tag, dockerfile string }{
+			{"dalikamata:latest", "deploy/docker/Dockerfile"},
+			{"dalifakes:latest", "deploy/docker/Dockerfile.fakes"},
+		} {
+			cmd := exec.Command("docker", "build", "-t", img.tag, "-f", img.dockerfile, ".")
+			cmd.Dir = root
+			cmd.Stdout = os.Stderr
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				log.Fatalf("building image %s: %v", img.tag, err)
+			}
 		}
 	}
 	os.Exit(m.Run())
