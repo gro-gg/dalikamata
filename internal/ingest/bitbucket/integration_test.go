@@ -3,219 +3,71 @@
 package bitbucket_test
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
-	"net"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"syscall"
+	"log/slog"
 	"testing"
 	"time"
 
-	"codeberg.org/aeforged/dalikamata/internal/domain/nats"
 	"github.com/matryer/is"
+
+	"codeberg.org/aeforged/dalikamata/internal/app"
+	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/ingest/bitbucket/fakeserver"
+	"codeberg.org/aeforged/dalikamata/internal/testhelper"
+	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
-
-// moduleRoot returns the module root directory. go test sets the working
-// directory to the package under test (internal/ingest/bitbucket/).
-func moduleRoot() string {
-	wd, _ := os.Getwd()
-	return filepath.Join(wd, "../../..")
-}
-
-// goRun creates a subprocess that runs `go run . <args>` from the module root.
-// Setpgid places the process (and the binary it forks) in their own process
-// group so stopSubprocess can kill the whole group, preventing orphaned
-// children from keeping I/O pipes open after the test exits.
-func goRun(ctx context.Context, bin string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "go", append([]string{"run", bin}, args...)...)
-	cmd.Dir = moduleRoot()
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	fmt.Println("  goRun:", cmd.String())
-	return cmd
-}
-
-func freePort(t *testing.T) int {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
-	return port
-}
-
-func waitHTTP(t *testing.T, url string) {
-	t.Helper()
-	deadline := time.Now().Add(30 * time.Second)
-	for time.Now().Before(deadline) {
-		resp, err := http.Get(url) //nolint:noctx
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return
-			}
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	t.Fatalf("service at %s did not become ready within 30s", url)
-}
-
-// scanOutput pipes a subprocess stdout through a scanner that mirrors every
-// line to os.Stderr and closes ready when a line contains all of the trigger
-// strings. Call before cmd.Start(); register the returned writer's Close() in
-// t.Cleanup AFTER stopSubprocess so the scanner goroutine drains cleanly.
-func scanOutput(cmd *exec.Cmd, triggers ...string) (w *io.PipeWriter, ready <-chan struct{}) {
-	r, pw := io.Pipe()
-	cmd.Stdout = pw
-	ch := make(chan struct{})
-	go func() {
-		closed := false
-		scanner := bufio.NewScanner(r)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fmt.Fprintln(os.Stderr, line)
-			if !closed {
-				match := true
-				for _, t := range triggers {
-					if !strings.Contains(line, t) {
-						match = false
-						break
-					}
-				}
-				if match {
-					close(ch)
-					closed = true
-				}
-			}
-		}
-	}()
-	return pw, ch
-}
-
-// scanDomainOutput pipes the domain subprocess stdout through a scanner that
-// mirrors every line to os.Stderr and signals two channels:
-//   - ready: closed when the NATS consumer is set up
-//   - reposDone: closed when 5 "received repo" log lines have been seen
-//
-// Call before domainSvc.Start(); register domainW.Close() in t.Cleanup AFTER
-// stopSubprocess so the scanner goroutine drains cleanly on shutdown.
-func scanDomainOutput(domainSvc *exec.Cmd) (domainW *io.PipeWriter, ready, reposDone <-chan struct{}) {
-	domainR, w := io.Pipe()
-	domainSvc.Stdout = w
-	chReady := make(chan struct{})
-	chRepos := make(chan struct{})
-	go func() {
-		readyClosed, reposClosed := false, false
-		repoCount := 0
-		scanner := bufio.NewScanner(domainR)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fmt.Fprintln(os.Stderr, line)
-			subject := "subject=ingest.git.repo"
-			if !readyClosed && strings.Contains(line, subject) && strings.Contains(line, nats.LogHandlerSettingUp) {
-				close(chReady)
-				readyClosed = true
-			}
-			if !reposClosed && strings.Contains(line, subject) && strings.Contains(line, nats.LogReceivedMessage) {
-				fmt.Println("  domain received repo event:", subject)
-				repoCount++
-				if repoCount >= 5 {
-					close(chRepos)
-					reposClosed = true
-				}
-			}
-		}
-	}()
-	return w, chReady, chRepos
-}
-
-// stopSubprocess kills the entire process group of cmd (covering both the
-// `go run` parent and the compiled binary it forks), then waits for cmd to exit.
-func stopSubprocess(cmd *exec.Cmd) {
-	if cmd.Process == nil {
-		return
-	}
-	fmt.Println("killpg subprocess:", cmd.Process.Pid)
-	syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	cmd.Wait()
-}
 
 func TestIngestBitbucketIntegration(t *testing.T) {
 	t.Parallel()
 
 	is := is.New(t)
+	l := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	t.Cleanup(cancel)
+	// 1. Embedded NATS + INGEST stream
+	natsURL, natsPort := testhelper.StartNATS(t)
+	js := testhelper.NewJetStream(t, natsURL)
+	testhelper.CreateIngestStream(t, js)
 
-	bbPort := freePort(t)
-	natsPort := freePort(t)
+	// 2. In-process fake Bitbucket server
+	bbPort := testhelper.FreePort(t)
+	bbSrv := fakeserver.New(fmt.Sprintf("127.0.0.1:%d", bbPort), l.With("service", "fake-bitbucket"))
+	bbCtx, bbCancel := context.WithCancel(t.Context())
+	t.Cleanup(bbCancel)
+	go func() {
+		if err := bbSrv.Start(bbCtx); err != nil {
+			t.Logf("fake bitbucket stopped: %v", err)
+		}
+	}()
+	testhelper.WaitHTTP(t, fmt.Sprintf("http://127.0.0.1:%d/rest/api/1.0/projects/PROJ/repos", bbPort))
 
-	fmt.Println("1. Start fake Bitbucket first — no dependencies on NATS.")
-	fakeBB := goRun(ctx, "./cmd/dalifakes", "bitbucket",
-		"--addr", fmt.Sprintf("127.0.0.1:%d", bbPort))
-	is.NoErr(fakeBB.Start())
-	t.Cleanup(func() { stopSubprocess(fakeBB) })
+	// 3. Bitbucket ingest app
+	ingestApp := app.NewIngestBitbucketApp(l)
+	ingestApp.NATSHost = "127.0.0.1"
+	ingestApp.NATSPort = natsPort
+	ingestApp.BitbucketURL = fmt.Sprintf("http://127.0.0.1:%d", bbPort)
+	ingestApp.BitbucketToken = "test-token"
+	ingestApp.Projects = []string{"PROJ", "INFRA"}
 
-	waitHTTP(t,
-		fmt.Sprintf("http://127.0.0.1:%d/rest/api/1.0/projects/PROJ/repos", bbPort))
+	ingestCtx, ingestCancel := context.WithCancel(t.Context())
+	t.Cleanup(ingestCancel)
+	go func() {
+		if err := ingestApp.Run(ingestCtx); err != nil {
+			t.Logf("ingest app stopped: %v", err)
+		}
+	}()
 
-	fmt.Println("2. Start NATS service.")
-	natsDataDir := t.TempDir()
-	natsSvc := goRun(ctx, "./cmd/dalikamata", "nats",
-		"--nats-port", strconv.Itoa(natsPort),
-		"--nats-data", natsDataDir)
-	natsW, natsReady := scanOutput(natsSvc, "NATS service running")
-	is.NoErr(natsSvc.Start())
-	t.Cleanup(func() { stopSubprocess(natsSvc); natsW.Close() })
+	// 4. Assert NATS message counts
+	// fakeserver fixture: PROJ(3 repos) + INFRA(2 repos) = 5
+	repos := testhelper.CollectMessages[model.Repo](t, js, dalinats.SubjectRepo, 5, 10*time.Second)
+	is.Equal(len(repos), 5)
 
-	fmt.Println("  waiting for NATS service to be ready...")
-	select {
-	case <-natsReady:
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for NATS service to be ready")
-	}
+	// backend-api(5) + frontend-app(3) + shared-lib(2) + k8s-configs(2) + terraform-modules(3) = 15
+	commits := testhelper.CollectMessages[model.Commit](t, js, dalinats.SubjectCommit, 15, 10*time.Second)
+	is.Equal(len(commits), 15)
 
-	fmt.Println("3. Start domain service.")
-	domainSvc := goRun(ctx, "./cmd/dalikamata", "domain", "--debug",
-		"--nats-host", "127.0.0.1",
-		"--nats-port", strconv.Itoa(natsPort))
-	domainW, domainReady, reposDone := scanDomainOutput(domainSvc)
-	is.NoErr(domainSvc.Start())
-	t.Cleanup(func() { stopSubprocess(domainSvc); domainW.Close() })
-
-	fmt.Println("  waiting for domain service to be ready...")
-	select {
-	case <-domainReady:
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for domain service to be ready")
-	}
-
-	fmt.Println("4. Start ingest service — crawls fake Bitbucket and publishes to NATS.")
-	ingestSvc := goRun(ctx, "./cmd/dalikamata", "ingest", "bitbucket", "--debug",
-		"--nats-host", "127.0.0.1",
-		"--nats-port", strconv.Itoa(natsPort),
-		"--bitbucket-url", fmt.Sprintf("http://127.0.0.1:%d", bbPort),
-		"--bitbucket-token", "test-token",
-		"--bitbucket-projects", "PROJ,INFRA")
-	is.NoErr(ingestSvc.Start())
-	t.Cleanup(func() { stopSubprocess(ingestSvc) })
-
-	fmt.Println("5. Wait for domain to log 5 received repo events (subject=ingest.git.repo).")
-	select {
-	case <-reposDone:
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for domain to receive all 5 repo events")
-	}
-	fmt.Println("Test completed successfully.")
+	// backend-api(3) + frontend-app(2) + shared-lib(1) + k8s-configs(1) + terraform-modules(2) = 9
+	prs := testhelper.CollectMessages[model.PullRequest](t, js, dalinats.SubjectPullRequest, 9, 10*time.Second)
+	is.Equal(len(prs), 9)
 }
