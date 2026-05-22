@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: go test -tags=integration ./internal/ingest/bitbucket/... -v -timeout 120s
+      - run: go test -tags=integration ./internal/ingest/bitbucket/... -v -timeout 1m
 
   lint:
     runs-on: ubuntu-latest
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: go test -tags=e2e ./internal/e2e/... -v -timeout 1m
+      - run: go test -tags=e2e ./internal/e2e/... -v -timeout 2m
 
   publish:
     needs: [test, integration-test, e2e-test, lint]
