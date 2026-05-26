@@ -14,8 +14,8 @@ import (
 )
 
 type GITPublisher struct {
-	stream  jetstream.JetStream
-	logger  *slog.Logger
+	stream    jetstream.JetStream
+	logger    *slog.Logger
 	closeConn func()
 }
 
@@ -39,17 +39,19 @@ func (p *GITPublisher) Close() {
 	p.closeConn()
 }
 
+func (p *GITPublisher) PublishRepo(ctx context.Context, repo model.Repo) error {
+	p.logger.Debug("publishing repo", "subject", SubjectRepo, "ID", repo.RepoID, "Name", repo.Name)
+	return p.publish(ctx, SubjectRepo, repo)
+}
+
 func (p *GITPublisher) PublishCommit(ctx context.Context, commit model.Commit) error {
+	p.logger.Debug("publishing commit", "subject", SubjectCommit, "SHA", commit.SHA, "RepoID", commit.RepoID)
 	return p.publish(ctx, SubjectCommit, commit)
 }
 
 func (p *GITPublisher) PublishPullRequest(ctx context.Context, pr model.PullRequest) error {
+	p.logger.Debug("publishing pull request", "subject", SubjectPullRequest, "ID", pr.ID)
 	return p.publish(ctx, SubjectPullRequest, pr)
-}
-
-func (p *GITPublisher) PublishRepo(ctx context.Context, repo model.Repo) error {
-	p.logger.Debug("publishing repo", "subject", SubjectRepo, "ID", repo.RepoID, "Name", repo.Name)
-	return p.publish(ctx, SubjectRepo, repo)
 }
 
 func (p *GITPublisher) publish(ctx context.Context, subject string, payload any) error {

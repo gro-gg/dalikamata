@@ -37,12 +37,14 @@ func (p *PipelinePublisher) PublishWorkflow(ctx context.Context, workflow model.
 	return p.publish(ctx, SubjectCicdWorkflow, workflow)
 }
 
-func (p *PipelinePublisher) PublishWorkflowRun(ctx context.Context, build model.WorkflowRun) error {
-	return p.publish(ctx, SubjectCicdWorkflowRun, build)
+func (p *PipelinePublisher) PublishWorkflowRun(ctx context.Context, run model.WorkflowRun) error {
+	p.logger.Debug("publishing workflow run", "subject", SubjectCicdWorkflowRun, "id", run.ID)
+	return p.publish(ctx, SubjectCicdWorkflowRun, run)
 }
 
-func (p *PipelinePublisher) PublishWorkflowTask(ctx context.Context, stage model.WorkflowTask) error {
-	return p.publish(ctx, SubjectCicdWorkflowTask, stage)
+func (p *PipelinePublisher) PublishWorkflowTask(ctx context.Context, task model.WorkflowTask) error {
+	p.logger.Debug("publishing workflow task", "subject", SubjectCicdWorkflowTask, "id", task.ID)
+	return p.publish(ctx, SubjectCicdWorkflowTask, task)
 }
 
 func (p *PipelinePublisher) publish(ctx context.Context, subject string, payload any) error {
