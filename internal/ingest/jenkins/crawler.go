@@ -21,12 +21,12 @@ const (
 
 type Crawler struct {
 	client    JenkinsClient
-	publisher domain.PipelinePublisher
+	publisher domain.CICDPublisher
 	jobs      []string
 	logger    *slog.Logger
 }
 
-func NewCrawler(client JenkinsClient, publisher domain.PipelinePublisher, jobs []string, logger *slog.Logger) *Crawler {
+func NewCrawler(client JenkinsClient, publisher domain.CICDPublisher, jobs []string, logger *slog.Logger) *Crawler {
 	return &Crawler{
 		client:    client,
 		publisher: publisher,
@@ -82,11 +82,11 @@ func (c *Crawler) discoverJobs(ctx context.Context, folderPath string) ([]string
 }
 
 func (c *Crawler) crawlJob(ctx context.Context, jobPath string) error {
-	job := model.Job{
-		JobID: jobPath,
-		Name:  path.Base(jobPath),
+	job := model.Workflow{
+		ID:   jobPath,
+		Name: path.Base(jobPath),
 	}
-	if err := c.publisher.PublishJob(ctx, job); err != nil {
+	if err := c.publisher.PublishWorkflow(ctx, job); err != nil {
 		c.logger.Error("publishing job", "job", jobPath, "error", err)
 	}
 
@@ -101,17 +101,17 @@ func (c *Crawler) crawlJob(ctx context.Context, jobPath string) error {
 		}
 
 		buildID := fmt.Sprintf("%s/%d", jobPath, b.Number)
-		domainBuild := model.Build{
-			ID:        buildID,
-			JobID:     jobPath,
-			Number:    b.Number,
-			Status:    b.Result,
-			Branch:    extractBranch(b),
-			CommitSHA: extractCommitSHA(b),
-			StartedAt: time.UnixMilli(b.Timestamp),
-			Duration:  float64(b.Duration) / 1000.0,
+		domainBuild := model.WorkflowRun{
+			ID:         buildID,
+			WorkflowID: jobPath,
+			Number:     b.Number,
+			Status:     b.Result,
+			Branch:     extractBranch(b),
+			CommitSHA:  extractCommitSHA(b),
+			StartedAt:  time.UnixMilli(b.Timestamp),
+			Duration:   float64(b.Duration) / 1000.0,
 		}
-		if err := c.publisher.PublishBuild(ctx, domainBuild); err != nil {
+		if err := c.publisher.PublishWorkflowRun(ctx, domainBuild); err != nil {
 			c.logger.Error("publishing build", "build", buildID, "error", err)
 		}
 
@@ -122,15 +122,15 @@ func (c *Crawler) crawlJob(ctx context.Context, jobPath string) error {
 		}
 
 		for i, s := range stages {
-			stage := model.PipelineStage{
-				BuildID:   buildID,
+			stage := model.WorkflowTask{
+				ID:        buildID,
 				Order:     i,
 				Name:      s.Name,
 				Status:    s.Status,
 				StartedAt: time.UnixMilli(s.StartTimeMillis),
 				Duration:  float64(s.DurationMillis) / 1000.0,
 			}
-			if err := c.publisher.PublishPipelineStage(ctx, stage); err != nil {
+			if err := c.publisher.PublishWorkflowTask(ctx, stage); err != nil {
 				c.logger.Error("publishing stage", "build", buildID, "stage", s.Name, "error", err)
 			}
 		}

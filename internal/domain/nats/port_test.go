@@ -13,8 +13,8 @@ import (
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
-	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
+	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
 )
 
 func TestIngestGitRepo(t *testing.T) {
@@ -39,7 +39,7 @@ func TestIngestGitRepo(t *testing.T) {
 
 	memory := repo.NewMemory()
 	svc := domain.NewDomainService(memory, l)
-	sut := dalinats.NewPort(l, dalinats.WithGitEventHandler(svc), dalinats.WithPipelineEventHandler(svc))
+	sut := dalinats.NewPort(l, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
 
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)

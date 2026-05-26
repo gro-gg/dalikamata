@@ -60,14 +60,14 @@ func TestIngestJenkinsIntegration(t *testing.T) {
 
 	// 4. Assert NATS message counts
 	// fakeserver fixture: 2 jobs
-	jobs := testhelper.CollectMessages[model.Job](t, js, dalinats.SubjectPipelineJob, 2, 10*time.Second)
+	jobs := testhelper.CollectMessages[model.Workflow](t, js, dalinats.SubjectCicdWorkflow, 2, 10*time.Second)
 	is.Equal(len(jobs), 2)
 
 	// 2 jobs × 3 builds each = 6 builds
-	builds := testhelper.CollectMessages[model.Build](t, js, dalinats.SubjectPipelineBuild, 6, 10*time.Second)
+	builds := testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 6, 10*time.Second)
 	is.Equal(len(builds), 6)
 
 	// 2 jobs × 3 builds × 3 stages = 18 stages
-	stages := testhelper.CollectMessages[model.PipelineStage](t, js, dalinats.SubjectPipelineStage, 18, 10*time.Second)
+	stages := testhelper.CollectMessages[model.WorkflowTask](t, js, dalinats.SubjectCicdWorkflowTask, 18, 10*time.Second)
 	is.Equal(len(stages), 18)
 }

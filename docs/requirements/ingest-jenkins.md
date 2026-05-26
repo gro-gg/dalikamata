@@ -30,7 +30,7 @@ Crawl a self-hosted Jenkins server and publish information about pipeline builds
 ## Scope
 
 For each job in scope:
-1. Publish a `Job` event describing the job (full path + leaf name).
+1. Publish a `Workflow` event describing the job (full path + leaf name).
 2. Fetch all builds (number, status, timestamps, SCM info).
 3. For each build, fetch all **pipeline stages** (name, status, duration).
 
@@ -51,14 +51,14 @@ const (
     BuildStatusUnstable = "UNSTABLE"
 )
 
-type Job struct {
-    JobID string `json:"job_id"` // full Jenkins path, e.g. "team/payments/main"
+type Workflow struct {
+    ID string `json:"job_id"` // full Jenkins path, e.g. "team/payments/main"
     Name  string `json:"name"`   // leaf name, e.g. "main"
 }
 
-type Build struct {
+type WorkflowRun struct {
     ID        string    `json:"id"`         // "<job-id>/<build-number>"
-    JobID     string    `json:"job_id"`     // full Jenkins path of the owning job
+    ID     string    `json:"job_id"`     // full Jenkins path of the owning job
     Number    int       `json:"number"`
     Status    string    `json:"status"`
     Branch    string    `json:"branch"`     // from SCM info; empty if unavailable
@@ -67,8 +67,8 @@ type Build struct {
     Duration  float64   `json:"duration"`   // seconds
 }
 
-type PipelineStage struct {
-    BuildID   string    `json:"build_id"`
+type WorkflowTask struct {
+    ID   string    `json:"build_id"`
     Order     int       `json:"order"` // 0-based execution order within the build
     Name      string    `json:"name"`
     Status    string    `json:"status"`
@@ -83,9 +83,9 @@ Subjects publish to the existing `INGEST` JetStream stream (filter `ingest.>`). 
 
 | Subject                   | Payload                       |
 |---------------------------|-------------------------------|
-| `ingest.pipeline.job`     | `model.Job` JSON              |
-| `ingest.pipeline.build`   | `model.Build` JSON            |
-| `ingest.pipeline.stage`   | `model.PipelineStage` JSON    |
+| `ingest.pipeline.job`     | `model.Workflow` JSON              |
+| `ingest.pipeline.build`   | `model.WorkflowRun` JSON            |
+| `ingest.pipeline.stage`   | `model.WorkflowTask` JSON    |
 
 ## CLI Flags (`dalikamata ingest jenkins`)
 

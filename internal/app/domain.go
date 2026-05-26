@@ -7,8 +7,8 @@ import (
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
-	"codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 )
 
 type DomainApp struct {
@@ -34,6 +34,6 @@ func (a *DomainApp) Run(ctx context.Context) error {
 
 	repository := repo.NewMemory()
 	svc := domain.NewDomainService(repository, a.logger)
-	port := dalinats.NewPort(a.logger, dalinats.WithGitEventHandler(svc), dalinats.WithPipelineEventHandler(svc))
+	port := dalinats.NewPort(a.logger, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
 	return port.Run(ctx, js)
 }

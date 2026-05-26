@@ -8,23 +8,23 @@ import (
 )
 
 type MemoryRepository struct {
-	mu           sync.RWMutex
-	repos        map[string]model.Repo
-	commits      map[string]model.Commit
-	pullRequests map[string]model.PullRequest
-	jobs         map[string]model.Job
-	builds       map[string]model.Build
-	stages       map[string]model.PipelineStage
+	mu            sync.RWMutex
+	repos         map[string]model.Repo
+	commits       map[string]model.Commit
+	pullRequests  map[string]model.PullRequest
+	workflows     map[string]model.Workflow
+	workflowRuns  map[string]model.WorkflowRun
+	workflowTasks map[string]model.WorkflowTask
 }
 
 func NewMemory() *MemoryRepository {
 	return &MemoryRepository{
-		repos:        make(map[string]model.Repo),
-		commits:      make(map[string]model.Commit),
-		pullRequests: make(map[string]model.PullRequest),
-		jobs:         make(map[string]model.Job),
-		builds:       make(map[string]model.Build),
-		stages:       make(map[string]model.PipelineStage),
+		repos:         make(map[string]model.Repo),
+		commits:       make(map[string]model.Commit),
+		pullRequests:  make(map[string]model.PullRequest),
+		workflows:     make(map[string]model.Workflow),
+		workflowRuns:  make(map[string]model.WorkflowRun),
+		workflowTasks: make(map[string]model.WorkflowTask),
 	}
 }
 
@@ -49,23 +49,23 @@ func (r *MemoryRepository) AddPullRequest(_ context.Context, pr model.PullReques
 	return nil
 }
 
-func (r *MemoryRepository) AddJob(_ context.Context, job model.Job) error {
+func (r *MemoryRepository) AddWorkflow(_ context.Context, job model.Workflow) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.jobs[job.JobID] = job
+	r.workflows[job.ID] = job
 	return nil
 }
 
-func (r *MemoryRepository) AddBuild(_ context.Context, build model.Build) error {
+func (r *MemoryRepository) AddWorkflowRun(_ context.Context, build model.WorkflowRun) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.builds[build.ID] = build
+	r.workflowRuns[build.ID] = build
 	return nil
 }
 
-func (r *MemoryRepository) AddPipelineStage(_ context.Context, stage model.PipelineStage) error {
+func (r *MemoryRepository) AddWorkflowTask(_ context.Context, stage model.WorkflowTask) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.stages[stage.BuildID+"/"+stage.Name] = stage
+	r.workflowTasks[stage.ID+"/"+stage.Name] = stage
 	return nil
 }

@@ -13,11 +13,11 @@ type GitPublisher interface {
 	PublishRepo(context.Context, model.Repo) error
 }
 
-// PipelinePublisher is the outgoing port for emitting CI/CD pipeline events.
-type PipelinePublisher interface {
-	PublishJob(context.Context, model.Job) error
-	PublishBuild(context.Context, model.Build) error
-	PublishPipelineStage(context.Context, model.PipelineStage) error
+// CICDPublisher is the outgoing port for emitting CI/CD pipeline events.
+type CICDPublisher interface {
+	PublishWorkflow(context.Context, model.Workflow) error
+	PublishWorkflowRun(context.Context, model.WorkflowRun) error
+	PublishWorkflowTask(context.Context, model.WorkflowTask) error
 }
 
 // Repository is the secondary (driven) port for persisting entities.
@@ -25,7 +25,7 @@ type Repository interface {
 	AddRepo(context.Context, model.Repo) error
 	AddCommit(context.Context, model.Commit) error
 	AddPullRequest(context.Context, model.PullRequest) error
-	AddJob(context.Context, model.Job) error
-	AddBuild(context.Context, model.Build) error
-	AddPipelineStage(context.Context, model.PipelineStage) error
+	AddWorkflow(context.Context, model.Workflow) error
+	AddWorkflowRun(context.Context, model.WorkflowRun) error
+	AddWorkflowTask(context.Context, model.WorkflowTask) error
 }

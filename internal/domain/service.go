@@ -14,11 +14,11 @@ type GitEventHandler interface {
 	HandlePullRequest(context.Context, model.PullRequest) error
 }
 
-// PipelineEventHandler is the primary (driving) port the NATS adapter calls into.
-type PipelineEventHandler interface {
-	HandleJob(context.Context, model.Job) error
-	HandleBuild(context.Context, model.Build) error
-	HandlePipelineStage(context.Context, model.PipelineStage) error
+// CicdEventHandler is the primary (driving) port the NATS adapter calls into.
+type CicdEventHandler interface {
+	HandleWorkflow(context.Context, model.Workflow) error
+	HandleWorkflowRun(context.Context, model.WorkflowRun) error
+	HandleWorkflowTask(context.Context, model.WorkflowTask) error
 }
 
 type DomainService struct {
@@ -48,17 +48,17 @@ func (s *DomainService) HandlePullRequest(ctx context.Context, pr model.PullRequ
 	return s.repo.AddPullRequest(ctx, pr)
 }
 
-func (s *DomainService) HandleJob(ctx context.Context, job model.Job) error {
-	s.logger.Info("handling job", "job_id", job.JobID)
-	return s.repo.AddJob(ctx, job)
+func (s *DomainService) HandleWorkflow(ctx context.Context, workflow model.Workflow) error {
+	s.logger.Info("handling workflow", "id", workflow.ID)
+	return s.repo.AddWorkflow(ctx, workflow)
 }
 
-func (s *DomainService) HandleBuild(ctx context.Context, build model.Build) error {
-	s.logger.Info("handling build", "build_id", build.ID, "job_id", build.JobID)
-	return s.repo.AddBuild(ctx, build)
+func (s *DomainService) HandleWorkflowRun(ctx context.Context, workflowRun model.WorkflowRun) error {
+	s.logger.Info("handling workflow run", "id", workflowRun.ID, "workflow_id", workflowRun.WorkflowID)
+	return s.repo.AddWorkflowRun(ctx, workflowRun)
 }
 
-func (s *DomainService) HandlePipelineStage(ctx context.Context, stage model.PipelineStage) error {
-	s.logger.Info("handling pipeline stage", "build_id", stage.BuildID, "name", stage.Name)
-	return s.repo.AddPipelineStage(ctx, stage)
+func (s *DomainService) HandleWorkflowTask(ctx context.Context, workflowTask model.WorkflowTask) error {
+	s.logger.Info("handling pipeline workflow task", "id", workflowTask.ID, "name", workflowTask.Name)
+	return s.repo.AddWorkflowTask(ctx, workflowTask)
 }

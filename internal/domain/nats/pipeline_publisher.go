@@ -18,7 +18,7 @@ type PipelinePublisher struct {
 	logger *slog.Logger
 }
 
-func NewPipelinePublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.PipelinePublisher, func(), error) {
+func NewPipelinePublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.CICDPublisher, func(), error) {
 	js, closeConn, err := nats.Connect(ctx, natsURL, logger)
 	if err != nil {
 		return nil, nil, fmt.Errorf("pipeline publisher connecting to NATS: %w", err)
@@ -32,17 +32,17 @@ func NewPipelinePublisher(ctx context.Context, natsURL string, logger *slog.Logg
 	return p, closeConn, nil
 }
 
-func (p *PipelinePublisher) PublishJob(ctx context.Context, job model.Job) error {
-	p.logger.Debug("publishing job", "subject", SubjectPipelineJob, "job_id", job.JobID)
-	return p.publish(ctx, SubjectPipelineJob, job)
+func (p *PipelinePublisher) PublishWorkflow(ctx context.Context, workflow model.Workflow) error {
+	p.logger.Debug("publishing workflow", "subject", SubjectCicdWorkflow, "id", workflow.ID)
+	return p.publish(ctx, SubjectCicdWorkflow, workflow)
 }
 
-func (p *PipelinePublisher) PublishBuild(ctx context.Context, build model.Build) error {
-	return p.publish(ctx, SubjectPipelineBuild, build)
+func (p *PipelinePublisher) PublishWorkflowRun(ctx context.Context, build model.WorkflowRun) error {
+	return p.publish(ctx, SubjectCicdWorkflowRun, build)
 }
 
-func (p *PipelinePublisher) PublishPipelineStage(ctx context.Context, stage model.PipelineStage) error {
-	return p.publish(ctx, SubjectPipelineStage, stage)
+func (p *PipelinePublisher) PublishWorkflowTask(ctx context.Context, stage model.WorkflowTask) error {
+	return p.publish(ctx, SubjectCicdWorkflowTask, stage)
 }
 
 func (p *PipelinePublisher) publish(ctx context.Context, subject string, payload any) error {

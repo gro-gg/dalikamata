@@ -21,18 +21,18 @@ const (
 	SubjectPullRequest = "ingest.git.pullrequest"
 	SubjectRepo        = "ingest.git.repo"
 
-	SubjectPipelineJob   = "ingest.pipeline.job"
-	SubjectPipelineBuild = "ingest.pipeline.build"
-	SubjectPipelineStage = "ingest.pipeline.stage"
+	SubjectCicdWorkflow     = "ingest.cicd.workflow"
+	SubjectCicdWorkflowRun  = "ingest.cicd.workflowRun"
+	SubjectCicdWorkflowTask = "ingest.cicd.workflowTask"
 
 	LogReceivedMessage  = "received message"
 	LogHandlerSettingUp = "setting up handler"
 )
 
 type NATSPort struct {
-	logger          *slog.Logger
-	gitHandler      domain.GitEventHandler
-	pipelineHandler domain.PipelineEventHandler
+	logger      *slog.Logger
+	gitHandler  domain.GitEventHandler
+	cicdHandler domain.CicdEventHandler
 }
 
 type HandlerOpt func(*NATSPort) error
@@ -44,9 +44,9 @@ func WithGitEventHandler(handler domain.GitEventHandler) HandlerOpt {
 	}
 }
 
-func WithPipelineEventHandler(handler domain.PipelineEventHandler) HandlerOpt {
+func WithCicdEventHandler(handler domain.CicdEventHandler) HandlerOpt {
 	return func(p *NATSPort) error {
-		p.pipelineHandler = handler
+		p.cicdHandler = handler
 		return nil
 	}
 }
@@ -105,34 +105,34 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 		return fmt.Errorf("creating ingest-git-pullrequest consumer: %w", err)
 	}
 
-	pipelineJobConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:       "ingest-pipeline-job",
+	cicdWorkflowConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       "ingest-cicd-workflow",
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		FilterSubject: SubjectPipelineJob,
+		FilterSubject: SubjectCicdWorkflow,
 		MaxDeliver:    MaxDeliver,
 	})
 	if err != nil {
-		return fmt.Errorf("creating ingest-pipeline-job consumer: %w", err)
+		return fmt.Errorf("creating ingest-cicd-workflow consumer: %w", err)
 	}
 
-	pipelineBuildConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:       "ingest-pipeline-build",
+	cicdWorkflowRunConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       "ingest-cicd-workflow-run",
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		FilterSubject: SubjectPipelineBuild,
+		FilterSubject: SubjectCicdWorkflowRun,
 		MaxDeliver:    MaxDeliver,
 	})
 	if err != nil {
-		return fmt.Errorf("creating ingest-pipeline-build consumer: %w", err)
+		return fmt.Errorf("creating ingest-cicd-workflow-run consumer: %w", err)
 	}
 
-	pipelineStageConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:       "ingest-pipeline-stage",
+	cicdWorkflowTaskConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       "ingest-cicd-workflow-task",
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		FilterSubject: SubjectPipelineStage,
+		FilterSubject: SubjectCicdWorkflowTask,
 		MaxDeliver:    MaxDeliver,
 	})
 	if err != nil {
-		return fmt.Errorf("creating ingest-pipeline-stage consumer: %w", err)
+		return fmt.Errorf("creating ingest-cicd-workflow-task consumer: %w", err)
 	}
 
 	gitRepoConsumeCtx, err := gitRepoConsumer.Consume(s.gitRepoHandler(ctx))
@@ -151,19 +151,19 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 		return fmt.Errorf("starting %s consumer: %w", SubjectPullRequest, err)
 	}
 
-	pipelineJobConsumeCtx, err := pipelineJobConsumer.Consume(s.pipelineJobHandler(ctx))
+	cicdWorkflowConsumeCtx, err := cicdWorkflowConsumer.Consume(s.cicdWorkflowHandler(ctx))
 	if err != nil {
-		return fmt.Errorf("starting %s consumer: %w", SubjectPipelineJob, err)
+		return fmt.Errorf("starting %s consumer: %w", SubjectCicdWorkflow, err)
 	}
 
-	pipelineBuildConsumeCtx, err := pipelineBuildConsumer.Consume(s.pipelineBuildHandler(ctx))
+	cicdWorkflowRunConsumeCtx, err := cicdWorkflowRunConsumer.Consume(s.cicdWorkflowRunHandler(ctx))
 	if err != nil {
-		return fmt.Errorf("starting %s consumer: %w", SubjectPipelineBuild, err)
+		return fmt.Errorf("starting %s consumer: %w", SubjectCicdWorkflowRun, err)
 	}
 
-	pipelineStageConsumeCtx, err := pipelineStageConsumer.Consume(s.pipelineStageHandler(ctx))
+	cicdWorkflowTaskConsumeCtx, err := cicdWorkflowTaskConsumer.Consume(s.cicdWorkflowTaskHandler(ctx))
 	if err != nil {
-		return fmt.Errorf("starting %s consumer: %w", SubjectPipelineStage, err)
+		return fmt.Errorf("starting %s consumer: %w", SubjectCicdWorkflowTask, err)
 	}
 
 	<-ctx.Done()
@@ -171,9 +171,9 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	gitRepoConsumeCtx.Drain()
 	gitCommitConsumeCtx.Drain()
 	gitPRConsumeCtx.Drain()
-	pipelineJobConsumeCtx.Drain()
-	pipelineBuildConsumeCtx.Drain()
-	pipelineStageConsumeCtx.Drain()
+	cicdWorkflowConsumeCtx.Drain()
+	cicdWorkflowRunConsumeCtx.Drain()
+	cicdWorkflowTaskConsumeCtx.Drain()
 
 	s.logger.Info("Event Handling Shut Down")
 	return nil
@@ -231,21 +231,21 @@ func (s *NATSPort) gitCommitHandler(ctx context.Context) func(msg jetstream.Msg)
 	}
 }
 
-func (s *NATSPort) pipelineJobHandler(ctx context.Context) func(msg jetstream.Msg) {
-	l := s.logger.With("subject", SubjectPipelineJob)
+func (s *NATSPort) cicdWorkflowHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectCicdWorkflow)
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)
-		var job model.Job
-		if err := json.Unmarshal(msg.Data(), &job); err != nil {
+		var workflow model.Workflow
+		if err := json.Unmarshal(msg.Data(), &workflow); err != nil {
 			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}
 			return
 		}
-		if err := s.pipelineHandler.HandleJob(ctx, job); err != nil {
-			l.Error("handling job", "job_id", job.JobID, "error", err)
+		if err := s.cicdHandler.HandleWorkflow(ctx, workflow); err != nil {
+			l.Error("handling workflow", "id", workflow.ID, "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}
@@ -257,21 +257,21 @@ func (s *NATSPort) pipelineJobHandler(ctx context.Context) func(msg jetstream.Ms
 	}
 }
 
-func (s *NATSPort) pipelineBuildHandler(ctx context.Context) func(msg jetstream.Msg) {
-	l := s.logger.With("subject", SubjectPipelineBuild)
+func (s *NATSPort) cicdWorkflowRunHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectCicdWorkflowRun)
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)
-		var build model.Build
-		if err := json.Unmarshal(msg.Data(), &build); err != nil {
+		var run model.WorkflowRun
+		if err := json.Unmarshal(msg.Data(), &run); err != nil {
 			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}
 			return
 		}
-		if err := s.pipelineHandler.HandleBuild(ctx, build); err != nil {
-			l.Error("handling build", "build_id", build.ID, "error", err)
+		if err := s.cicdHandler.HandleWorkflowRun(ctx, run); err != nil {
+			l.Error("handling workflow run", "id", run.ID, "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}
@@ -283,21 +283,21 @@ func (s *NATSPort) pipelineBuildHandler(ctx context.Context) func(msg jetstream.
 	}
 }
 
-func (s *NATSPort) pipelineStageHandler(ctx context.Context) func(msg jetstream.Msg) {
-	l := s.logger.With("subject", SubjectPipelineStage)
+func (s *NATSPort) cicdWorkflowTaskHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectCicdWorkflowTask)
 
 	return func(msg jetstream.Msg) {
 		l.Debug(LogReceivedMessage)
-		var stage model.PipelineStage
-		if err := json.Unmarshal(msg.Data(), &stage); err != nil {
+		var task model.WorkflowTask
+		if err := json.Unmarshal(msg.Data(), &task); err != nil {
 			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}
 			return
 		}
-		if err := s.pipelineHandler.HandlePipelineStage(ctx, stage); err != nil {
-			l.Error("handling pipeline stage", "build_id", stage.BuildID, "name", stage.Name, "error", err)
+		if err := s.cicdHandler.HandleWorkflowTask(ctx, task); err != nil {
+			l.Error("handling workflow task", "id", task.ID, "name", task.Name, "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}
