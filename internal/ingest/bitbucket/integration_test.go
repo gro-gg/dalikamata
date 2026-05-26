@@ -1,5 +1,3 @@
-//go:build integration
-
 package bitbucket_test
 
 import (
@@ -20,8 +18,6 @@ import (
 )
 
 func TestIngestBitbucketIntegration(t *testing.T) {
-	t.Parallel()
-
 	is := is.New(t)
 	l := slog.New(slog.NewTextHandler(io.Discard, nil))
 

@@ -49,16 +49,6 @@ docker compose -f deploy/docker/docker-compose-mono.yaml up
 go test ./... -race
 ```
 
-### Integration tests
-
-Integration tests start real service subprocesses (`go run .`) and verify
-end-to-end behaviour. They are gated behind the `integration` build tag so they
-do not run during normal `go test ./...` invocations.
-
-```bash
-go test -tags=integration ./internal/ingest/bitbucket/... -v -timeout 20s
-```
-
 ### End-to-end tests
 
 E2E tests spin up the full stack using Docker Compose and verify that metrics
@@ -69,7 +59,7 @@ and are gated behind the `e2e` build tag.
 go test -tags=e2e ./internal/e2e/... -v -timeout 2m
 ```
 
-By default the test suite builds the Docker images before running. If the images
+By default, the test suite builds the Docker images before running. If the images
 are already loaded (e.g. in CI after a dedicated build step), pass
 `-skip-docker-build` to skip the build:
 
