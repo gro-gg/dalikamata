@@ -139,32 +139,37 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectRepo, err)
 	}
-	s.logger.Info(LogHandlerSettingUp, "subject", SubjectRepo)
+	s.logger.Debug(LogHandlerSettingUp, "subject", SubjectRepo)
 
 	gitCommitConsumeCtx, err := gitCommitConsumer.Consume(s.gitCommitHandler(ctx))
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectCommit, err)
 	}
+	s.logger.Debug(LogHandlerSettingUp, "subject", SubjectCommit)
 
 	gitPRConsumeCtx, err := gitPRConsumer.Consume(s.gitPullRequestHandler(ctx))
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectPullRequest, err)
 	}
+	s.logger.Debug(LogHandlerSettingUp, "subject", SubjectPullRequest)
 
 	cicdWorkflowConsumeCtx, err := cicdWorkflowConsumer.Consume(s.cicdWorkflowHandler(ctx))
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectCicdWorkflow, err)
 	}
+	s.logger.Debug(LogHandlerSettingUp, "subject", SubjectCicdWorkflow)
 
 	cicdWorkflowRunConsumeCtx, err := cicdWorkflowRunConsumer.Consume(s.cicdWorkflowRunHandler(ctx))
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectCicdWorkflowRun, err)
 	}
+	s.logger.Debug(LogHandlerSettingUp, "subject", SubjectCicdWorkflowRun)
 
 	cicdWorkflowTaskConsumeCtx, err := cicdWorkflowTaskConsumer.Consume(s.cicdWorkflowTaskHandler(ctx))
 	if err != nil {
 		return fmt.Errorf("starting %s consumer: %w", SubjectCicdWorkflowTask, err)
 	}
+	s.logger.Debug(LogHandlerSettingUp, "subject", SubjectCicdWorkflowTask)
 
 	<-ctx.Done()
 
