@@ -38,7 +38,7 @@ For each job in scope:
 
 ## Data Model
 
-Pipeline domain types are defined in `pkg/model/pipeline.go`. The ingest service maps Jenkins API responses to these types before publishing.
+Pipeline domain types are defined in `pkg/model/cicd.go`. The ingest service maps Jenkins API responses to these types before publishing.
 
 ### New types
 
@@ -81,11 +81,11 @@ type WorkflowTask struct {
 
 Subjects publish to the existing `INGEST` JetStream stream (filter `ingest.>`). They are intentionally generic so that future ingestors for other CI/CD tools (GitHub Actions, GitLab CI, etc.) can publish to the same subjects.
 
-| Subject                   | Payload                       |
-|---------------------------|-------------------------------|
-| `ingest.pipeline.job`     | `model.Workflow` JSON              |
-| `ingest.pipeline.build`   | `model.WorkflowRun` JSON            |
-| `ingest.pipeline.stage`   | `model.WorkflowTask` JSON    |
+| Subject                    | Payload                   |
+|----------------------------|---------------------------|
+| `ingest.cicd.workflow`     | `model.Workflow` JSON     |
+| `ingest.cicd.workflowRun`  | `model.WorkflowRun` JSON  |
+| `ingest.cicd.workflowTask` | `model.WorkflowTask` JSON |
 
 ## CLI Flags (`dalikamata ingest jenkins`)
 
