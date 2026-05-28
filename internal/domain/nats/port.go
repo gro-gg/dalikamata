@@ -302,7 +302,7 @@ func (s *NATSPort) cicdWorkflowTaskHandler(ctx context.Context) func(msg jetstre
 			return
 		}
 		if err := s.cicdHandler.HandleWorkflowTask(ctx, task); err != nil {
-			l.Error("handling workflow task", "id", task.ID, "name", task.Name, "error", err)
+			l.Error("handling workflow task", "id", task.WorkflowRunID, "name", task.Name, "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}

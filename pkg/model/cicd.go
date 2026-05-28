@@ -26,10 +26,10 @@ type WorkflowRun struct {
 }
 
 type WorkflowTask struct {
-	ID        string    `json:"id"`
-	Order     int       `json:"order"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	StartedAt time.Time `json:"started_at"`
-	Duration  float64   `json:"duration"`
+	WorkflowRunID string    `json:"workflow_run_id"`
+	Order         int       `json:"order"`
+	Name          string    `json:"name"`
+	Status        string    `json:"status"`
+	StartedAt     time.Time `json:"started_at"`
+	Duration      float64   `json:"duration"`
 }

@@ -4,9 +4,9 @@ import (
 	"context"
 	"log/slog"
 
-	"codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/metrics"
 	metricnats "codeberg.org/aeforged/dalikamata/internal/metrics/nats"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 )
 
 type MetricsApp struct {

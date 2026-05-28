@@ -6,9 +6,9 @@ import (
 	"log/slog"
 
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
-	"codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/httpclient"
 	"codeberg.org/aeforged/dalikamata/internal/ingest/jenkins"
+	"codeberg.org/aeforged/dalikamata/internal/nats"
 )
 
 type IngestJenkinsApp struct {

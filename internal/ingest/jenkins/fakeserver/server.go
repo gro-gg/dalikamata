@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	classWorkflowJob = "org.jenkinsci.plugins.workflow.job.WorkflowJob"
+	classWorkflowJob  = "org.jenkinsci.plugins.workflow.job.WorkflowJob"
 	classGitBuildData = "hudson.plugins.git.util.BuildData"
 )
 

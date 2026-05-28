@@ -66,6 +66,6 @@ func (r *MemoryRepository) AddWorkflowRun(_ context.Context, build model.Workflo
 func (r *MemoryRepository) AddWorkflowTask(_ context.Context, stage model.WorkflowTask) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.workflowTasks[stage.ID+"/"+stage.Name] = stage
+	r.workflowTasks[stage.WorkflowRunID+"/"+stage.Name] = stage
 	return nil
 }

@@ -33,17 +33,17 @@ func NewPipelinePublisher(ctx context.Context, natsURL string, logger *slog.Logg
 }
 
 func (p *PipelinePublisher) PublishWorkflow(ctx context.Context, workflow model.Workflow) error {
-	p.logger.Debug("publishing workflow", "subject", SubjectCicdWorkflow, "id", workflow.ID)
+	p.logger.Debug("publishing workflow", "subject", SubjectCicdWorkflow, "id", workflow.ID, "payload", workflow)
 	return p.publish(ctx, SubjectCicdWorkflow, workflow)
 }
 
 func (p *PipelinePublisher) PublishWorkflowRun(ctx context.Context, run model.WorkflowRun) error {
-	p.logger.Debug("publishing workflow run", "subject", SubjectCicdWorkflowRun, "id", run.ID)
+	p.logger.Debug("publishing workflow run", "subject", SubjectCicdWorkflowRun, "id", run.ID, "payload", run)
 	return p.publish(ctx, SubjectCicdWorkflowRun, run)
 }
 
 func (p *PipelinePublisher) PublishWorkflowTask(ctx context.Context, task model.WorkflowTask) error {
-	p.logger.Debug("publishing workflow task", "subject", SubjectCicdWorkflowTask, "id", task.ID)
+	p.logger.Debug("publishing workflow task", "subject", SubjectCicdWorkflowTask, "id", task.WorkflowRunID, "payload", task)
 	return p.publish(ctx, SubjectCicdWorkflowTask, task)
 }
 

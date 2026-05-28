@@ -130,12 +130,12 @@ func (c *Crawler) crawlJob(ctx context.Context, jobPath string) error {
 
 		for i, s := range stages {
 			workflowTask := model.WorkflowTask{
-				ID:        buildID,
-				Order:     i,
-				Name:      s.Name,
-				Status:    s.Status,
-				StartedAt: time.UnixMilli(s.StartTimeMillis),
-				Duration:  float64(s.DurationMillis) / 1000.0,
+				WorkflowRunID: buildID,
+				Order:         i,
+				Name:          s.Name,
+				Status:        s.Status,
+				StartedAt:     time.UnixMilli(s.StartTimeMillis),
+				Duration:      float64(s.DurationMillis) / 1000.0,
 			}
 			if err := c.publisher.PublishWorkflowTask(ctx, workflowTask); err != nil {
 				c.logger.Error("publishing stage as workflow task", "build", buildID, "stage", s.Name, "error", err)
