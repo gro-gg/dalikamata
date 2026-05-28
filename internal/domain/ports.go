@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
@@ -28,4 +29,17 @@ type Repository interface {
 	AddWorkflow(context.Context, model.Workflow) error
 	AddWorkflowRun(context.Context, model.WorkflowRun) error
 	AddWorkflowTask(context.Context, model.WorkflowTask) error
+}
+
+// QueryRepository is the secondary (driven) port for querying entities.
+// Each method applies the filter/sort/pagination in q and calls emit once per
+// matching result. The emit callback returning an error stops iteration and
+// that error is returned to the caller.
+type QueryRepository interface {
+	QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error
+	QueryCommits(ctx context.Context, q query.Query, emit func(model.Commit) error) error
+	QueryPullRequests(ctx context.Context, q query.Query, emit func(model.PullRequest) error) error
+	QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error
+	QueryWorkflowRuns(ctx context.Context, q query.Query, emit func(model.WorkflowRun) error) error
+	QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error
 }
