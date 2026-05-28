@@ -73,6 +73,12 @@ func (p *QueryPort) Run(ctx context.Context, nc *gonats.Conn) error {
 		subs = append(subs, sub)
 	}
 
+	// Flush ensures all SUB commands have been processed by the server
+	// before we signal readiness to callers.
+	if err := nc.Flush(); err != nil {
+		return fmt.Errorf("flushing subscriptions: %w", err)
+	}
+
 	<-ctx.Done()
 
 	for _, sub := range subs {
