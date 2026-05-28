@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
@@ -26,7 +28,7 @@ func NewDomainApp(logger *slog.Logger) *DomainApp {
 }
 
 func (a *DomainApp) Run(ctx context.Context) error {
-	_, js, closeConn, err := nats.Connect(ctx, nats.NATSConnectionString(a.NATSHost, a.NATSPort), a.logger)
+	nc, js, closeConn, err := nats.Connect(ctx, nats.NATSConnectionString(a.NATSHost, a.NATSPort), a.logger)
 	if err != nil {
 		return fmt.Errorf("connecting to NATS server: %w", err)
 	}
@@ -34,6 +36,25 @@ func (a *DomainApp) Run(ctx context.Context) error {
 
 	repository := repo.NewMemory()
 	svc := domain.NewDomainService(repository, repository, a.logger)
-	port := dalinats.NewPort(a.logger, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
-	return port.Run(ctx, js)
+
+	ingestPort := dalinats.NewPort(a.logger, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
+	queryPort := dalinats.NewQueryPort(a.logger, svc)
+
+	errCh := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); errCh <- ingestPort.Run(ctx, js) }()
+	go func() { defer wg.Done(); errCh <- queryPort.Run(ctx, nc) }()
+
+	<-ctx.Done()
+	wg.Wait()
+	close(errCh)
+
+	var joined error
+	for e := range errCh {
+		if e != nil && !errors.Is(e, context.Canceled) {
+			joined = errors.Join(joined, e)
+		}
+	}
+	return joined
 }
