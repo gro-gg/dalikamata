@@ -1,26 +1,4 @@
 services:
-  dalikamata-nats:
-    image: dalikamata:latest
-    build:
-      context: ../../
-      dockerfile: deploy/docker/Dockerfile
-    command:
-      - "nats"
-    ports:
-      - "4222:4222"
-    networks:
-      - monitoring
-
-  dalikamata:
-    image: dalikamata:latest
-    command:
-      - "--nats-host=dalikamata-nats"
-      - "domain"
-    depends_on:
-      - dalikamata-nats
-    networks:
-      - monitoring
-
   dalikamata-fake-bitbucket:
     image: dalifakes:latest
     build:
@@ -28,73 +6,53 @@ services:
       dockerfile: deploy/docker/Dockerfile.fakes
     command:
       - "bitbucket"
-      - "--addr=0.0.0.0:7990"
+      - "--addr=0.0.0.0:27990"
     ports:
-      - "7990:7990"
-    networks:
-      - monitoring
+      - "27990:27990"
 
-  dalikamata-ingest-bitbucket:
+  dalikamata-nats:
+    image: dalikamata:latest
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile
+    command:
+      - "--nats-port=24222"
+      - "nats"
+      - "--nats-data=/tmp/nats"
+    ports:
+      - "24222:24222"
+
+  dalikamata-domain:
     image: dalikamata:latest
     command:
-      - "--bitbucket-url=http://dalikamata-fake-bitbucket:7990"
-      - "--bitbucket-token=x"
-      - "--bitbucket-projects=PROJ,INFR"
       - "--nats-host=dalikamata-nats"
-      - "ingest"
-      - "bitbucket"
+      - "--nats-port=24222"
+      - "domain"
     depends_on:
-      - dalikamata-fake-bitbucket
-      - dalikamata
-    networks:
-      - monitoring
+      - dalikamata-nats
 
   dalikamata-metrics:
     image: dalikamata:latest
     command:
       - "--nats-host=dalikamata-nats"
+      - "--nats-port=24222"
+      - "--metrics-addr=0.0.0.0:22112"
       - "metrics"
-      - "--debug"
     depends_on:
-      - dalikamata
+      - dalikamata-nats
     ports:
-      - "2112:2112"
-    networks:
-      - monitoring
+      - "22112:22112"
 
-  # Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus-micro.yml:/etc/prometheus/prometheus.yml
+  dalikamata-ingest:
+    image: dalikamata:latest
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-    networks:
-      - monitoring
-
-  # Grafana
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_AUTH_DISABLE_INITIAL_ADMIN_CREATION=false
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - ./grafana_provisioning:/etc/grafana/provisioning
-      - grafana_storage:/var/lib/grafana
-    networks:
-      - monitoring
-
-networks:
-  monitoring:
-    driver: bridge
-
-volumes:
-  grafana_storage:
+      - "--nats-host=dalikamata-nats"
+      - "--nats-port=24222"
+      - "ingest"
+      - "bitbucket"
+      - "--bitbucket-url=http://dalikamata-fake-bitbucket:27990"
+      - "--bitbucket-token=test-token"
+      - "--bitbucket-projects=PROJ,INFRA"
+    depends_on:
+      - dalikamata-fake-bitbucket
+      - dalikamata-domain

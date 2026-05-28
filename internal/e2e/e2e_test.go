@@ -58,7 +58,7 @@ func TestE2EMono(t *testing.T) {
 	t.Parallel()
 	runE2E(t,
 		"dalikamata-e2e-mono",
-		composeFile("docker-compose-e2e-mono.yaml"),
+		composeFile("docker-compose-mono.yaml"),
 		12112,
 		14222,
 	)
@@ -68,7 +68,7 @@ func TestE2EMicro(t *testing.T) {
 	t.Parallel()
 	runE2E(t,
 		"dalikamata-e2e-micro",
-		composeFile("docker-compose-e2e-micro.yaml"),
+		composeFile("docker-compose-micro.yaml"),
 		22112,
 		24222,
 	)
