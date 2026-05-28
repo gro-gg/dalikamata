@@ -15,16 +15,6 @@ import (
 const (
 	MaxDeliver = 5
 
-	StreamIngest       = "ingest.>"
-	StreamIngestName   = "INGEST"
-	SubjectCommit      = "ingest.git.commit"
-	SubjectPullRequest = "ingest.git.pullrequest"
-	SubjectRepo        = "ingest.git.repo"
-
-	SubjectCicdWorkflow     = "ingest.cicd.workflow"
-	SubjectCicdWorkflowRun  = "ingest.cicd.workflowRun"
-	SubjectCicdWorkflowTask = "ingest.cicd.workflowTask"
-
 	LogReceivedMessage  = "received message"
 	LogHandlerSettingUp = "setting up handler"
 )

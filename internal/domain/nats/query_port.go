@@ -13,27 +13,6 @@ import (
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
-// Query subjects mirror the ingest subject hierarchy but under the "query."
-// prefix. Each subject accepts a JSON-encoded query.Query and streams replies
-// to the request's reply inbox.
-const (
-	SubjectQueryRepo            = "query.git.repo"
-	SubjectQueryCommit          = "query.git.commit"
-	SubjectQueryPullRequest     = "query.git.pullrequest"
-	SubjectQueryCicdWorkflow    = "query.cicd.workflow"
-	SubjectQueryCicdWorkflowRun = "query.cicd.workflowRun"
-	SubjectQueryCicdTask        = "query.cicd.workflowTask"
-
-	// HeaderQueryStatus is set on every reply message to indicate its role.
-	HeaderQueryStatus = "Daka-Query-Status"
-	// StatusData marks a message carrying one entity result.
-	StatusData = "data"
-	// StatusDone marks the final message; the body is empty.
-	StatusDone = "done"
-	// StatusError marks the final message on failure; the body is JSON {"error":"..."}.
-	StatusError = "error"
-)
-
 // QueryPort subscribes to core NATS query subjects and streams entity results
 // back to the caller's reply inbox. It uses core NATS (not JetStream) because
 // request-reply is a core NATS feature.
