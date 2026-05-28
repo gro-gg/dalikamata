@@ -19,7 +19,7 @@ type PipelinePublisher struct {
 }
 
 func NewPipelinePublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.CICDPublisher, func(), error) {
-	js, closeConn, err := nats.Connect(ctx, natsURL, logger)
+	_, js, closeConn, err := nats.Connect(ctx, natsURL, logger)
 	if err != nil {
 		return nil, nil, fmt.Errorf("pipeline publisher connecting to NATS: %w", err)
 	}

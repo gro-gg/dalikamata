@@ -26,7 +26,7 @@ func NewDomainApp(logger *slog.Logger) *DomainApp {
 }
 
 func (a *DomainApp) Run(ctx context.Context) error {
-	js, closeConn, err := nats.Connect(ctx, nats.NATSConnectionString(a.NATSHost, a.NATSPort), a.logger)
+	_, js, closeConn, err := nats.Connect(ctx, nats.NATSConnectionString(a.NATSHost, a.NATSPort), a.logger)
 	if err != nil {
 		return fmt.Errorf("connecting to NATS server: %w", err)
 	}

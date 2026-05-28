@@ -11,23 +11,24 @@ import (
 )
 
 // Connect dials the NATS server at url, retrying every second until the
-// connection succeeds or ctx is cancelled. Returns a ready JetStream instance
-// and a close function for the underlying connection.
-func Connect(ctx context.Context, url string, logger *slog.Logger) (jetstream.JetStream, func(), error) {
+// connection succeeds or ctx is cancelled. Returns the underlying connection
+// (for core NATS operations such as request-reply), a ready JetStream
+// instance, and a close function for the connection.
+func Connect(ctx context.Context, url string, logger *slog.Logger) (*nats.Conn, jetstream.JetStream, func(), error) {
 	for {
 		nc, err := nats.Connect(url)
 		if err == nil {
 			js, err := jetstream.New(nc)
 			if err != nil {
 				nc.Close()
-				return nil, nil, fmt.Errorf("creating JetStream: %w", err)
+				return nil, nil, nil, fmt.Errorf("creating JetStream: %w", err)
 			}
-			return js, nc.Close, nil
+			return nc, js, nc.Close, nil
 		}
 		logger.Error("connecting to NATS", "error", err)
 		select {
 		case <-ctx.Done():
-			return nil, nil, ctx.Err()
+			return nil, nil, nil, ctx.Err()
 		case <-time.After(time.Second):
 		}
 	}

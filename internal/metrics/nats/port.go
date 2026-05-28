@@ -34,7 +34,7 @@ func NewPort(logger *slog.Logger, natsURL string) *Port {
 }
 
 func (p *Port) Subscribe(ctx context.Context, handler func(model.PullRequest)) (err error) {
-	js, closeConn, err := nats.Connect(ctx, p.natsURL, p.logger)
+	_, js, closeConn, err := nats.Connect(ctx, p.natsURL, p.logger)
 	if err != nil {
 		return err
 	}

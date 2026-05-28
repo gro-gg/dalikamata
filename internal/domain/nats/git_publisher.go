@@ -20,7 +20,7 @@ type GITPublisher struct {
 }
 
 func NewGitPublisher(ctx context.Context, natsURL string, logger *slog.Logger) (domain.GitPublisher, func(), error) {
-	js, closeConn, err := nats.Connect(ctx, natsURL, logger)
+	_, js, closeConn, err := nats.Connect(ctx, natsURL, logger)
 	if err != nil {
 		return nil, nil, fmt.Errorf("git publisher connecting to NATS: %w", err)
 	}
