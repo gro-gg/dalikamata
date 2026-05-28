@@ -9,7 +9,7 @@ Dalikamata (or Dalikmata) is a pre-colonial Visayan deity of the Philippines, re
 | Command | Description |
 |---|---|
 | `dalikamata nats` | Start the embedded NATS JetStream server |
-| `dalikamata domain` | Start the domain service (requires a running NATS server) |
+| `dalikamata domain` | Start the domain service — persists ingest events and serves typed queries (requires a running NATS server) |
 | `dalikamata metrics` | Start the metrics service (requires a running NATS server) |
 | `dalikamata ingest bitbucket` | Crawl Bitbucket and publish events to NATS |
 | `dalikamata ingest jenkins` | Crawl Jenkins and publish pipeline events to NATS |
