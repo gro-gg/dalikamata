@@ -33,7 +33,7 @@ func (a *DomainApp) Run(ctx context.Context) error {
 	defer closeConn()
 
 	repository := repo.NewMemory()
-	svc := domain.NewDomainService(repository, a.logger)
+	svc := domain.NewDomainService(repository, repository, a.logger)
 	port := dalinats.NewPort(a.logger, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
 	return port.Run(ctx, js)
 }

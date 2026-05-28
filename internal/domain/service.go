@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
@@ -21,15 +22,27 @@ type CicdEventHandler interface {
 	HandleWorkflowTask(context.Context, model.WorkflowTask) error
 }
 
-type DomainService struct {
-	repo   Repository
-	logger *slog.Logger
+// QueryHandler is the primary (driving) port the NATS query adapter calls into.
+type QueryHandler interface {
+	QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error
+	QueryCommits(ctx context.Context, q query.Query, emit func(model.Commit) error) error
+	QueryPullRequests(ctx context.Context, q query.Query, emit func(model.PullRequest) error) error
+	QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error
+	QueryWorkflowRuns(ctx context.Context, q query.Query, emit func(model.WorkflowRun) error) error
+	QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error
 }
 
-func NewDomainService(repo Repository, logger *slog.Logger) *DomainService {
+type DomainService struct {
+	repo      Repository
+	queryRepo QueryRepository
+	logger    *slog.Logger
+}
+
+func NewDomainService(repo Repository, queryRepo QueryRepository, logger *slog.Logger) *DomainService {
 	return &DomainService{
-		repo:   repo,
-		logger: logger.With("component", "domain_service"),
+		repo:      repo,
+		queryRepo: queryRepo,
+		logger:    logger.With("component", "domain_service"),
 	}
 }
 
@@ -61,4 +74,28 @@ func (s *DomainService) HandleWorkflowRun(ctx context.Context, workflowRun model
 func (s *DomainService) HandleWorkflowTask(ctx context.Context, workflowTask model.WorkflowTask) error {
 	s.logger.Info("handling pipeline workflow task", "id", workflowTask.WorkflowRunID, "name", workflowTask.Name)
 	return s.repo.AddWorkflowTask(ctx, workflowTask)
+}
+
+func (s *DomainService) QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error {
+	return s.queryRepo.QueryRepos(ctx, q, emit)
+}
+
+func (s *DomainService) QueryCommits(ctx context.Context, q query.Query, emit func(model.Commit) error) error {
+	return s.queryRepo.QueryCommits(ctx, q, emit)
+}
+
+func (s *DomainService) QueryPullRequests(ctx context.Context, q query.Query, emit func(model.PullRequest) error) error {
+	return s.queryRepo.QueryPullRequests(ctx, q, emit)
+}
+
+func (s *DomainService) QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error {
+	return s.queryRepo.QueryWorkflows(ctx, q, emit)
+}
+
+func (s *DomainService) QueryWorkflowRuns(ctx context.Context, q query.Query, emit func(model.WorkflowRun) error) error {
+	return s.queryRepo.QueryWorkflowRuns(ctx, q, emit)
+}
+
+func (s *DomainService) QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error {
+	return s.queryRepo.QueryWorkflowTasks(ctx, q, emit)
 }
