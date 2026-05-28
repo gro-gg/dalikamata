@@ -41,6 +41,8 @@ Or start NATS, domain, ingest, and metrics together as a single process (mono):
 docker compose -f deploy/docker/docker-compose-mono.yaml up
 ```
 
+Add `--profile monitoring` to either command to also start Prometheus (port 9090) and Grafana (port 3000) for visualization. Omitting the flag runs the core services only — this is the mode used by e2e tests.
+
 # Testing
 
 ### Unit tests
