@@ -2,10 +2,11 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
+	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
 	"codeberg.org/aeforged/dalikamata/internal/metrics"
-	metricnats "codeberg.org/aeforged/dalikamata/internal/metrics/nats"
 	"codeberg.org/aeforged/dalikamata/internal/nats"
 )
 
@@ -26,10 +27,13 @@ func NewMetricsApp(logger *slog.Logger) *MetricsApp {
 }
 
 func (a *MetricsApp) Run(ctx context.Context) error {
-	port := metricnats.NewPort(
-		a.logger.With("port", "nats"),
-		nats.NATSConnectionString(a.NATSHost, a.NATSPort),
-	)
-	svc := metrics.NewMetricsService(port, a.logger, a.MetricsURL)
+	nc, _, closeConn, err := nats.Connect(ctx, nats.NATSConnectionString(a.NATSHost, a.NATSPort), a.logger)
+	if err != nil {
+		return fmt.Errorf("connecting to NATS: %w", err)
+	}
+	defer closeConn()
+
+	querier := dalinats.NewQueryClient(nc, a.logger.With("component", "query-client"))
+	svc := metrics.NewMetricsService(querier, a.logger, a.MetricsURL)
 	return svc.Run(ctx)
 }
