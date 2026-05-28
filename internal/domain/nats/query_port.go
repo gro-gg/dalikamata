@@ -25,10 +25,10 @@ func NewQueryPort(logger *slog.Logger, handler domain.QueryHandler) *QueryPort {
 	return &QueryPort{logger: logger, handler: handler}
 }
 
-// Run subscribes to the six query subjects and blocks until ctx is cancelled.
-// Subscriptions are drained before returning.
+// Run subscribes to the six query subjects and the aggregate subject, then
+// blocks until ctx is cancelled. Subscriptions are drained before returning.
 func (p *QueryPort) Run(ctx context.Context, nc *gonats.Conn) error {
-	subs := make([]*gonats.Subscription, 0, 6)
+	subs := make([]*gonats.Subscription, 0, 7)
 
 	type entry struct {
 		subject string
@@ -41,6 +41,7 @@ func (p *QueryPort) Run(ctx context.Context, nc *gonats.Conn) error {
 		{SubjectQueryCicdWorkflow, p.handleQueryWorkflows},
 		{SubjectQueryCicdWorkflowRun, p.handleQueryWorkflowRuns},
 		{SubjectQueryCicdTask, p.handleQueryWorkflowTasks},
+		{SubjectQueryAggregate, p.handleAggregate},
 	}
 
 	for _, e := range entries {
@@ -147,6 +148,37 @@ func (p *QueryPort) handleQuery(
 	}
 }
 
+func (p *QueryPort) handleAggregate(msg *gonats.Msg) {
+	l := p.logger.With("subject", msg.Subject)
+
+	if msg.Reply == "" {
+		l.Warn("aggregate request has no reply subject; dropping")
+		return
+	}
+
+	var q query.Query
+	if err := json.Unmarshal(msg.Data, &q); err != nil {
+		l.Error("decoding aggregate query", "error", err)
+		_ = sendError(msg, err)
+		return
+	}
+
+	result, err := p.handler.Aggregate(context.Background(), q)
+	if err != nil {
+		l.Error("executing aggregate", "error", err)
+		_ = sendError(msg, err)
+		return
+	}
+
+	if err := sendAggregation(msg, result); err != nil {
+		l.Error("sending aggregation result", "error", err)
+		return
+	}
+	if err := sendDone(msg); err != nil {
+		l.Error("sending done after aggregation", "error", err)
+	}
+}
+
 // sendData publishes a single entity result to the request's reply inbox.
 func sendData(req *gonats.Msg, payload any) error {
 	b, err := json.Marshal(payload)
@@ -166,6 +198,20 @@ func sendDone(req *gonats.Msg) error {
 	reply := &gonats.Msg{
 		Subject: req.Reply,
 		Header:  gonats.Header{HeaderQueryStatus: []string{StatusDone}},
+	}
+	return req.RespondMsg(reply)
+}
+
+// sendAggregation publishes the aggregation result tree to the request's reply inbox.
+func sendAggregation(req *gonats.Msg, result map[string]query.AggregationResult) error {
+	b, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("marshalling aggregation result: %w", err)
+	}
+	reply := &gonats.Msg{
+		Subject: req.Reply,
+		Header:  gonats.Header{HeaderQueryStatus: []string{StatusAggregation}},
+		Data:    b,
 	}
 	return req.RespondMsg(reply)
 }

@@ -32,9 +32,10 @@ type Repository interface {
 }
 
 // QueryRepository is the secondary (driven) port for querying entities.
-// Each method applies the filter/sort/pagination in q and calls emit once per
-// matching result. The emit callback returning an error stops iteration and
-// that error is returned to the caller.
+// Each QueryX method applies the filter/sort/pagination in q and calls emit
+// once per matching result. The emit callback returning an error stops
+// iteration and that error is returned to the caller.
+// Aggregate applies q.Aggs to filtered items and returns the result tree.
 type QueryRepository interface {
 	QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error
 	QueryCommits(ctx context.Context, q query.Query, emit func(model.Commit) error) error
@@ -42,4 +43,5 @@ type QueryRepository interface {
 	QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error
 	QueryWorkflowRuns(ctx context.Context, q query.Query, emit func(model.WorkflowRun) error) error
 	QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error
+	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
 }

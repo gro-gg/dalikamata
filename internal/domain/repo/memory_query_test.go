@@ -200,6 +200,132 @@ func TestQueryCommits_EmitErrorStopsIteration(t *testing.T) {
 	is.Equal(count, 1) // stopped after first
 }
 
+// ---- Aggregate -------------------------------------------------------------
+
+func TestAggregate_PRCycleTimeHistogram(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	created := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	updated := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC) // 1 day = 86400s
+
+	r := repo.NewMemory(repo.WithClock(func() time.Time { return updated }))
+	is.NoErr(r.AddPullRequest(ctx, model.PullRequest{
+		ID:        "1",
+		RepoID:    "R",
+		State:     model.PullRequestStateMerged,
+		CreatedAt: created,
+		UpdatedAt: updated,
+	}))
+
+	buckets := []float64{3600, 14400, 86400, 259200, 604800}
+	result, err := r.Aggregate(ctx, query.Query{
+		Entity: query.EntityPullRequest,
+		Aggs: map[string]query.Aggregation{
+			"cycle": {Op: query.AggHistogram, Field: query.PRCycleTimeSeconds, Buckets: buckets},
+		},
+	})
+	is.NoErr(err)
+	cycle := result["cycle"]
+	is.Equal(cycle.DocCount, uint64(1))
+	is.Equal(cycle.Sum, 86400.0)
+	// 86400 ≤ 86400 → cumulative counts at bounds 86400, 259200, 604800 = 1
+	countAt := func(bound float64) uint64 {
+		for _, b := range cycle.Buckets {
+			if b.Key.(float64) == bound {
+				return b.DocCount
+			}
+		}
+		return 0
+	}
+	is.Equal(countAt(3600), uint64(0))
+	is.Equal(countAt(14400), uint64(0))
+	is.Equal(countAt(86400), uint64(1))
+	is.Equal(countAt(259200), uint64(1))
+	is.Equal(countAt(604800), uint64(1))
+}
+
+func TestAggregate_NilWhenNoAggs(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newRepo()
+	result, err := r.Aggregate(ctx, query.Query{Entity: query.EntityPullRequest})
+	is.NoErr(err)
+	is.True(result == nil)
+}
+
+func TestAggregate_FilterApplied(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newRepo()
+
+	is.NoErr(r.AddPullRequest(ctx, model.PullRequest{ID: "1", RepoID: "A", State: model.PullRequestStateMerged}))
+	is.NoErr(r.AddPullRequest(ctx, model.PullRequest{ID: "2", RepoID: "B", State: model.PullRequestStateMerged}))
+
+	result, err := r.Aggregate(ctx, query.Query{
+		Entity: query.EntityPullRequest,
+		Filter: &query.Filter{
+			Op:    query.OpTerm,
+			Field: query.PRRepoID,
+			Value: ptr(query.StringValue("A")),
+		},
+		Aggs: map[string]query.Aggregation{
+			"by_state": {Op: query.AggTerms, Field: query.PRState},
+		},
+	})
+	is.NoErr(err)
+	// Only repo A's PR passes the filter.
+	is.Equal(result["by_state"].Buckets[0].DocCount, uint64(1))
+}
+
+func TestAggregate_NestedTermsDateHistTermsHistogram(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	jan := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	janUpdated := time.Date(2024, 1, 16, 0, 0, 0, 0, time.UTC) // 1 day cycle
+	fixed := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	r := repo.NewMemory(repo.WithClock(func() time.Time { return fixed }))
+	is.NoErr(r.AddPullRequest(ctx, model.PullRequest{
+		ID: "1", RepoID: "R", State: model.PullRequestStateMerged,
+		CreatedAt: jan, UpdatedAt: janUpdated,
+	}))
+
+	result, err := r.Aggregate(ctx, query.Query{
+		Entity: query.EntityPullRequest,
+		Aggs: map[string]query.Aggregation{
+			"by_repo": {Op: query.AggTerms, Field: query.PRRepoID,
+				Aggs: map[string]query.Aggregation{
+					"by_month": {Op: query.AggDateHistogram, Field: query.PRCreatedAt, Interval: "month", Format: "2006-01",
+						Aggs: map[string]query.Aggregation{
+							"by_state": {Op: query.AggTerms, Field: query.PRState,
+								Aggs: map[string]query.Aggregation{
+									"cycle": {Op: query.AggHistogram, Field: query.PRCycleTimeSeconds, Buckets: []float64{3600, 86400, 604800}},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	is.NoErr(err)
+
+	repoBucket := result["by_repo"].Buckets[0]
+	is.Equal(repoBucket.Key, "R")
+
+	monthBucket := repoBucket.Aggs["by_month"].Buckets[0]
+	is.Equal(monthBucket.Key, "2024-01")
+
+	stateBucket := monthBucket.Aggs["by_state"].Buckets[0]
+	is.Equal(stateBucket.Key, "MERGED")
+
+	cycle := stateBucket.Aggs["cycle"]
+	is.Equal(cycle.DocCount, uint64(1))
+	is.Equal(cycle.Sum, janUpdated.Sub(jan).Seconds())
+}
+
 // ---- Concurrency -----------------------------------------------------------
 
 func TestQueryCommits_ConcurrentReadWrite(t *testing.T) {

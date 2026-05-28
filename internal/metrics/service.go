@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -11,23 +12,21 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 const DefaultMetricsAddr = "0.0.0.0:2112"
 
-// PullRequestQuerier is the incoming port for fetching pull request state from
-// the domain. At scrape time the MetricsService calls QueryPullRequestsAll to
-// obtain all stored PRs and derive its metrics from them.
-type PullRequestQuerier interface {
-	QueryPullRequestsAll(ctx context.Context, q query.Query) ([]model.PullRequest, error)
+// PullRequestAggregator is the incoming port for obtaining server-side PR
+// aggregation results from the domain.
+type PullRequestAggregator interface {
+	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
 }
 
 // MetricsService implements prometheus.Collector. On every Prometheus scrape
-// it queries the domain service for all pull requests and emits fresh
-// cycle-time histogram observations. No event stream subscription is held.
+// it requests a pre-computed PR cycle-time histogram from the domain and emits
+// one const histogram per (repo_id, created_month, state) label combination.
 type MetricsService struct {
-	querier     PullRequestQuerier
+	aggregator  PullRequestAggregator
 	logger      *slog.Logger
 	metricsAddr string
 	prCycleDesc *prometheus.Desc
@@ -37,9 +36,43 @@ type MetricsService struct {
 // implementation so existing dashboards continue to work.
 var prCycleBuckets = []float64{3600, 14400, 86400, 259200, 604800}
 
-func NewMetricsService(querier PullRequestQuerier, logger *slog.Logger, metricsAddr string) *MetricsService {
+// prCycleQuery is the aggregation query issued on every scrape.
+// terms(repo_id) → date_histogram(created_at, month) → terms(state) → histogram(cycle_time_seconds)
+var prCycleQuery = query.Query{
+	Entity: query.EntityPullRequest,
+	Size:   -1,
+	Aggs: map[string]query.Aggregation{
+		"by_repo": {
+			Op:    query.AggTerms,
+			Field: query.PRRepoID,
+			Aggs: map[string]query.Aggregation{
+				"by_month": {
+					Op:       query.AggDateHistogram,
+					Field:    query.PRCreatedAt,
+					Interval: "month",
+					Format:   "2006-01",
+					Aggs: map[string]query.Aggregation{
+						"by_state": {
+							Op:    query.AggTerms,
+							Field: query.PRState,
+							Aggs: map[string]query.Aggregation{
+								"cycle_time": {
+									Op:      query.AggHistogram,
+									Field:   query.PRCycleTimeSeconds,
+									Buckets: prCycleBuckets,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
+func NewMetricsService(aggregator PullRequestAggregator, logger *slog.Logger, metricsAddr string) *MetricsService {
 	s := &MetricsService{
-		querier:     querier,
+		aggregator:  aggregator,
 		logger:      logger,
 		metricsAddr: DefaultMetricsAddr,
 		prCycleDesc: prometheus.NewDesc(
@@ -89,77 +122,85 @@ func (s *MetricsService) Describe(ch chan<- *prometheus.Desc) {
 	ch <- s.prCycleDesc
 }
 
-// Collect implements prometheus.Collector. It is called on every Prometheus
-// scrape. It queries all pull requests from the domain, groups them by
-// (repo_id, created_month, state), and emits one const histogram per group.
+// Collect implements prometheus.Collector. On every Prometheus scrape it
+// issues one aggregation request to the domain and walks the result tree to
+// emit one const histogram per (repo_id, created_month, state) group.
 func (s *MetricsService) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	prs, err := s.querier.QueryPullRequestsAll(ctx, query.Query{Entity: query.EntityPullRequest})
+	result, err := s.aggregator.Aggregate(ctx, prCycleQuery)
 	if err != nil {
-		s.logger.Error("querying pull requests for metrics collection", "error", err)
+		s.logger.Error("querying pr cycle time aggregation", "error", err)
 		return
 	}
-	s.logger.Debug("collected pull requests for metrics", "count", len(prs))
-
-	type labelKey struct{ repoID, createdMonth, state string }
-	type histData struct {
-		count   uint64
-		sum     float64
-		buckets map[float64]uint64
+	if result == nil {
+		return
 	}
 
-	groups := make(map[labelKey]*histData)
+	if err := s.emitFromTree(ch, result); err != nil {
+		s.logger.Error("emitting pr cycle time metrics", "error", err)
+	}
+}
 
-	for _, pr := range prs {
-		var cycleTime time.Duration
-		switch pr.State {
-		case model.PullRequestStateMerged, model.PullRequestStateDeclined:
-			cycleTime = pr.UpdatedAt.Sub(pr.CreatedAt)
-		default: // OPEN — measure time so far
-			cycleTime = time.Since(pr.CreatedAt)
-		}
-		secs := cycleTime.Seconds()
-
-		k := labelKey{
-			repoID:       pr.RepoID,
-			createdMonth: pr.CreatedAt.Format("2006-01"),
-			state:        pr.State,
-		}
-		g, ok := groups[k]
+// emitFromTree walks the by_repo → by_month → by_state → cycle_time tree
+// and emits one MustNewConstHistogram per leaf.
+func (s *MetricsService) emitFromTree(ch chan<- prometheus.Metric, result map[string]query.AggregationResult) error {
+	byRepo, ok := result["by_repo"]
+	if !ok {
+		return nil
+	}
+	for _, repoBucket := range byRepo.Buckets {
+		repoID, ok := repoBucket.Key.(string)
 		if !ok {
-			g = &histData{buckets: make(map[float64]uint64, len(prCycleBuckets))}
-			for _, b := range prCycleBuckets {
-				g.buckets[b] = 0
-			}
-			groups[k] = g
+			return fmt.Errorf("by_repo bucket key is %T, want string", repoBucket.Key)
 		}
-		g.count++
-		g.sum += secs
-		// Prometheus histograms are cumulative: increment every bucket
-		// whose upper bound is >= the observed value.
-		for _, b := range prCycleBuckets {
-			if secs <= b {
-				g.buckets[b]++
+		byMonth, ok := repoBucket.Aggs["by_month"]
+		if !ok {
+			continue
+		}
+		for _, monthBucket := range byMonth.Buckets {
+			month, ok := monthBucket.Key.(string)
+			if !ok {
+				return fmt.Errorf("by_month bucket key is %T, want string", monthBucket.Key)
+			}
+			byState, ok := monthBucket.Aggs["by_state"]
+			if !ok {
+				continue
+			}
+			for _, stateBucket := range byState.Buckets {
+				state, ok := stateBucket.Key.(string)
+				if !ok {
+					return fmt.Errorf("by_state bucket key is %T, want string", stateBucket.Key)
+				}
+				cycleAgg, ok := stateBucket.Aggs["cycle_time"]
+				if !ok {
+					continue
+				}
+				bucketMap := make(map[float64]uint64, len(cycleAgg.Buckets))
+				for _, b := range cycleAgg.Buckets {
+					upper, ok := b.Key.(float64)
+					if !ok {
+						return fmt.Errorf("cycle_time bucket key is %T, want float64", b.Key)
+					}
+					bucketMap[upper] = b.DocCount
+				}
+				ch <- prometheus.MustNewConstHistogram(
+					s.prCycleDesc,
+					cycleAgg.DocCount,
+					cycleAgg.Sum,
+					bucketMap,
+					repoID,
+					month,
+					state,
+				)
+				s.logger.Info("emitted pr cycle time metric",
+					"repo_id", repoID,
+					"state", state,
+					"count", cycleAgg.DocCount,
+				)
 			}
 		}
 	}
-
-	for k, g := range groups {
-		ch <- prometheus.MustNewConstHistogram(
-			s.prCycleDesc,
-			g.count,
-			g.sum,
-			g.buckets,
-			k.repoID,
-			k.createdMonth,
-			k.state,
-		)
-		s.logger.Info("emitted pr cycle time metric",
-			"repo_id", k.repoID,
-			"state", k.state,
-			"count", g.count,
-		)
-	}
+	return nil
 }

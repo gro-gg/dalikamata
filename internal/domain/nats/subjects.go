@@ -28,10 +28,19 @@ const (
 	SubjectQueryCicdTask        = "query.cicd.workflowTask"
 )
 
+// SubjectQueryAggregate is the single request-reply subject for server-side
+// aggregations. The entity is specified in the Query body. This subject is
+// intentionally separate from the per-entity query subjects so old clients
+// that only handle data/done/error are unaffected.
+const SubjectQueryAggregate = "query.aggregate"
+
 // Daka-Query-Status header values used in query reply messages.
 const (
 	HeaderQueryStatus = "Daka-Query-Status"
 	StatusData        = "data"
 	StatusDone        = "done"
 	StatusError       = "error"
+	// StatusAggregation is sent as a single reply carrying the aggregation
+	// result tree before the final StatusDone sentinel.
+	StatusAggregation = "aggregation"
 )

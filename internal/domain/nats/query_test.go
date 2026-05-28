@@ -280,4 +280,49 @@ func TestQuery_CoreNATSOnly(t *testing.T) {
 	is.Equal(got[0].RepoID, "P/r")
 }
 
+// TestAggregate_PRCycleTimeRoundTrip verifies the full aggregation path:
+// QueryClient.Aggregate → NATS → QueryPort.handleAggregate → DomainService →
+// MemoryRepository.Aggregate → response deserialized by the client.
+func TestAggregate_PRCycleTimeRoundTrip(t *testing.T) {
+	is := testis.New(t)
+	client, cleanup := startQueryStack(t)
+	defer cleanup()
+
+	// The startQueryStack helper seeds two PRs:
+	//   X/repo/1 — MERGED
+	//   X/repo/2 — OPEN
+	q := query.Query{
+		Entity: query.EntityPullRequest,
+		Size:   -1,
+		Aggs: map[string]query.Aggregation{
+			"by_state": {Op: query.AggTerms, Field: query.PRState},
+		},
+	}
+
+	result, err := client.Aggregate(context.Background(), q)
+	is.NoErr(err)
+	is.True(result != nil)
+
+	// Two distinct state buckets: MERGED and OPEN.
+	byState := result["by_state"]
+	is.Equal(len(byState.Buckets), 2)
+
+	var totalDocs uint64
+	for _, b := range byState.Buckets {
+		totalDocs += b.DocCount
+	}
+	is.Equal(totalDocs, uint64(2))
+}
+
+func TestAggregate_EmptyAggs(t *testing.T) {
+	is := testis.New(t)
+	client, cleanup := startQueryStack(t)
+	defer cleanup()
+
+	// A query with no aggs returns nil without error.
+	result, err := client.Aggregate(context.Background(), query.Query{Entity: query.EntityPullRequest})
+	is.NoErr(err)
+	is.True(result == nil)
+}
+
 func ptrQ[T any](v T) *T { return &v }

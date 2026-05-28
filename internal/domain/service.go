@@ -30,6 +30,7 @@ type QueryHandler interface {
 	QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error
 	QueryWorkflowRuns(ctx context.Context, q query.Query, emit func(model.WorkflowRun) error) error
 	QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error
+	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
 }
 
 type DomainService struct {
@@ -98,4 +99,8 @@ func (s *DomainService) QueryWorkflowRuns(ctx context.Context, q query.Query, em
 
 func (s *DomainService) QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error {
 	return s.queryRepo.QueryWorkflowTasks(ctx, q, emit)
+}
+
+func (s *DomainService) Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error) {
+	return s.queryRepo.Aggregate(ctx, q)
 }

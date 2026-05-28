@@ -110,6 +110,67 @@ func (c *QueryClient) QueryWorkflowTasksAll(ctx context.Context, q query.Query) 
 	return collectAll(out, errs)
 }
 
+// --- Aggregation ------------------------------------------------------------
+
+// Aggregate sends q to the server-side aggregation handler and returns the
+// named aggregation result tree. The query must include at least one entry in
+// q.Aggs; an empty Aggs returns nil without an error.
+func (c *QueryClient) Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error) {
+	body, err := json.Marshal(q)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling aggregate query: %w", err)
+	}
+
+	inbox := c.nc.NewInbox()
+	sub, err := c.nc.SubscribeSync(inbox)
+	if err != nil {
+		return nil, fmt.Errorf("subscribing to inbox: %w", err)
+	}
+	defer sub.Unsubscribe() //nolint:errcheck
+
+	if err := c.nc.PublishRequest(SubjectQueryAggregate, inbox, body); err != nil {
+		return nil, fmt.Errorf("publishing aggregate query: %w", err)
+	}
+
+	deadline := time.Now().Add(c.timeout)
+
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, fmt.Errorf("aggregate query timed out after %s", c.timeout)
+		}
+
+		msg, err := sub.NextMsgWithContext(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, fmt.Errorf("receiving aggregate reply: %w", err)
+		}
+
+		switch msg.Header.Get(HeaderQueryStatus) {
+		case StatusDone:
+			return nil, nil
+		case StatusError:
+			var payload struct {
+				Error string `json:"error"`
+			}
+			if e := json.Unmarshal(msg.Data, &payload); e != nil || payload.Error == "" {
+				return nil, fmt.Errorf("server error (unparseable)")
+			}
+			return nil, fmt.Errorf("server error: %s", payload.Error)
+		case StatusAggregation:
+			var result map[string]query.AggregationResult
+			if e := json.Unmarshal(msg.Data, &result); e != nil {
+				return nil, fmt.Errorf("decoding aggregation result: %w", e)
+			}
+			return result, nil
+		default:
+			c.logger.Warn("unknown status in aggregate reply", "status", msg.Header.Get(HeaderQueryStatus))
+		}
+	}
+}
+
 // --- Generic internals ------------------------------------------------------
 
 // streamQuery is the shared implementation for all streaming methods.

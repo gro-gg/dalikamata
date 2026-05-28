@@ -2,11 +2,22 @@ package repo
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
+
+// MemoryRepositoryOpt configures a MemoryRepository.
+type MemoryRepositoryOpt func(*MemoryRepository)
+
+// WithClock overrides the clock used to compute cycle_time_seconds for OPEN PRs.
+// Useful in tests to produce deterministic results.
+func WithClock(clock func() time.Time) MemoryRepositoryOpt {
+	return func(r *MemoryRepository) { r.clock = clock }
+}
 
 type MemoryRepository struct {
 	mu            sync.RWMutex
@@ -16,17 +27,23 @@ type MemoryRepository struct {
 	workflows     map[string]model.Workflow
 	workflowRuns  map[string]model.WorkflowRun
 	workflowTasks map[string]model.WorkflowTask
+	clock         func() time.Time
 }
 
-func NewMemory() *MemoryRepository {
-	return &MemoryRepository{
+func NewMemory(opts ...MemoryRepositoryOpt) *MemoryRepository {
+	r := &MemoryRepository{
 		repos:         make(map[string]model.Repo),
 		commits:       make(map[string]model.Commit),
 		pullRequests:  make(map[string]model.PullRequest),
 		workflows:     make(map[string]model.Workflow),
 		workflowRuns:  make(map[string]model.WorkflowRun),
 		workflowTasks: make(map[string]model.WorkflowTask),
+		clock:         time.Now,
 	}
+	for _, o := range opts {
+		o(r)
+	}
+	return r
 }
 
 func (r *MemoryRepository) AddRepo(_ context.Context, repo model.Repo) error {
@@ -98,7 +115,10 @@ func (r *MemoryRepository) QueryPullRequests(ctx context.Context, q query.Query,
 		snapshot = append(snapshot, v)
 	}
 	r.mu.RUnlock()
-	return queryEntities(ctx, snapshot, q, projectPullRequest, emit)
+	now := r.clock()
+	return queryEntities(ctx, snapshot, q, func(pr model.PullRequest) map[string]any {
+		return projectPullRequest(pr, now)
+	}, emit)
 }
 
 func (r *MemoryRepository) QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error {
@@ -129,6 +149,109 @@ func (r *MemoryRepository) QueryWorkflowTasks(ctx context.Context, q query.Query
 	}
 	r.mu.RUnlock()
 	return queryEntities(ctx, snapshot, q, projectWorkflowTask, emit)
+}
+
+// Aggregate applies the aggregation tree in q.Aggs to all entities of q.Entity
+// that match q.Filter, returning the named aggregation results.
+// Returns nil when q.Aggs is empty.
+func (r *MemoryRepository) Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error) {
+	if len(q.Aggs) == 0 {
+		return nil, nil
+	}
+	now := r.clock()
+	projected, err := r.snapshotProject(ctx, q.Entity, q.Filter, now)
+	if err != nil {
+		return nil, err
+	}
+	return query.EvaluateAggs(projected, q.Aggs)
+}
+
+// snapshotProject takes a read-locked snapshot of the named entity collection,
+// releases the lock, then filters and projects each item to map[string]any.
+func (r *MemoryRepository) snapshotProject(ctx context.Context, entity query.Entity, filter *query.Filter, now time.Time) ([]map[string]any, error) {
+	switch entity {
+	case query.EntityRepo:
+		r.mu.RLock()
+		snap := make([]model.Repo, 0, len(r.repos))
+		for _, v := range r.repos {
+			snap = append(snap, v)
+		}
+		r.mu.RUnlock()
+		return filterProject(ctx, snap, filter, func(v model.Repo) map[string]any { return projectRepo(v) })
+
+	case query.EntityCommit:
+		r.mu.RLock()
+		snap := make([]model.Commit, 0, len(r.commits))
+		for _, v := range r.commits {
+			snap = append(snap, v)
+		}
+		r.mu.RUnlock()
+		return filterProject(ctx, snap, filter, func(v model.Commit) map[string]any { return projectCommit(v) })
+
+	case query.EntityPullRequest:
+		r.mu.RLock()
+		snap := make([]model.PullRequest, 0, len(r.pullRequests))
+		for _, v := range r.pullRequests {
+			snap = append(snap, v)
+		}
+		r.mu.RUnlock()
+		return filterProject(ctx, snap, filter, func(v model.PullRequest) map[string]any { return projectPullRequest(v, now) })
+
+	case query.EntityWorkflow:
+		r.mu.RLock()
+		snap := make([]model.Workflow, 0, len(r.workflows))
+		for _, v := range r.workflows {
+			snap = append(snap, v)
+		}
+		r.mu.RUnlock()
+		return filterProject(ctx, snap, filter, func(v model.Workflow) map[string]any { return projectWorkflow(v) })
+
+	case query.EntityWorkflowRun:
+		r.mu.RLock()
+		snap := make([]model.WorkflowRun, 0, len(r.workflowRuns))
+		for _, v := range r.workflowRuns {
+			snap = append(snap, v)
+		}
+		r.mu.RUnlock()
+		return filterProject(ctx, snap, filter, func(v model.WorkflowRun) map[string]any { return projectWorkflowRun(v) })
+
+	case query.EntityWorkflowTask:
+		r.mu.RLock()
+		snap := make([]model.WorkflowTask, 0, len(r.workflowTasks))
+		for _, v := range r.workflowTasks {
+			snap = append(snap, v)
+		}
+		r.mu.RUnlock()
+		return filterProject(ctx, snap, filter, func(v model.WorkflowTask) map[string]any { return projectWorkflowTask(v) })
+
+	default:
+		return nil, fmt.Errorf("unknown entity: %q", entity)
+	}
+}
+
+// filterProject filters snapshot items by filter and projects matching ones to
+// map[string]any. Respects context cancellation.
+func filterProject[T any](
+	ctx context.Context,
+	snapshot []T,
+	filter *query.Filter,
+	project func(T) map[string]any,
+) ([]map[string]any, error) {
+	result := make([]map[string]any, 0, len(snapshot))
+	for _, item := range snapshot {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		fields := project(item)
+		ok, err := query.Match(filter, fields)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			result = append(result, fields)
+		}
+	}
+	return result, nil
 }
 
 // queryEntities is the shared implementation for all QueryX methods.

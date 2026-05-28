@@ -28,6 +28,11 @@ const (
 	PRTitle       = "title"
 	PRDescription = "description"
 	PRID          = "id"
+
+	// PRCycleTimeSeconds is a computed field: seconds from PR creation to its
+	// final state (MERGED/DECLINED) or to the current time for OPEN PRs.
+	// Materialized by projectPullRequest at read time — not stored on the model.
+	PRCycleTimeSeconds = "cycle_time_seconds"
 )
 
 // Workflow fields.

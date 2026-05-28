@@ -13,13 +13,16 @@ const (
 )
 
 // Query is the top-level request type. It targets a single entity, applies an
-// optional filter tree, sorts results, and paginates with from/size semantics.
-// The "aggs" key is reserved for future aggregation support; passing it today
-// has no effect.
+// optional filter tree, sorts results, paginates with from/size semantics, and
+// optionally requests server-side aggregations.
+//
+// Size -1 signals "aggregations only, no hits" — send to SubjectQueryAggregate
+// to obtain only the aggregation result tree without streaming entity hits.
 type Query struct {
-	Entity Entity      `json:"entity"`
-	Filter *Filter     `json:"filter,omitempty"`
-	Sort   []SortField `json:"sort,omitempty"`
-	From   int         `json:"from,omitempty"`
-	Size   int         `json:"size,omitempty"` // 0 = return all matches
+	Entity Entity                 `json:"entity"`
+	Filter *Filter                `json:"filter,omitempty"`
+	Sort   []SortField            `json:"sort,omitempty"`
+	From   int                    `json:"from,omitempty"`
+	Size   int                    `json:"size,omitempty"` // 0 = all matches; -1 = aggregations only
+	Aggs   map[string]Aggregation `json:"aggs,omitempty"`
 }

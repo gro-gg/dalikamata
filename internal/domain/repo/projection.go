@@ -1,6 +1,8 @@
 package repo
 
 import (
+	"time"
+
 	q "codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
@@ -25,18 +27,31 @@ func projectCommit(c model.Commit) map[string]any {
 }
 
 // projectPullRequest converts a PullRequest to a field map for query evaluation.
-func projectPullRequest(pr model.PullRequest) map[string]any {
+// now is used to compute cycle_time_seconds for OPEN PRs; pass MemoryRepository.clock().
+func projectPullRequest(pr model.PullRequest, now time.Time) map[string]any {
 	return map[string]any{
-		q.PRID:          pr.ID,
-		q.PRRepoID:      pr.RepoID,
-		q.PRName:        pr.Name,
-		q.PRTitle:       pr.Title,
-		q.PRDescription: pr.Description,
-		q.PRState:       pr.State,
-		q.PRAuthor:      pr.Author,
-		q.PRCreatedAt:   pr.CreatedAt,
-		q.PRUpdatedAt:   pr.UpdatedAt,
+		q.PRID:               pr.ID,
+		q.PRRepoID:           pr.RepoID,
+		q.PRName:             pr.Name,
+		q.PRTitle:            pr.Title,
+		q.PRDescription:      pr.Description,
+		q.PRState:            pr.State,
+		q.PRAuthor:           pr.Author,
+		q.PRCreatedAt:        pr.CreatedAt,
+		q.PRUpdatedAt:        pr.UpdatedAt,
+		q.PRCycleTimeSeconds: prCycleTimeSeconds(pr, now),
 	}
+}
+
+// prCycleTimeSeconds returns the elapsed seconds from PR creation to its
+// final state (MERGED/DECLINED) or to now for OPEN PRs.
+func prCycleTimeSeconds(pr model.PullRequest, now time.Time) float64 {
+	end := now
+	switch pr.State {
+	case model.PullRequestStateMerged, model.PullRequestStateDeclined:
+		end = pr.UpdatedAt
+	}
+	return end.Sub(pr.CreatedAt).Seconds()
 }
 
 // projectWorkflow converts a Workflow to a field map for query evaluation.

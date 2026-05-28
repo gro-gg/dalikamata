@@ -33,7 +33,7 @@ func (a *MetricsApp) Run(ctx context.Context) error {
 	}
 	defer closeConn()
 
-	querier := dalinats.NewQueryClient(nc, a.logger.With("component", "query-client"))
-	svc := metrics.NewMetricsService(querier, a.logger, a.MetricsURL)
+	aggregator := dalinats.NewQueryClient(nc, a.logger.With("component", "query-client"))
+	svc := metrics.NewMetricsService(aggregator, a.logger, a.MetricsURL)
 	return svc.Run(ctx)
 }
