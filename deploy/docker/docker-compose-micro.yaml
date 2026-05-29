@@ -10,6 +10,14 @@ services:
     ports:
       - "27990:27990"
 
+  dalikamata-fake-jenkins:
+    image: dalifakes:latest
+    command:
+      - "jenkins"
+      - "--addr=0.0.0.0:27991"
+    ports:
+      - "27991:27991"
+
   dalikamata-nats:
     image: dalikamata:latest
     build:
@@ -55,6 +63,20 @@ services:
       - "--bitbucket-projects=PROJ,INFRA"
     depends_on:
       - dalikamata-fake-bitbucket
+      - dalikamata-domain
+
+  dalikamata-ingest-jenkins:
+    image: dalikamata:latest
+    command:
+      - "--nats-host=dalikamata-nats"
+      - "--nats-port=24222"
+      - "ingest"
+      - "jenkins"
+      - "--jenkins-url=http://dalikamata-fake-jenkins:27991"
+      - "--jenkins-user=any"
+      - "--jenkins-token=any"
+    depends_on:
+      - dalikamata-fake-jenkins
       - dalikamata-domain
 
   prometheus:
