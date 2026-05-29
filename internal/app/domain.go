@@ -37,7 +37,11 @@ func (a *DomainApp) Run(ctx context.Context) error {
 	repository := repo.NewMemory()
 	svc := domain.NewDomainService(repository, repository, a.logger)
 
-	ingestPort := dalinats.NewPort(a.logger, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
+	ingestPort := dalinats.NewPort(a.logger,
+		dalinats.WithGitEventHandler(svc),
+		dalinats.WithCicdEventHandler(svc),
+		dalinats.WithPlatformEventHandler(svc),
+	)
 	queryPort := dalinats.NewQueryPort(a.logger, svc)
 
 	errCh := make(chan error, 2)

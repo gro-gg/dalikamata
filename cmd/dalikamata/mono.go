@@ -47,6 +47,14 @@ var monoCmd = &cobra.Command{
 		ingestApp.Projects = bitbucketProjects
 		ingestApp.CACertsDir = caCertsDir
 
+		var configApp *app.IngestConfigApp
+		if componentsDir != "" {
+			configApp = app.NewIngestConfigApp(l)
+			configApp.NATSHost = natsURL
+			configApp.NATSPort = natsPort
+			configApp.Dir = componentsDir
+		}
+
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
 
@@ -77,6 +85,13 @@ var monoCmd = &cobra.Command{
 				l.Error("running domain service", "error", ingestErr)
 			}
 		})
+		if configApp != nil {
+			wg.Go(func() {
+				if err := configApp.Run(ctx); err != nil {
+					l.Error("running config ingest", "error", err)
+				}
+			})
+		}
 
 		<-ctx.Done()
 
@@ -101,4 +116,5 @@ func init() {
 	monoCmd.Flags().StringVar(&bitbucketURL, "bitbucket-url", "", "Bitbucket Server base URL (e.g. https://bitbucket.example.com)")
 	monoCmd.Flags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
 	monoCmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
+	monoCmd.Flags().StringVar(&componentsDir, "components-dir", "", "directory of component YAML files (optional)")
 }
