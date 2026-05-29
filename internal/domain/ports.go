@@ -29,6 +29,8 @@ type Repository interface {
 	AddWorkflow(context.Context, model.Workflow) error
 	AddWorkflowRun(context.Context, model.WorkflowRun) error
 	AddWorkflowTask(context.Context, model.WorkflowTask) error
+	AddTeam(context.Context, model.Team) error
+	AddComponent(context.Context, model.Component) error
 }
 
 // QueryRepository is the secondary (driven) port for querying entities.
@@ -43,5 +45,7 @@ type QueryRepository interface {
 	QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error
 	QueryWorkflowRuns(ctx context.Context, q query.Query, emit func(model.WorkflowRun) error) error
 	QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error
+	QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error
+	QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error
 	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
 }

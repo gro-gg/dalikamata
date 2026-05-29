@@ -27,6 +27,8 @@ type MemoryRepository struct {
 	workflows     map[string]model.Workflow
 	workflowRuns  map[string]model.WorkflowRun
 	workflowTasks map[string]model.WorkflowTask
+	teams         map[string]model.Team
+	components    map[string]model.Component
 	clock         func() time.Time
 }
 
@@ -38,6 +40,8 @@ func NewMemory(opts ...MemoryRepositoryOpt) *MemoryRepository {
 		workflows:     make(map[string]model.Workflow),
 		workflowRuns:  make(map[string]model.WorkflowRun),
 		workflowTasks: make(map[string]model.WorkflowTask),
+		teams:         make(map[string]model.Team),
+		components:    make(map[string]model.Component),
 		clock:         time.Now,
 	}
 	for _, o := range opts {
@@ -85,6 +89,20 @@ func (r *MemoryRepository) AddWorkflowTask(_ context.Context, stage model.Workfl
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.workflowTasks[stage.WorkflowRunID+"/"+stage.Name] = stage
+	return nil
+}
+
+func (r *MemoryRepository) AddTeam(_ context.Context, team model.Team) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.teams[team.Name] = team
+	return nil
+}
+
+func (r *MemoryRepository) AddComponent(_ context.Context, comp model.Component) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.components[comp.Name] = comp
 	return nil
 }
 
@@ -149,6 +167,26 @@ func (r *MemoryRepository) QueryWorkflowTasks(ctx context.Context, q query.Query
 	}
 	r.mu.RUnlock()
 	return queryEntities(ctx, snapshot, q, projectWorkflowTask, emit)
+}
+
+func (r *MemoryRepository) QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error {
+	r.mu.RLock()
+	snapshot := make([]model.Team, 0, len(r.teams))
+	for _, v := range r.teams {
+		snapshot = append(snapshot, v)
+	}
+	r.mu.RUnlock()
+	return queryEntities(ctx, snapshot, q, projectTeam, emit)
+}
+
+func (r *MemoryRepository) QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error {
+	r.mu.RLock()
+	snapshot := make([]model.Component, 0, len(r.components))
+	for _, v := range r.components {
+		snapshot = append(snapshot, v)
+	}
+	r.mu.RUnlock()
+	return queryEntities(ctx, snapshot, q, projectComponent, emit)
 }
 
 // Aggregate applies the aggregation tree in q.Aggs to all entities of q.Entity
@@ -223,6 +261,24 @@ func (r *MemoryRepository) snapshotProject(ctx context.Context, entity query.Ent
 		}
 		r.mu.RUnlock()
 		return filterProject(ctx, snap, filter, func(v model.WorkflowTask) map[string]any { return projectWorkflowTask(v) })
+
+	case query.EntityTeam:
+		r.mu.RLock()
+		snap := make([]model.Team, 0, len(r.teams))
+		for _, v := range r.teams {
+			snap = append(snap, v)
+		}
+		r.mu.RUnlock()
+		return filterProject(ctx, snap, filter, func(v model.Team) map[string]any { return projectTeam(v) })
+
+	case query.EntityComponent:
+		r.mu.RLock()
+		snap := make([]model.Component, 0, len(r.components))
+		for _, v := range r.components {
+			snap = append(snap, v)
+		}
+		r.mu.RUnlock()
+		return filterProject(ctx, snap, filter, func(v model.Component) map[string]any { return projectComponent(v) })
 
 	default:
 		return nil, fmt.Errorf("unknown entity: %q", entity)

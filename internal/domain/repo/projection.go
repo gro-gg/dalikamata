@@ -87,3 +87,20 @@ func projectWorkflowTask(t model.WorkflowTask) map[string]any {
 		q.TaskDuration:      t.Duration,
 	}
 }
+
+// projectTeam converts a Team to a field map for query evaluation.
+func projectTeam(t model.Team) map[string]any {
+	return map[string]any{
+		q.TeamName: t.Name,
+	}
+}
+
+// projectComponent converts a Component to a field map for query evaluation.
+// Nested slice fields (repos, workflows, artifacts) are omitted from the
+// projection in v1; top-level scalar filters are sufficient for initial use cases.
+func projectComponent(c model.Component) map[string]any {
+	return map[string]any{
+		q.ComponentName:     c.Name,
+		q.ComponentTeamName: c.TeamName,
+	}
+}

@@ -352,3 +352,120 @@ func TestQueryCommits_ConcurrentReadWrite(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// ---- QueryTeams ------------------------------------------------------------
+
+func TestQueryTeams_FilterByName(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newRepo()
+
+	is.NoErr(r.AddTeam(ctx, model.Team{Name: "payments"}))
+	is.NoErr(r.AddTeam(ctx, model.Team{Name: "checkout"}))
+
+	q := query.Query{
+		Entity: query.EntityTeam,
+		Filter: &query.Filter{
+			Op:    query.OpTerm,
+			Field: query.TeamName,
+			Value: ptr(query.StringValue("payments")),
+		},
+	}
+	var got []model.Team
+	is.NoErr(r.QueryTeams(ctx, q, func(t model.Team) error {
+		got = append(got, t)
+		return nil
+	}))
+	is.Equal(len(got), 1)
+	is.Equal(got[0].Name, "payments")
+}
+
+func TestQueryTeams_All(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newRepo()
+
+	is.NoErr(r.AddTeam(ctx, model.Team{Name: "alpha"}))
+	is.NoErr(r.AddTeam(ctx, model.Team{Name: "beta"}))
+
+	var got []model.Team
+	is.NoErr(r.QueryTeams(ctx, query.Query{Entity: query.EntityTeam}, func(t model.Team) error {
+		got = append(got, t)
+		return nil
+	}))
+	is.Equal(len(got), 2)
+}
+
+// ---- QueryComponents -------------------------------------------------------
+
+func TestQueryComponents_FilterByTeam(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newRepo()
+
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "payment-service", TeamName: "payments"}))
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "checkout-api", TeamName: "checkout"}))
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "payment-worker", TeamName: "payments"}))
+
+	q := query.Query{
+		Entity: query.EntityComponent,
+		Filter: &query.Filter{
+			Op:    query.OpTerm,
+			Field: query.ComponentTeamName,
+			Value: ptr(query.StringValue("payments")),
+		},
+	}
+	var got []model.Component
+	is.NoErr(r.QueryComponents(ctx, q, func(c model.Component) error {
+		got = append(got, c)
+		return nil
+	}))
+	is.Equal(len(got), 2)
+	for _, c := range got {
+		is.Equal(c.TeamName, "payments")
+	}
+}
+
+func TestQueryComponents_SortByName(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newRepo()
+
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "z-service", TeamName: "team"}))
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "a-service", TeamName: "team"}))
+
+	q := query.Query{
+		Entity: query.EntityComponent,
+		Sort:   []query.SortField{{Field: query.ComponentName, Order: query.SortAsc}},
+	}
+	var got []model.Component
+	is.NoErr(r.QueryComponents(ctx, q, func(c model.Component) error {
+		got = append(got, c)
+		return nil
+	}))
+	is.Equal(len(got), 2)
+	is.Equal(got[0].Name, "a-service")
+	is.Equal(got[1].Name, "z-service")
+}
+
+func TestAggregate_Team(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newRepo()
+
+	is.NoErr(r.AddTeam(ctx, model.Team{Name: "alpha"}))
+	is.NoErr(r.AddTeam(ctx, model.Team{Name: "beta"}))
+
+	q := query.Query{
+		Entity: query.EntityTeam,
+		Size:   -1,
+		Aggs: map[string]query.Aggregation{
+			"by_name": {Op: query.AggTerms, Field: query.TeamName},
+		},
+	}
+	result, err := r.Aggregate(ctx, q)
+	is.NoErr(err)
+	byName, ok := result["by_name"]
+	is.True(ok)
+	is.Equal(len(byName.Buckets), 2)
+}
