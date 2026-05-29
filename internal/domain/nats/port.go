@@ -20,9 +20,10 @@ const (
 )
 
 type NATSPort struct {
-	logger      *slog.Logger
-	gitHandler  domain.GitEventHandler
-	cicdHandler domain.CicdEventHandler
+	logger           *slog.Logger
+	gitHandler       domain.GitEventHandler
+	cicdHandler      domain.CicdEventHandler
+	platformHandler  domain.PlatformEventHandler
 }
 
 type HandlerOpt func(*NATSPort) error
@@ -37,6 +38,13 @@ func WithGitEventHandler(handler domain.GitEventHandler) HandlerOpt {
 func WithCicdEventHandler(handler domain.CicdEventHandler) HandlerOpt {
 	return func(p *NATSPort) error {
 		p.cicdHandler = handler
+		return nil
+	}
+}
+
+func WithPlatformEventHandler(handler domain.PlatformEventHandler) HandlerOpt {
+	return func(p *NATSPort) error {
+		p.platformHandler = handler
 		return nil
 	}
 }
@@ -161,6 +169,41 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	}
 	s.logger.Debug(LogHandlerSettingUp, "subject", SubjectCicdWorkflowTask)
 
+	var platformTeamConsumeCtx, platformComponentConsumeCtx jetstream.ConsumeContext
+	if s.platformHandler != nil {
+		platformTeamConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+			Durable:       "ingest-platform-team",
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			FilterSubject: SubjectPlatformTeam,
+			MaxDeliver:    MaxDeliver,
+		})
+		if err != nil {
+			return fmt.Errorf("creating ingest-platform-team consumer: %w", err)
+		}
+
+		platformComponentConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+			Durable:       "ingest-platform-component",
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			FilterSubject: SubjectPlatformComponent,
+			MaxDeliver:    MaxDeliver,
+		})
+		if err != nil {
+			return fmt.Errorf("creating ingest-platform-component consumer: %w", err)
+		}
+
+		platformTeamConsumeCtx, err = platformTeamConsumer.Consume(s.platformTeamHandler(ctx))
+		if err != nil {
+			return fmt.Errorf("starting %s consumer: %w", SubjectPlatformTeam, err)
+		}
+		s.logger.Debug(LogHandlerSettingUp, "subject", SubjectPlatformTeam)
+
+		platformComponentConsumeCtx, err = platformComponentConsumer.Consume(s.platformComponentHandler(ctx))
+		if err != nil {
+			return fmt.Errorf("starting %s consumer: %w", SubjectPlatformComponent, err)
+		}
+		s.logger.Debug(LogHandlerSettingUp, "subject", SubjectPlatformComponent)
+	}
+
 	<-ctx.Done()
 
 	gitRepoConsumeCtx.Drain()
@@ -169,6 +212,12 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	cicdWorkflowConsumeCtx.Drain()
 	cicdWorkflowRunConsumeCtx.Drain()
 	cicdWorkflowTaskConsumeCtx.Drain()
+	if platformTeamConsumeCtx != nil {
+		platformTeamConsumeCtx.Drain()
+	}
+	if platformComponentConsumeCtx != nil {
+		platformComponentConsumeCtx.Drain()
+	}
 
 	s.logger.Info("Event Handling Shut Down")
 	return nil
@@ -319,6 +368,58 @@ func (s *NATSPort) gitPullRequestHandler(ctx context.Context) func(msg jetstream
 		}
 		if err := s.gitHandler.HandlePullRequest(ctx, pr); err != nil {
 			l.Error("handling pull request", "id", pr.ID, "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := msg.Ack(); err != nil {
+			l.Error("ack message", "error", err)
+		}
+	}
+}
+
+func (s *NATSPort) platformTeamHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectPlatformTeam)
+
+	return func(msg jetstream.Msg) {
+		l.Debug(LogReceivedMessage)
+		var team model.Team
+		if err := json.Unmarshal(msg.Data(), &team); err != nil {
+			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := s.platformHandler.HandleTeam(ctx, team); err != nil {
+			l.Error("handling team", "name", team.Name, "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := msg.Ack(); err != nil {
+			l.Error("ack message", "error", err)
+		}
+	}
+}
+
+func (s *NATSPort) platformComponentHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectPlatformComponent)
+
+	return func(msg jetstream.Msg) {
+		l.Debug(LogReceivedMessage)
+		var comp model.Component
+		if err := json.Unmarshal(msg.Data(), &comp); err != nil {
+			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := s.platformHandler.HandleComponent(ctx, comp); err != nil {
+			l.Error("handling component", "name", comp.Name, "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}

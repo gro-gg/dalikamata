@@ -13,29 +13,60 @@ import (
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
+	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
+	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
-func TestIngestGitRepo(t *testing.T) {
-	is := testis.New(t)
-	l := slog.New(slog.NewTextHandler(io.Discard, nil))
+func collectTeams(t *testing.T, r *repo.MemoryRepository) []model.Team {
+	t.Helper()
+	var out []model.Team
+	if err := r.QueryTeams(context.Background(), query.Query{Entity: query.EntityTeam}, func(tm model.Team) error {
+		out = append(out, tm)
+		return nil
+	}); err != nil {
+		t.Fatalf("QueryTeams: %v", err)
+	}
+	return out
+}
 
-	natsURL := internalnats.NATSConnectionString("localhost", 4444)
+func collectComponents(t *testing.T, r *repo.MemoryRepository) []model.Component {
+	t.Helper()
+	var out []model.Component
+	if err := r.QueryComponents(context.Background(), query.Query{Entity: query.EntityComponent}, func(c model.Component) error {
+		out = append(out, c)
+		return nil
+	}); err != nil {
+		t.Fatalf("QueryComponents: %v", err)
+	}
+	return out
+}
+
+func startNATS(t *testing.T, port int) (string, jetstream.JetStream) {
+	t.Helper()
+	is := testis.New(t)
+	natsURL := internalnats.NATSConnectionString("localhost", port)
 	ns := internalnats.NewServer()
-	ns.Port = 4444
+	ns.Port = port
 	ns.DataDir = t.TempDir()
 	go func() {
 		err := ns.Start(t.Context())
 		is.NoErr(err)
 	}()
-	err := ns.WaitForStartup()
-	is.NoErr(err)
-
+	is.NoErr(ns.WaitForStartup())
 	nc, err := nats.Connect(natsURL)
 	is.NoErr(err)
 	js, err := jetstream.New(nc)
 	is.NoErr(err)
+	return natsURL, js
+}
+
+func TestIngestGitRepo(t *testing.T) {
+	is := testis.New(t)
+	l := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	_, js := startNATS(t, 4444)
 
 	memory := repo.NewMemory()
 	svc := domain.NewDomainService(memory, memory, l)
@@ -56,4 +87,48 @@ func TestIngestGitRepo(t *testing.T) {
 		is.NoErr(err)
 		time.Sleep(time.Millisecond)
 	}
+}
+
+func TestIngestPlatformTeamAndComponent(t *testing.T) {
+	is := testis.New(t)
+	l := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	_, js := startNATS(t, 4445)
+
+	memory := repo.NewMemory()
+	svc := domain.NewDomainService(memory, memory, l)
+	sut := dalinats.NewPort(l,
+		dalinats.WithGitEventHandler(svc),
+		dalinats.WithCicdEventHandler(svc),
+		dalinats.WithPlatformEventHandler(svc),
+	)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	go func() {
+		err := sut.Run(ctx, js)
+		is.NoErr(err)
+	}()
+
+	// team event
+	teamJSON := `{"name":"payments"}`
+	_, err := js.Publish(ctx, dalinats.SubjectPlatformTeam, []byte(teamJSON))
+	is.NoErr(err)
+
+	// component event
+	compJSON := `{"name":"payment-service","team_name":"payments","repos":[],"workflows":[],"artifacts":[]}`
+	_, err = js.Publish(ctx, dalinats.SubjectPlatformComponent, []byte(compJSON))
+	is.NoErr(err)
+
+	// allow consumers to process
+	time.Sleep(100 * time.Millisecond)
+
+	teams := collectTeams(t, memory)
+	is.Equal(len(teams), 1)
+	is.Equal(teams[0].Name, "payments")
+
+	comps := collectComponents(t, memory)
+	is.Equal(len(comps), 1)
+	is.Equal(comps[0].Name, "payment-service")
 }

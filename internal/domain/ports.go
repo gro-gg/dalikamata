@@ -21,6 +21,12 @@ type CICDPublisher interface {
 	PublishWorkflowTask(context.Context, model.WorkflowTask) error
 }
 
+// PlatformPublisher is the outgoing port for emitting platform config events.
+type PlatformPublisher interface {
+	PublishTeam(context.Context, model.Team) error
+	PublishComponent(context.Context, model.Component) error
+}
+
 // Repository is the secondary (driven) port for persisting entities.
 type Repository interface {
 	AddRepo(context.Context, model.Repo) error

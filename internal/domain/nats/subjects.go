@@ -15,6 +15,9 @@ const (
 	SubjectCicdWorkflow     = "ingest.cicd.workflow"
 	SubjectCicdWorkflowRun  = "ingest.cicd.workflowRun"
 	SubjectCicdWorkflowTask = "ingest.cicd.workflowTask"
+
+	SubjectPlatformTeam      = "ingest.platform.team"
+	SubjectPlatformComponent = "ingest.platform.component"
 )
 
 // Query subjects — request-reply subjects for reading domain entities.
@@ -26,6 +29,9 @@ const (
 	SubjectQueryCicdWorkflow    = "query.cicd.workflow"
 	SubjectQueryCicdWorkflowRun = "query.cicd.workflowRun"
 	SubjectQueryCicdTask        = "query.cicd.workflowTask"
+
+	SubjectQueryPlatformTeam      = "query.platform.team"
+	SubjectQueryPlatformComponent = "query.platform.component"
 )
 
 // SubjectQueryAggregate is the single request-reply subject for server-side
