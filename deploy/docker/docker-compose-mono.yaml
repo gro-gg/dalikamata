@@ -31,11 +31,14 @@ services:
       - "--bitbucket-url=http://dalikamata-fake-bitbucket:17990"
       - "--bitbucket-token=test-token"
       - "--bitbucket-projects=PROJ,INFRA"
+      - "--components-dir=/components"
     depends_on:
       - dalikamata-fake-bitbucket
     ports:
       - "14222:14222"
       - "12112:12112"
+    volumes:
+      - ./components:/components:ro
 
   dalikamata-ingest-jenkins:
     image: dalikamata:latest

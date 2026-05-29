@@ -28,6 +28,12 @@ ingest:
     # If empty, the chart auto-creates a Secret named <release>-jenkins with a random token.
     existingSecret: ""
 
+  config:
+    # Optional: name of a ConfigMap whose keys are component YAML files (*.yaml / *.yml).
+    # Each key is mounted as a file under /components inside the crawler container.
+    # If empty, the config ingest Deployment is not created.
+    existingConfigMap: ""
+
 prometheus:
   enabled: false
   scrapeInterval: 15s

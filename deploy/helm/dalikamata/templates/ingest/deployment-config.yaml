@@ -1,0 +1,40 @@
+{{- if .Values.ingest.config.existingConfigMap }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-ingest-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest-config
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dalikamata.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ingest-config
+  template:
+    metadata:
+      labels:
+        {{- include "dalikamata.labels" . | nindent 8 }}
+        app.kubernetes.io/component: ingest-config
+    spec:
+      containers:
+        - name: ingest-config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--nats-host={{ include "dalikamata.natsServiceName" . }}"
+            - "--nats-port={{ .Values.nats.port }}"
+            - "ingest"
+            - "config"
+            - "--dir=/components"
+          volumeMounts:
+            - name: components
+              mountPath: /components
+              readOnly: true
+      volumes:
+        - name: components
+          configMap:
+            name: {{ .Values.ingest.config.existingConfigMap }}
+{{- end }}

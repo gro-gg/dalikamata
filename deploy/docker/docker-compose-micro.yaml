@@ -65,6 +65,19 @@ services:
       - dalikamata-fake-bitbucket
       - dalikamata-domain
 
+  dalikamata-ingest-config:
+    image: dalikamata:latest
+    command:
+      - "--nats-host=dalikamata-nats"
+      - "--nats-port=24222"
+      - "ingest"
+      - "config"
+      - "--dir=/components"
+    depends_on:
+      - dalikamata-domain
+    volumes:
+      - ./components:/components:ro
+
   dalikamata-ingest-jenkins:
     image: dalikamata:latest
     command:
