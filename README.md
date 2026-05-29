@@ -13,6 +13,7 @@ Dalikamata (or Dalikmata) is a pre-colonial Visayan deity of the Philippines, re
 | `dalikamata metrics` | Start the metrics service (requires a running NATS server) |
 | `dalikamata ingest bitbucket` | Crawl Bitbucket and publish events to NATS |
 | `dalikamata ingest jenkins` | Crawl Jenkins and publish pipeline events to NATS |
+| `dalikamata ingest config` | Read component YAML files and publish platform events to NATS |
 | `dalikamata mono` | Start NATS, domain, metrics, and ingest together in one process |
 
 Key flags (available on all commands via root):
@@ -26,6 +27,14 @@ Key flags (available on all commands via root):
 | `--metrics-addr` | `0.0.0.0:2112` | Prometheus metrics listen address |
 
 The `nats` and `mono` commands also accept `--nats-data` (default `./data/nats`) to set the JetStream persistence directory.
+
+`dalikamata ingest config` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--dir` | _(required)_ | Directory of per-component YAML files (`*.yaml` / `*.yml`) |
+
+`dalikamata mono` also accepts `--components-dir` (optional) to run the config crawler alongside the other ingest sources.
 
 ## Docker Compose
 
