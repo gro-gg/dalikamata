@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-ingest-jenkins
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest-jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dalikamata.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ingest-jenkins
+  template:
+    metadata:
+      labels:
+        {{- include "dalikamata.labels" . | nindent 8 }}
+        app.kubernetes.io/component: ingest-jenkins
+    spec:
+      containers:
+        - name: ingest-jenkins
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--nats-host={{ include "dalikamata.natsServiceName" . }}"
+            - "--nats-port={{ .Values.nats.port }}"
+            - "ingest"
+            - "jenkins"
+            - "--jenkins-url={{ required "ingest.jenkins.url is required" .Values.ingest.jenkins.url }}"
+            - "--jenkins-user={{ required "ingest.jenkins.user is required" .Values.ingest.jenkins.user }}"
+            - "--jenkins-token=$(JENKINS_TOKEN)"
+          env:
+            - name: JENKINS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dalikamata.jenkinsSecretName" . }}
+                  key: token

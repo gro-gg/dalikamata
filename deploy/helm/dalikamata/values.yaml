@@ -19,6 +19,15 @@ ingest:
     # If empty, the chart auto-creates a Secret named <release>-bitbucket with a random token.
     existingSecret: ""
 
+  jenkins:
+    # Required: base URL of your Jenkins instance (e.g. https://jenkins.example.com)
+    url: ""
+    # Required: Jenkins username for API access
+    user: ""
+    # Optional: name of a pre-existing Secret with key "token".
+    # If empty, the chart auto-creates a Secret named <release>-jenkins with a random token.
+    existingSecret: ""
+
 prometheus:
   enabled: false
   scrapeInterval: 15s

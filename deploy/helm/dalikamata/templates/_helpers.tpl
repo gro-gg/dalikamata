@@ -64,6 +64,13 @@ Name of the Bitbucket Secret (existing or auto-created).
 {{- end }}
 
 {{/*
+Name of the Jenkins Secret (existing or auto-created).
+*/}}
+{{- define "dalikamata.jenkinsSecretName" -}}
+{{- .Values.ingest.jenkins.existingSecret | default (printf "%s-jenkins" (include "dalikamata.fullname" .)) }}
+{{- end }}
+
+{{/*
 Name of the Grafana Secret (existing or auto-created).
 */}}
 {{- define "dalikamata.grafanaSecretName" -}}
