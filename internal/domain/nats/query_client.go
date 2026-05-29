@@ -72,6 +72,16 @@ func (c *QueryClient) QueryWorkflowTasks(ctx context.Context, q query.Query) (<-
 	return streamQuery[model.WorkflowTask](ctx, c, SubjectQueryCicdTask, q)
 }
 
+// QueryTeams streams matching Team entities.
+func (c *QueryClient) QueryTeams(ctx context.Context, q query.Query) (<-chan model.Team, <-chan error) {
+	return streamQuery[model.Team](ctx, c, SubjectQueryPlatformTeam, q)
+}
+
+// QueryComponents streams matching Component entities.
+func (c *QueryClient) QueryComponents(ctx context.Context, q query.Query) (<-chan model.Component, <-chan error) {
+	return streamQuery[model.Component](ctx, c, SubjectQueryPlatformComponent, q)
+}
+
 // --- Collecting helpers -----------------------------------------------------
 
 // QueryReposAll collects all matching Repo entities into a slice.
@@ -107,6 +117,18 @@ func (c *QueryClient) QueryWorkflowRunsAll(ctx context.Context, q query.Query) (
 // QueryWorkflowTasksAll collects all matching WorkflowTask entities into a slice.
 func (c *QueryClient) QueryWorkflowTasksAll(ctx context.Context, q query.Query) ([]model.WorkflowTask, error) {
 	out, errs := c.QueryWorkflowTasks(ctx, q)
+	return collectAll(out, errs)
+}
+
+// QueryTeamsAll collects all matching Team entities into a slice.
+func (c *QueryClient) QueryTeamsAll(ctx context.Context, q query.Query) ([]model.Team, error) {
+	out, errs := c.QueryTeams(ctx, q)
+	return collectAll(out, errs)
+}
+
+// QueryComponentsAll collects all matching Component entities into a slice.
+func (c *QueryClient) QueryComponentsAll(ctx context.Context, q query.Query) ([]model.Component, error) {
+	out, errs := c.QueryComponents(ctx, q)
 	return collectAll(out, errs)
 }
 

@@ -326,3 +326,85 @@ func TestAggregate_EmptyAggs(t *testing.T) {
 }
 
 func ptrQ[T any](v T) *T { return &v }
+
+// startPlatformQueryStack is like startQueryStack but also returns the service
+// so callers can seed platform entities (Team, Component) directly.
+func startPlatformQueryStack(t *testing.T) (*domain.DomainService, *dalinats.QueryClient, func()) {
+	t.Helper()
+	is := testis.New(t)
+
+	natsURL, _ := testhelper.StartNATS(t)
+
+	nc, err := gonats.Connect(natsURL)
+	is.NoErr(err)
+
+	js, err := jetstream.New(nc)
+	is.NoErr(err)
+
+	l := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	memory := repo.NewMemory()
+	svc := domain.NewDomainService(memory, memory, l)
+
+	ingestPort := dalinats.NewPort(l,
+		dalinats.WithGitEventHandler(svc),
+		dalinats.WithCicdEventHandler(svc),
+		dalinats.WithPlatformEventHandler(svc),
+	)
+	queryPort := dalinats.NewQueryPort(l, svc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() { _ = ingestPort.Run(ctx, js) }()
+	go func() { _ = queryPort.Run(ctx, nc) }()
+
+	time.Sleep(50 * time.Millisecond)
+
+	client := dalinats.NewQueryClient(nc, l)
+	return svc, client, cancel
+}
+
+func TestQueryTeams_RoundTrip(t *testing.T) {
+	is := testis.New(t)
+	svc, client, cleanup := startPlatformQueryStack(t)
+	defer cleanup()
+
+	seedCtx := context.Background()
+	is.NoErr(svc.HandleTeam(seedCtx, model.Team{Name: "alpha"}))
+	is.NoErr(svc.HandleTeam(seedCtx, model.Team{Name: "beta"}))
+
+	teams, err := client.QueryTeamsAll(context.Background(), query.Query{
+		Entity: query.EntityTeam,
+		Filter: &query.Filter{
+			Op:    query.OpTerm,
+			Field: query.TeamName,
+			Value: ptrQ(query.StringValue("alpha")),
+		},
+	})
+	is.NoErr(err)
+	is.Equal(len(teams), 1)
+	is.Equal(teams[0].Name, "alpha")
+}
+
+func TestQueryComponents_RoundTrip(t *testing.T) {
+	is := testis.New(t)
+	svc, client, cleanup := startPlatformQueryStack(t)
+	defer cleanup()
+
+	seedCtx := context.Background()
+	is.NoErr(svc.HandleTeam(seedCtx, model.Team{Name: "payments"}))
+	is.NoErr(svc.HandleComponent(seedCtx, model.Component{Name: "payment-service", TeamName: "payments"}))
+	is.NoErr(svc.HandleComponent(seedCtx, model.Component{Name: "checkout-api", TeamName: "checkout"}))
+
+	comps, err := client.QueryComponentsAll(context.Background(), query.Query{
+		Entity: query.EntityComponent,
+		Filter: &query.Filter{
+			Op:    query.OpTerm,
+			Field: query.ComponentTeamName,
+			Value: ptrQ(query.StringValue("payments")),
+		},
+	})
+	is.NoErr(err)
+	is.Equal(len(comps), 1)
+	is.Equal(comps[0].Name, "payment-service")
+}

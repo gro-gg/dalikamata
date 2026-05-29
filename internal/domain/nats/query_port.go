@@ -41,6 +41,8 @@ func (p *QueryPort) Run(ctx context.Context, nc *gonats.Conn) error {
 		{SubjectQueryCicdWorkflow, p.handleQueryWorkflows},
 		{SubjectQueryCicdWorkflowRun, p.handleQueryWorkflowRuns},
 		{SubjectQueryCicdTask, p.handleQueryWorkflowTasks},
+		{SubjectQueryPlatformTeam, p.handleQueryTeams},
+		{SubjectQueryPlatformComponent, p.handleQueryComponents},
 		{SubjectQueryAggregate, p.handleAggregate},
 	}
 
@@ -111,6 +113,22 @@ func (p *QueryPort) handleQueryWorkflowTasks(msg *gonats.Msg) {
 	p.handleQuery(msg, func(ctx context.Context, q query.Query) error {
 		return p.handler.QueryWorkflowTasks(ctx, q, func(t model.WorkflowTask) error {
 			return sendData(msg, t)
+		})
+	})
+}
+
+func (p *QueryPort) handleQueryTeams(msg *gonats.Msg) {
+	p.handleQuery(msg, func(ctx context.Context, q query.Query) error {
+		return p.handler.QueryTeams(ctx, q, func(t model.Team) error {
+			return sendData(msg, t)
+		})
+	})
+}
+
+func (p *QueryPort) handleQueryComponents(msg *gonats.Msg) {
+	p.handleQuery(msg, func(ctx context.Context, q query.Query) error {
+		return p.handler.QueryComponents(ctx, q, func(c model.Component) error {
+			return sendData(msg, c)
 		})
 	})
 }
