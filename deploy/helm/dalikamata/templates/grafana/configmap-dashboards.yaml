@@ -1,0 +1,28 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-grafana-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+data:
+  # Grafana dashboard provider — instructs Grafana to load JSON files from this directory.
+  dashboards.yml: |
+    apiVersion: 1
+
+    providers:
+      - name: dalikamata
+        folder: Dalikamata
+        type: file
+        options:
+          path: /etc/grafana/provisioning/dashboards
+  # Dashboard JSON files are sourced from files/dashboards/*.json in this chart.
+  # range+base produces clean keys (e.g. "pr_cycle_time.json") without path separators,
+  # which Kubernetes ConfigMap keys do not allow.
+{{- range $path, $bytes := .Files.Glob "files/dashboards/*.json" }}
+  {{ base $path }}: |
+{{ $bytes | toString | indent 4 }}
+{{- end }}
+{{- end }}

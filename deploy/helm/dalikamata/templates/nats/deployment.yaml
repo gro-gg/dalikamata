@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-nats
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dalikamata.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: nats
+  template:
+    metadata:
+      labels:
+        {{- include "dalikamata.labels" . | nindent 8 }}
+        app.kubernetes.io/component: nats
+    spec:
+      containers:
+        - name: nats
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--nats-host=0.0.0.0"
+            - "--nats-port={{ .Values.nats.port }}"
+            - "nats"
+            - "--nats-data=/data/nats"
+          ports:
+            - name: nats
+              containerPort: {{ .Values.nats.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: nats-data
+              mountPath: /data/nats
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.nats.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.nats.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: nats-data
+          emptyDir: {}

@@ -1,0 +1,58 @@
+image:
+  repository: dalikamata
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nats:
+  port: 4222
+
+metrics:
+  port: 2112
+
+ingest:
+  bitbucket:
+    # Required: base URL of your Bitbucket Server instance (e.g. https://bitbucket.example.com)
+    url: ""
+    # Required: comma-separated Bitbucket project keys to crawl (e.g. "PROJ,INFRA")
+    projects: ""
+    # Optional: name of a pre-existing Secret with key "token".
+    # If empty, the chart auto-creates a Secret named <release>-bitbucket with a random token.
+    existingSecret: ""
+
+prometheus:
+  enabled: false
+  scrapeInterval: 15s
+  service:
+    type: LoadBalancer
+  persistence:
+    size: 8Gi
+    storageClass: ""
+
+grafana:
+  enabled: false
+  # Optional: name of a pre-existing Secret with key "admin-password".
+  # If empty, the chart auto-creates a Secret named <release>-grafana with a random password.
+  existingSecret: ""
+  service:
+    type: LoadBalancer
+  persistence:
+    size: 2Gi
+    storageClass: ""
+  ingress:
+    enabled: false
+    # IngressClass to use (e.g. "nginx", "traefik"). Leave empty to use the cluster default.
+    className: ""
+    # Required when ingress.enabled is true — hostname Grafana will be served on.
+    hostname: ""
+    # Arbitrary annotations forwarded to the Ingress object.
+    # Useful for cert-manager, rewrite rules, auth middleware, etc.
+    # annotations:
+    #   cert-manager.io/cluster-issuer: letsencrypt-prod
+    #   nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    annotations: {}
+    # TLS configuration. Each entry names a Secret and the hosts it covers.
+    # tls:
+    #   - hosts:
+    #       - grafana.example.com
+    #     secretName: grafana-tls
+    tls: []

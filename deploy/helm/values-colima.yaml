@@ -1,0 +1,22 @@
+ingest:
+  bitbucket:
+    url: "https://bitbucket.example.com"   # replace with your Bitbucket Server URL
+    projects: "PROJ,INFRA"                 # replace with your project keys
+
+grafana:
+  enabled: true
+  service:
+    # ClusterIP — Traefik handles external traffic; no LoadBalancer needed.
+    type: ClusterIP
+  ingress:
+    enabled: true
+    className: traefik
+    hostname: grafana.local
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+
+prometheus:
+  enabled: true
+  service:
+    # NodePort — Prometheus has no Ingress; reach it directly via the Colima VM IP.
+    type: NodePort

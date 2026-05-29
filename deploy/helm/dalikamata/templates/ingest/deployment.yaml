@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-ingest
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dalikamata.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ingest
+  template:
+    metadata:
+      labels:
+        {{- include "dalikamata.labels" . | nindent 8 }}
+        app.kubernetes.io/component: ingest
+    spec:
+      containers:
+        - name: ingest
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--nats-host={{ include "dalikamata.natsServiceName" . }}"
+            - "--nats-port={{ .Values.nats.port }}"
+            - "ingest"
+            - "bitbucket"
+            - "--bitbucket-url={{ required "ingest.bitbucket.url is required" .Values.ingest.bitbucket.url }}"
+            - "--bitbucket-token=$(BITBUCKET_TOKEN)"
+            - "--bitbucket-projects={{ required "ingest.bitbucket.projects is required" .Values.ingest.bitbucket.projects }}"
+          env:
+            - name: BITBUCKET_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dalikamata.bitbucketSecretName" . }}
+                  key: token
