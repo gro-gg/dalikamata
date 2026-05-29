@@ -62,3 +62,14 @@ const (
 	TaskStartedAt     = "started_at"
 	TaskDuration      = "duration"
 )
+
+// Team fields.
+const (
+	TeamName = "name"
+)
+
+// Component fields.
+const (
+	ComponentName     = "name"
+	ComponentTeamName = "team_name"
+)

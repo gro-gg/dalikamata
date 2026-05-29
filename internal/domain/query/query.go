@@ -10,6 +10,9 @@ const (
 	EntityWorkflow     Entity = "workflow"
 	EntityWorkflowRun  Entity = "workflowRun"
 	EntityWorkflowTask Entity = "workflowTask"
+
+	EntityTeam      Entity = "team"
+	EntityComponent Entity = "component"
 )
 
 // Query is the top-level request type. It targets a single entity, applies an
