@@ -22,6 +22,12 @@ type CicdEventHandler interface {
 	HandleWorkflowTask(context.Context, model.WorkflowTask) error
 }
 
+// PlatformEventHandler is the primary (driving) port for platform config events.
+type PlatformEventHandler interface {
+	HandleTeam(context.Context, model.Team) error
+	HandleComponent(context.Context, model.Component) error
+}
+
 // QueryHandler is the primary (driving) port the NATS query adapter calls into.
 type QueryHandler interface {
 	QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error
@@ -30,6 +36,8 @@ type QueryHandler interface {
 	QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error
 	QueryWorkflowRuns(ctx context.Context, q query.Query, emit func(model.WorkflowRun) error) error
 	QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error
+	QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error
+	QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error
 	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
 }
 
@@ -77,6 +85,16 @@ func (s *DomainService) HandleWorkflowTask(ctx context.Context, workflowTask mod
 	return s.repo.AddWorkflowTask(ctx, workflowTask)
 }
 
+func (s *DomainService) HandleTeam(ctx context.Context, team model.Team) error {
+	s.logger.Info("handling team", "name", team.Name)
+	return s.repo.AddTeam(ctx, team)
+}
+
+func (s *DomainService) HandleComponent(ctx context.Context, comp model.Component) error {
+	s.logger.Info("handling component", "name", comp.Name, "team", comp.TeamName)
+	return s.repo.AddComponent(ctx, comp)
+}
+
 func (s *DomainService) QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error {
 	return s.queryRepo.QueryRepos(ctx, q, emit)
 }
@@ -99,6 +117,14 @@ func (s *DomainService) QueryWorkflowRuns(ctx context.Context, q query.Query, em
 
 func (s *DomainService) QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error {
 	return s.queryRepo.QueryWorkflowTasks(ctx, q, emit)
+}
+
+func (s *DomainService) QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error {
+	return s.queryRepo.QueryTeams(ctx, q, emit)
+}
+
+func (s *DomainService) QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error {
+	return s.queryRepo.QueryComponents(ctx, q, emit)
 }
 
 func (s *DomainService) Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error) {
