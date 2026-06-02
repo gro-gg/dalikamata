@@ -29,20 +29,26 @@ type MemoryRepository struct {
 	workflowTasks map[string]model.WorkflowTask
 	teams         map[string]model.Team
 	components    map[string]model.Component
-	clock         func() time.Time
+	// Reverse indexes maintained by AddComponent so that WorkflowRun/Task
+	// projections can surface team_name and component_name without a join.
+	workflowToComponent map[string]string // workflowID → component name
+	componentToTeam     map[string]string // component name → team name
+	clock               func() time.Time
 }
 
 func NewMemory(opts ...MemoryRepositoryOpt) *MemoryRepository {
 	r := &MemoryRepository{
-		repos:         make(map[string]model.Repo),
-		commits:       make(map[string]model.Commit),
-		pullRequests:  make(map[string]model.PullRequest),
-		workflows:     make(map[string]model.Workflow),
-		workflowRuns:  make(map[string]model.WorkflowRun),
-		workflowTasks: make(map[string]model.WorkflowTask),
-		teams:         make(map[string]model.Team),
-		components:    make(map[string]model.Component),
-		clock:         time.Now,
+		repos:               make(map[string]model.Repo),
+		commits:             make(map[string]model.Commit),
+		pullRequests:        make(map[string]model.PullRequest),
+		workflows:           make(map[string]model.Workflow),
+		workflowRuns:        make(map[string]model.WorkflowRun),
+		workflowTasks:       make(map[string]model.WorkflowTask),
+		teams:               make(map[string]model.Team),
+		components:          make(map[string]model.Component),
+		workflowToComponent: make(map[string]string),
+		componentToTeam:     make(map[string]string),
+		clock:               time.Now,
 	}
 	for _, o := range opts {
 		o(r)
@@ -102,8 +108,58 @@ func (r *MemoryRepository) AddTeam(_ context.Context, team model.Team) error {
 func (r *MemoryRepository) AddComponent(_ context.Context, comp model.Component) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// Remove stale workflow→component entries from the previous version of
+	// this component (handles re-ingests where the workflow list shrinks).
+	if prev, ok := r.components[comp.Name]; ok {
+		for _, cw := range prev.Workflows {
+			if r.workflowToComponent[cw.WorkflowID] == prev.Name {
+				delete(r.workflowToComponent, cw.WorkflowID)
+			}
+		}
+	}
 	r.components[comp.Name] = comp
+	r.componentToTeam[comp.Name] = comp.TeamName
+	for _, cw := range comp.Workflows {
+		r.workflowToComponent[cw.WorkflowID] = comp.Name
+	}
 	return nil
+}
+
+// snapshotOwnerLookup captures a point-in-time copy of the indexes and workflow
+// names under a read lock and returns an ownerLookup whose closures operate on
+// the snapshot — safe to call after the lock is released.
+func (r *MemoryRepository) snapshotOwnerLookup() ownerLookup {
+	wfc := make(map[string]string, len(r.workflowToComponent))
+	for k, v := range r.workflowToComponent {
+		wfc[k] = v
+	}
+	ct := make(map[string]string, len(r.componentToTeam))
+	for k, v := range r.componentToTeam {
+		ct[k] = v
+	}
+	wfNames := make(map[string]string, len(r.workflows))
+	for k, v := range r.workflows {
+		wfNames[k] = v.Name
+	}
+	return ownerLookup{
+		ownership: func(workflowID string) (string, string) {
+			compName, ok := wfc[workflowID]
+			if !ok {
+				return "unknown", "unknown"
+			}
+			teamName, ok := ct[compName]
+			if !ok {
+				return compName, "unknown"
+			}
+			return compName, teamName
+		},
+		workflowName: func(workflowID string) string {
+			if name, ok := wfNames[workflowID]; ok {
+				return name
+			}
+			return workflowID
+		},
+	}
 }
 
 func (r *MemoryRepository) QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error {
@@ -155,18 +211,28 @@ func (r *MemoryRepository) QueryWorkflowRuns(ctx context.Context, q query.Query,
 	for _, v := range r.workflowRuns {
 		snapshot = append(snapshot, v)
 	}
+	lkp := r.snapshotOwnerLookup()
 	r.mu.RUnlock()
-	return queryEntities(ctx, snapshot, q, projectWorkflowRun, emit)
+	return queryEntities(ctx, snapshot, q, func(run model.WorkflowRun) map[string]any {
+		return projectWorkflowRun(run, lkp)
+	}, emit)
 }
 
 func (r *MemoryRepository) QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error {
 	r.mu.RLock()
-	snapshot := make([]model.WorkflowTask, 0, len(r.workflowTasks))
+	snapTasks := make([]model.WorkflowTask, 0, len(r.workflowTasks))
 	for _, v := range r.workflowTasks {
-		snapshot = append(snapshot, v)
+		snapTasks = append(snapTasks, v)
 	}
+	snapRuns := make(map[string]model.WorkflowRun, len(r.workflowRuns))
+	for k, v := range r.workflowRuns {
+		snapRuns[k] = v
+	}
+	lkp := r.snapshotOwnerLookup()
 	r.mu.RUnlock()
-	return queryEntities(ctx, snapshot, q, projectWorkflowTask, emit)
+	return queryEntities(ctx, snapTasks, q, func(t model.WorkflowTask) map[string]any {
+		return projectWorkflowTask(t, snapRuns, lkp)
+	}, emit)
 }
 
 func (r *MemoryRepository) QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error {
@@ -250,17 +316,23 @@ func (r *MemoryRepository) snapshotProject(ctx context.Context, entity query.Ent
 		for _, v := range r.workflowRuns {
 			snap = append(snap, v)
 		}
+		lkp := r.snapshotOwnerLookup()
 		r.mu.RUnlock()
-		return filterProject(ctx, snap, filter, func(v model.WorkflowRun) map[string]any { return projectWorkflowRun(v) })
+		return filterProject(ctx, snap, filter, func(v model.WorkflowRun) map[string]any { return projectWorkflowRun(v, lkp) })
 
 	case query.EntityWorkflowTask:
 		r.mu.RLock()
-		snap := make([]model.WorkflowTask, 0, len(r.workflowTasks))
+		snapTasks := make([]model.WorkflowTask, 0, len(r.workflowTasks))
 		for _, v := range r.workflowTasks {
-			snap = append(snap, v)
+			snapTasks = append(snapTasks, v)
 		}
+		snapRuns := make(map[string]model.WorkflowRun, len(r.workflowRuns))
+		for k, v := range r.workflowRuns {
+			snapRuns[k] = v
+		}
+		lkp := r.snapshotOwnerLookup()
 		r.mu.RUnlock()
-		return filterProject(ctx, snap, filter, func(v model.WorkflowTask) map[string]any { return projectWorkflowTask(v) })
+		return filterProject(ctx, snapTasks, filter, func(v model.WorkflowTask) map[string]any { return projectWorkflowTask(v, snapRuns, lkp) })
 
 	case query.EntityTeam:
 		r.mu.RLock()

@@ -62,22 +62,46 @@ func projectWorkflow(w model.Workflow) map[string]any {
 	}
 }
 
+// ownerLookup carries the closures needed to enrich WorkflowRun and
+// WorkflowTask projections with team/component/workflow-name fields.
+// Both closures must be safe to call concurrently and without holding any lock,
+// because they operate on snapshot data captured under the repository's RLock.
+type ownerLookup struct {
+	// ownership returns (componentName, teamName) for the given workflowID,
+	// falling back to ("unknown", "unknown") for unclaimed workflows.
+	ownership func(workflowID string) (component, team string)
+	// workflowName returns the human-readable workflow name for the given ID,
+	// falling back to the ID itself when no Workflow record exists.
+	workflowName func(workflowID string) string
+}
+
 // projectWorkflowRun converts a WorkflowRun to a field map for query evaluation.
-func projectWorkflowRun(r model.WorkflowRun) map[string]any {
+// Enriched fields (team_name, component_name, workflow_name) are looked up via lkp.
+func projectWorkflowRun(r model.WorkflowRun, lkp ownerLookup) map[string]any {
+	component, team := lkp.ownership(r.WorkflowID)
 	return map[string]any{
-		q.RunID:         r.ID,
-		q.RunWorkflowID: r.WorkflowID,
-		q.RunNumber:     r.Number,
-		q.RunStatus:     r.Status,
-		q.RunBranch:     r.Branch,
-		q.RunCommitSHA:  r.CommitSHA,
-		q.RunStartedAt:  r.StartedAt,
-		q.RunDuration:   r.Duration,
+		q.RunID:           r.ID,
+		q.RunWorkflowID:   r.WorkflowID,
+		q.RunNumber:       r.Number,
+		q.RunStatus:       r.Status,
+		q.RunBranch:       r.Branch,
+		q.RunCommitSHA:    r.CommitSHA,
+		q.RunStartedAt:    r.StartedAt,
+		q.RunDuration:     r.Duration,
+		q.RunWorkflowName: lkp.workflowName(r.WorkflowID),
+		q.RunComponentName: component,
+		q.RunTeamName:     team,
 	}
 }
 
 // projectWorkflowTask converts a WorkflowTask to a field map for query evaluation.
-func projectWorkflowTask(t model.WorkflowTask) map[string]any {
+// Enriched fields are looked up via runs (task→run→workflowID) and then lkp.
+func projectWorkflowTask(t model.WorkflowTask, runs map[string]model.WorkflowRun, lkp ownerLookup) map[string]any {
+	workflowID := ""
+	if run, ok := runs[t.WorkflowRunID]; ok {
+		workflowID = run.WorkflowID
+	}
+	component, team := lkp.ownership(workflowID)
 	return map[string]any{
 		q.TaskWorkflowRunID: t.WorkflowRunID,
 		q.TaskOrder:         t.Order,
@@ -85,6 +109,10 @@ func projectWorkflowTask(t model.WorkflowTask) map[string]any {
 		q.TaskStatus:        t.Status,
 		q.TaskStartedAt:     t.StartedAt,
 		q.TaskDuration:      t.Duration,
+		q.TaskWorkflowID:    workflowID,
+		q.TaskWorkflowName:  lkp.workflowName(workflowID),
+		q.TaskComponentName: component,
+		q.TaskTeamName:      team,
 	}
 }
 
