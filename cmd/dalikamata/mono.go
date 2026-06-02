@@ -55,6 +55,18 @@ var monoCmd = &cobra.Command{
 			configApp.Dir = componentsDir
 		}
 
+		var jenkinsApp *app.IngestJenkinsApp
+		if jenkinsURL != "" {
+			jenkinsApp = app.NewIngestJenkinsApp(l)
+			jenkinsApp.NATSHost = natsURL
+			jenkinsApp.NATSPort = natsPort
+			jenkinsApp.JenkinsURL = jenkinsURL
+			jenkinsApp.JenkinsUser = jenkinsUser
+			jenkinsApp.JenkinsToken = jenkinsToken
+			jenkinsApp.Jobs = jenkinsJobs
+			jenkinsApp.CACertsDir = caCertsDir
+		}
+
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
 
@@ -68,27 +80,31 @@ var monoCmd = &cobra.Command{
 		}
 
 		wg.Go(func() {
-			domainErr := domainApp.Run(ctx)
-			if domainErr != nil {
-				l.Error("running domain service", "error", domainErr)
+			if err := domainApp.Run(ctx); err != nil {
+				l.Error("running domain service", "error", err)
 			}
 		})
 		wg.Go(func() {
-			metricsErr := metricsApp.Run(ctx)
-			if metricsErr != nil {
-				l.Error("running domain service", "error", metricsErr)
+			if err := metricsApp.Run(ctx); err != nil {
+				l.Error("running metrics service", "error", err)
 			}
 		})
 		wg.Go(func() {
-			ingestErr := ingestApp.Run(ctx)
-			if ingestErr != nil {
-				l.Error("running domain service", "error", ingestErr)
+			if err := ingestApp.Run(ctx); err != nil {
+				l.Error("running bitbucket ingest", "error", err)
 			}
 		})
 		if configApp != nil {
 			wg.Go(func() {
 				if err := configApp.Run(ctx); err != nil {
 					l.Error("running config ingest", "error", err)
+				}
+			})
+		}
+		if jenkinsApp != nil {
+			wg.Go(func() {
+				if err := jenkinsApp.Run(ctx); err != nil {
+					l.Error("running jenkins ingest", "error", err)
 				}
 			})
 		}
@@ -117,4 +133,8 @@ func init() {
 	monoCmd.Flags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
 	monoCmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
 	monoCmd.Flags().StringVar(&componentsDir, "components-dir", "", "directory of component YAML files (optional)")
+	monoCmd.Flags().StringVar(&jenkinsURL, "jenkins-url", "", "Jenkins base URL (optional; omit to skip Jenkins ingest)")
+	monoCmd.Flags().StringVar(&jenkinsUser, "jenkins-user", "", "Jenkins username")
+	monoCmd.Flags().StringVar(&jenkinsToken, "jenkins-token", "", "Jenkins API token")
+	monoCmd.Flags().StringSliceVar(&jenkinsJobs, "jenkins-jobs", nil, "Jenkins job paths to crawl (comma-separated); crawl all if omitted")
 }

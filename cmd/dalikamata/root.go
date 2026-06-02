@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"codeberg.org/aeforged/dalikamata/internal/app"
 	"codeberg.org/aeforged/dalikamata/internal/metrics"
 	"github.com/spf13/cobra"
 )
@@ -56,7 +55,7 @@ func Execute() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	rootCmd.SetContext(app.AddWaitGroup(ctx))
+	rootCmd.SetContext(ctx)
 
 	err := rootCmd.Execute()
 	if err != nil {
