@@ -51,6 +51,13 @@ const (
 	RunCommitSHA  = "commit_sha"
 	RunStartedAt  = "started_at"
 	RunDuration   = "duration"
+
+	// Enriched at projection time by joining against the component index:
+	// workflow_id → component → team. RunWorkflowName is dereferenced from
+	// the Workflow record. None of these are stored on model.WorkflowRun.
+	RunWorkflowName  = "workflow_name"
+	RunComponentName = "component_name"
+	RunTeamName      = "team_name"
 )
 
 // WorkflowTask fields.
@@ -61,6 +68,14 @@ const (
 	TaskStatus        = "status"
 	TaskStartedAt     = "started_at"
 	TaskDuration      = "duration"
+
+	// Enriched at projection time. Tasks only carry WorkflowRunID on the
+	// model, so workflow_id/workflow_name/component_name/team_name are all
+	// looked up via the parent run.
+	TaskWorkflowID    = "workflow_id"
+	TaskWorkflowName  = "workflow_name"
+	TaskComponentName = "component_name"
+	TaskTeamName      = "team_name"
 )
 
 // Team fields.
