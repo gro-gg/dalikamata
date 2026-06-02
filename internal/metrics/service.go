@@ -23,18 +23,118 @@ type PullRequestAggregator interface {
 }
 
 // MetricsService implements prometheus.Collector. On every Prometheus scrape
-// it requests a pre-computed PR cycle-time histogram from the domain and emits
-// one const histogram per (repo_id, created_month, state) label combination.
+// it requests pre-computed histograms from the domain and emits const histograms
+// for PR cycle time, workflow run duration, and workflow task duration.
 type MetricsService struct {
-	aggregator  PullRequestAggregator
-	logger      *slog.Logger
-	metricsAddr string
-	prCycleDesc *prometheus.Desc
+	aggregator      PullRequestAggregator
+	logger          *slog.Logger
+	metricsAddr     string
+	prCycleDesc     *prometheus.Desc
+	wfRunDesc       *prometheus.Desc
+	wfTaskDesc      *prometheus.Desc
 }
 
 // prCycleBuckets mirrors the bucket boundaries of the original event-driven
 // implementation so existing dashboards continue to work.
 var prCycleBuckets = []float64{3600, 14400, 86400, 259200, 604800}
+
+// workflowRunBuckets covers typical CI/CD pipeline total runtimes (1m–6h).
+var workflowRunBuckets = []float64{60, 300, 900, 1800, 3600, 7200, 21600}
+
+// workflowTaskBuckets covers individual stage durations (30s–1h).
+var workflowTaskBuckets = []float64{30, 60, 120, 300, 600, 1800, 3600}
+
+// workflowRunQuery aggregates run durations by team → component → workflow_id → workflow_name → status.
+var workflowRunQuery = query.Query{
+	Entity: query.EntityWorkflowRun,
+	Size:   -1,
+	Aggs: map[string]query.Aggregation{
+		"by_team": {
+			Op:    query.AggTerms,
+			Field: query.RunTeamName,
+			Aggs: map[string]query.Aggregation{
+				"by_component": {
+					Op:    query.AggTerms,
+					Field: query.RunComponentName,
+					Aggs: map[string]query.Aggregation{
+						"by_workflow_id": {
+							Op:    query.AggTerms,
+							Field: query.RunWorkflowID,
+							Aggs: map[string]query.Aggregation{
+								"by_workflow_name": {
+									Op:    query.AggTerms,
+									Field: query.RunWorkflowName,
+									Aggs: map[string]query.Aggregation{
+										"by_status": {
+											Op:    query.AggTerms,
+											Field: query.RunStatus,
+											Aggs: map[string]query.Aggregation{
+												"duration": {
+													Op:      query.AggHistogram,
+													Field:   query.RunDuration,
+													Buckets: workflowRunBuckets,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
+// workflowTaskQuery aggregates task durations by team → component → workflow_id → workflow_name → task_name → status.
+var workflowTaskQuery = query.Query{
+	Entity: query.EntityWorkflowTask,
+	Size:   -1,
+	Aggs: map[string]query.Aggregation{
+		"by_team": {
+			Op:    query.AggTerms,
+			Field: query.TaskTeamName,
+			Aggs: map[string]query.Aggregation{
+				"by_component": {
+					Op:    query.AggTerms,
+					Field: query.TaskComponentName,
+					Aggs: map[string]query.Aggregation{
+						"by_workflow_id": {
+							Op:    query.AggTerms,
+							Field: query.TaskWorkflowID,
+							Aggs: map[string]query.Aggregation{
+								"by_workflow_name": {
+									Op:    query.AggTerms,
+									Field: query.TaskWorkflowName,
+									Aggs: map[string]query.Aggregation{
+										"by_task_name": {
+											Op:    query.AggTerms,
+											Field: query.TaskName,
+											Aggs: map[string]query.Aggregation{
+												"by_status": {
+													Op:    query.AggTerms,
+													Field: query.TaskStatus,
+													Aggs: map[string]query.Aggregation{
+														"duration": {
+															Op:      query.AggHistogram,
+															Field:   query.TaskDuration,
+															Buckets: workflowTaskBuckets,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+}
 
 // prCycleQuery is the aggregation query issued on every scrape.
 // terms(repo_id) → date_histogram(created_at, month) → terms(state) → histogram(cycle_time_seconds)
@@ -81,6 +181,18 @@ func NewMetricsService(aggregator PullRequestAggregator, logger *slog.Logger, me
 			[]string{"repo_id", "created_month", "state"},
 			nil,
 		),
+		wfRunDesc: prometheus.NewDesc(
+			"workflow_run_duration_seconds",
+			"Total duration of a workflow run in seconds, grouped by team and component.",
+			[]string{"team_name", "component_name", "workflow_id", "workflow_name", "status"},
+			nil,
+		),
+		wfTaskDesc: prometheus.NewDesc(
+			"workflow_task_duration_seconds",
+			"Duration of a workflow stage/task in seconds, grouped by team and component.",
+			[]string{"team_name", "component_name", "workflow_id", "workflow_name", "task_name", "status"},
+			nil,
+		),
 	}
 	if metricsAddr != "" {
 		s.metricsAddr = metricsAddr
@@ -120,32 +232,45 @@ func (s *MetricsService) Run(ctx context.Context) error {
 // Describe implements prometheus.Collector.
 func (s *MetricsService) Describe(ch chan<- *prometheus.Desc) {
 	ch <- s.prCycleDesc
+	ch <- s.wfRunDesc
+	ch <- s.wfTaskDesc
 }
 
-// Collect implements prometheus.Collector. On every Prometheus scrape it
-// issues one aggregation request to the domain and walks the result tree to
-// emit one const histogram per (repo_id, created_month, state) group.
+// Collect implements prometheus.Collector. On every Prometheus scrape it issues
+// aggregation requests to the domain and emits const histograms for PR cycle
+// time, workflow run duration, and workflow task duration.
 func (s *MetricsService) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	result, err := s.aggregator.Aggregate(ctx, prCycleQuery)
-	if err != nil {
+	if result, err := s.aggregator.Aggregate(ctx, prCycleQuery); err != nil {
 		s.logger.Error("querying pr cycle time aggregation", "error", err)
-		return
-	}
-	if result == nil {
-		return
+	} else if result != nil {
+		if err := s.emitPRCycleTree(ch, result); err != nil {
+			s.logger.Error("emitting pr cycle time metrics", "error", err)
+		}
 	}
 
-	if err := s.emitFromTree(ch, result); err != nil {
-		s.logger.Error("emitting pr cycle time metrics", "error", err)
+	if result, err := s.aggregator.Aggregate(ctx, workflowRunQuery); err != nil {
+		s.logger.Error("querying workflow run duration aggregation", "error", err)
+	} else if result != nil {
+		if err := s.emitWorkflowRunTree(ch, result); err != nil {
+			s.logger.Error("emitting workflow run duration metrics", "error", err)
+		}
+	}
+
+	if result, err := s.aggregator.Aggregate(ctx, workflowTaskQuery); err != nil {
+		s.logger.Error("querying workflow task duration aggregation", "error", err)
+	} else if result != nil {
+		if err := s.emitWorkflowTaskTree(ch, result); err != nil {
+			s.logger.Error("emitting workflow task duration metrics", "error", err)
+		}
 	}
 }
 
-// emitFromTree walks the by_repo → by_month → by_state → cycle_time tree
+// emitPRCycleTree walks the by_repo → by_month → by_state → cycle_time tree
 // and emits one MustNewConstHistogram per leaf.
-func (s *MetricsService) emitFromTree(ch chan<- prometheus.Metric, result map[string]query.AggregationResult) error {
+func (s *MetricsService) emitPRCycleTree(ch chan<- prometheus.Metric, result map[string]query.AggregationResult) error {
 	byRepo, ok := result["by_repo"]
 	if !ok {
 		return nil
@@ -199,6 +324,145 @@ func (s *MetricsService) emitFromTree(ch chan<- prometheus.Metric, result map[st
 					"state", state,
 					"count", cycleAgg.DocCount,
 				)
+			}
+		}
+	}
+	return nil
+}
+
+// extractBucketMap converts a histogram AggregationResult's Buckets into the
+// cumulative map[upperBound]count that MustNewConstHistogram expects.
+func extractBucketMap(agg query.AggregationResult) (map[float64]uint64, error) {
+	m := make(map[float64]uint64, len(agg.Buckets))
+	for _, b := range agg.Buckets {
+		upper, ok := b.Key.(float64)
+		if !ok {
+			return nil, fmt.Errorf("histogram bucket key is %T, want float64", b.Key)
+		}
+		m[upper] = b.DocCount
+	}
+	return m, nil
+}
+
+// strKey asserts that a bucket key is a string.
+func strKey(key any, label string) (string, error) {
+	s, ok := key.(string)
+	if !ok {
+		return "", fmt.Errorf("%s bucket key is %T, want string", label, key)
+	}
+	return s, nil
+}
+
+// emitWorkflowRunTree walks team→component→workflow_id→workflow_name→status→duration
+// and emits one workflow_run_duration_seconds histogram per leaf.
+func (s *MetricsService) emitWorkflowRunTree(ch chan<- prometheus.Metric, result map[string]query.AggregationResult) error {
+	byTeam, ok := result["by_team"]
+	if !ok {
+		return nil
+	}
+	for _, teamB := range byTeam.Buckets {
+		team, err := strKey(teamB.Key, "by_team")
+		if err != nil {
+			return err
+		}
+		for _, compB := range teamB.Aggs["by_component"].Buckets {
+			comp, err := strKey(compB.Key, "by_component")
+			if err != nil {
+				return err
+			}
+			for _, wfIDB := range compB.Aggs["by_workflow_id"].Buckets {
+				wfID, err := strKey(wfIDB.Key, "by_workflow_id")
+				if err != nil {
+					return err
+				}
+				for _, wfNameB := range wfIDB.Aggs["by_workflow_name"].Buckets {
+					wfName, err := strKey(wfNameB.Key, "by_workflow_name")
+					if err != nil {
+						return err
+					}
+					for _, statusB := range wfNameB.Aggs["by_status"].Buckets {
+						status, err := strKey(statusB.Key, "by_status")
+						if err != nil {
+							return err
+						}
+						durAgg, ok := statusB.Aggs["duration"]
+						if !ok {
+							continue
+						}
+						bm, err := extractBucketMap(durAgg)
+						if err != nil {
+							return err
+						}
+						ch <- prometheus.MustNewConstHistogram(
+							s.wfRunDesc,
+							durAgg.DocCount,
+							durAgg.Sum,
+							bm,
+							team, comp, wfID, wfName, status,
+						)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// emitWorkflowTaskTree walks team→component→workflow_id→workflow_name→task_name→status→duration
+// and emits one workflow_task_duration_seconds histogram per leaf.
+func (s *MetricsService) emitWorkflowTaskTree(ch chan<- prometheus.Metric, result map[string]query.AggregationResult) error {
+	byTeam, ok := result["by_team"]
+	if !ok {
+		return nil
+	}
+	for _, teamB := range byTeam.Buckets {
+		team, err := strKey(teamB.Key, "by_team")
+		if err != nil {
+			return err
+		}
+		for _, compB := range teamB.Aggs["by_component"].Buckets {
+			comp, err := strKey(compB.Key, "by_component")
+			if err != nil {
+				return err
+			}
+			for _, wfIDB := range compB.Aggs["by_workflow_id"].Buckets {
+				wfID, err := strKey(wfIDB.Key, "by_workflow_id")
+				if err != nil {
+					return err
+				}
+				for _, wfNameB := range wfIDB.Aggs["by_workflow_name"].Buckets {
+					wfName, err := strKey(wfNameB.Key, "by_workflow_name")
+					if err != nil {
+						return err
+					}
+					for _, taskB := range wfNameB.Aggs["by_task_name"].Buckets {
+						taskName, err := strKey(taskB.Key, "by_task_name")
+						if err != nil {
+							return err
+						}
+						for _, statusB := range taskB.Aggs["by_status"].Buckets {
+							status, err := strKey(statusB.Key, "by_status")
+							if err != nil {
+								return err
+							}
+							durAgg, ok := statusB.Aggs["duration"]
+							if !ok {
+								continue
+							}
+							bm, err := extractBucketMap(durAgg)
+							if err != nil {
+								return err
+							}
+							ch <- prometheus.MustNewConstHistogram(
+								s.wfTaskDesc,
+								durAgg.DocCount,
+								durAgg.Sum,
+								bm,
+								team, comp, wfID, wfName, taskName, status,
+							)
+						}
+					}
+				}
 			}
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/matryer/is"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
@@ -130,4 +131,134 @@ func TestCollect_EmptyRepo(t *testing.T) {
 	families, err := reg.Gather()
 	is.NoErr(err)
 	is.Equal(len(families), 0)
+}
+
+// newWorkflowFixtureAggregator builds a MemoryRepository seeded with two teams,
+// two components, two workflows, and a mix of runs and tasks so we can assert
+// the new metrics.
+func newWorkflowFixtureAggregator(t *testing.T) *stubAggregator {
+	t.Helper()
+	r := repo.NewMemory()
+	ctx := context.Background()
+
+	mustAdd := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// --- Team Alpha / component svc-a / workflow wf-build ---
+	mustAdd(r.AddTeam(ctx, model.Team{Name: "alpha"}))
+	mustAdd(r.AddComponent(ctx, model.Component{
+		Name:     "svc-a",
+		TeamName: "alpha",
+		Repos:    []model.ComponentRepo{{RepoID: "r1", Role: "ci"}},
+		Workflows: []model.ComponentWorkflow{
+			{WorkflowID: "wf-build", Role: "ci"},
+		},
+	}))
+	mustAdd(r.AddWorkflow(ctx, model.Workflow{ID: "wf-build", Name: "Build"}))
+
+	// Two runs: 90s success, 600s success.
+	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run1", WorkflowID: "wf-build", Status: "SUCCESS", Duration: 90}))
+	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run2", WorkflowID: "wf-build", Status: "SUCCESS", Duration: 600}))
+
+	// Tasks for run1.
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run1", Name: "lint", Status: "SUCCESS", Duration: 30}))
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run1", Name: "test", Status: "SUCCESS", Duration: 60}))
+
+	// Tasks for run2.
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run2", Name: "lint", Status: "SUCCESS", Duration: 28}))
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run2", Name: "test", Status: "FAILURE", Duration: 570}))
+
+	// --- Team Beta / component svc-b / workflow wf-deploy (no component file → "unknown") ---
+	mustAdd(r.AddWorkflow(ctx, model.Workflow{ID: "wf-orphan", Name: "Orphan Deploy"}))
+	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run3", WorkflowID: "wf-orphan", Status: "FAILURE", Duration: 45}))
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run3", Name: "deploy", Status: "FAILURE", Duration: 45}))
+
+	return &stubAggregator{r: r}
+}
+
+// TestCollect_WorkflowRunDurationHistogram verifies that workflow_run_duration_seconds
+// is emitted with the correct label values and counts.
+func TestCollect_WorkflowRunDurationHistogram(t *testing.T) {
+	is := is.New(t)
+	agg := newWorkflowFixtureAggregator(t)
+	svc := metrics.NewMetricsService(agg, discardLogger(), "")
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(svc)
+
+	families, err := reg.Gather()
+	is.NoErr(err)
+
+	// Find workflow_run_duration_seconds families.
+	var wfFam *dto.MetricFamily
+	for _, f := range families {
+		if f.GetName() == "workflow_run_duration_seconds" {
+			wfFam = f
+			break
+		}
+	}
+	is.True(wfFam != nil) // metric family must be present
+
+	// There must be exactly 2 series: alpha/svc-a/wf-build/Build/SUCCESS and unknown/unknown/wf-orphan/Orphan Deploy/FAILURE.
+	is.Equal(len(wfFam.GetMetric()), 2)
+
+	// Verify the alpha series: 2 observations (90s, 600s).
+	for _, m := range wfFam.GetMetric() {
+		labels := labelMap(m)
+		if labels["team_name"] == "alpha" {
+			is.Equal(labels["component_name"], "svc-a")
+			is.Equal(labels["workflow_name"], "Build")
+			is.Equal(labels["status"], "SUCCESS")
+			is.Equal(m.GetHistogram().GetSampleCount(), uint64(2))
+			is.Equal(m.GetHistogram().GetSampleSum(), float64(90+600))
+		}
+	}
+}
+
+// TestCollect_WorkflowTaskDurationHistogram verifies that workflow_task_duration_seconds
+// is emitted per task name and status.
+func TestCollect_WorkflowTaskDurationHistogram(t *testing.T) {
+	is := is.New(t)
+	agg := newWorkflowFixtureAggregator(t)
+	svc := metrics.NewMetricsService(agg, discardLogger(), "")
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(svc)
+
+	families, err := reg.Gather()
+	is.NoErr(err)
+
+	var taskFam *dto.MetricFamily
+	for _, f := range families {
+		if f.GetName() == "workflow_task_duration_seconds" {
+			taskFam = f
+			break
+		}
+	}
+	is.True(taskFam != nil)
+
+	// Collect label combos for owned tasks (team=alpha).
+	type key struct{ task, status string }
+	owned := map[key]bool{}
+	for _, m := range taskFam.GetMetric() {
+		labels := labelMap(m)
+		if labels["team_name"] == "alpha" {
+			owned[key{labels["task_name"], labels["status"]}] = true
+		}
+	}
+	// lint:SUCCESS, test:SUCCESS, test:FAILURE must all be present.
+	is.True(owned[key{"lint", "SUCCESS"}])
+	is.True(owned[key{"test", "SUCCESS"}])
+	is.True(owned[key{"test", "FAILURE"}])
+}
+
+// labelMap extracts prometheus label pairs into a plain map for easy assertion.
+func labelMap(m *dto.Metric) map[string]string {
+	out := make(map[string]string, len(m.GetLabel()))
+	for _, lp := range m.GetLabel() {
+		out[lp.GetName()] = lp.GetValue()
+	}
+	return out
 }
