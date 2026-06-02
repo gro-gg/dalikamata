@@ -1,6 +1,9 @@
 version: "1"
 name: frontend
 team: platform
+repos:
+  - id: PROJ/frontend-app
+    role: cicd
 workflows:
   - id: build-frontend
     role: ci
