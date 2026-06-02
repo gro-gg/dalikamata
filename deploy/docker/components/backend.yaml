@@ -1,0 +1,6 @@
+version: "1"
+name: backend
+team: platform
+workflows:
+  - id: build-backend
+    role: ci
