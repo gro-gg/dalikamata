@@ -57,15 +57,15 @@ func TestIngestJenkinsIntegration(t *testing.T) {
 	}()
 
 	// 4. Assert NATS message counts
-	// fakeserver fixture: 2 jobs
-	jobs := testhelper.CollectMessages[model.Workflow](t, js, dalinats.SubjectCicdWorkflow, 2, 10*time.Second)
-	is.Equal(len(jobs), 2)
+	// fakeserver fixture: 5 jobs (build-backend, test-backend, deploy-backend, build-frontend, deploy-frontend)
+	jobs := testhelper.CollectMessages[model.Workflow](t, js, dalinats.SubjectCicdWorkflow, 5, 20*time.Second)
+	is.Equal(len(jobs), 5)
 
-	// 2 jobs × 3 builds each = 6 builds
-	builds := testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 6, 10*time.Second)
-	is.Equal(len(builds), 6)
+	// 5 jobs × 10 builds each = 50 builds
+	builds := testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 50, 20*time.Second)
+	is.Equal(len(builds), 50)
 
-	// 2 jobs × 3 builds × 3 stages = 18 stages
-	stages := testhelper.CollectMessages[model.WorkflowTask](t, js, dalinats.SubjectCicdWorkflowTask, 18, 10*time.Second)
-	is.Equal(len(stages), 18)
+	// build-backend(4) + test-backend(3) + deploy-backend(4) + build-frontend(4) + deploy-frontend(4) = 19 stages/cycle × 10 builds = 190
+	stages := testhelper.CollectMessages[model.WorkflowTask](t, js, dalinats.SubjectCicdWorkflowTask, 190, 20*time.Second)
+	is.Equal(len(stages), 190)
 }

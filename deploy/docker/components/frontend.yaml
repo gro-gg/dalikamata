@@ -4,3 +4,5 @@ team: platform
 workflows:
   - id: build-frontend
     role: ci
+  - id: deploy-frontend
+    role: cd
