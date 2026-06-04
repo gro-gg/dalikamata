@@ -6,13 +6,12 @@ Calculate engineering metrics from domain events and expose them to a Prometheus
 
 ## Architecture
 
-- The metrics service subscribes to **NATS events** published by ingest services.
+- The metrics service queries the **domain service** via server-side aggregations.
 - It exposes metrics via an **HTTP `/metrics` endpoint** (Prometheus pull model).
-- In a future iteration, it will additionally query the domain service directly to calculate metrics that require historical or aggregated data.
 
-## Scope (v1)
+## Scope
 
-The first version subscribes only to pull request events from the Bitbucket ingestor and calculates a single metric: **PR cycle time**.
+Covers pull request cycle time (Bitbucket) and CI/CD workflow metrics (Jenkins).
 
 ## Metrics
 
@@ -42,13 +41,62 @@ Measures the time elapsed between a pull request being created and its current o
 | `DECLINED` | `updatedAt − createdAt` |
 | `OPEN` | `now − createdAt` (age at the time the event is received) |
 
-**Update trigger:** one histogram observation is recorded for each incoming NATS pull request event.
+**Update trigger:** computed on every Prometheus scrape via a server-side aggregation query to the domain.
 
-## NATS Subscription
+### `workflow_run_duration_seconds` (Histogram)
 
-| Subject | Payload |
-|---------|---------|
-| `ingest.git.pullrequest` | `model.PullRequest` JSON |
+Measures the total duration of a Jenkins pipeline run.
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Histogram |
+| Unit | Seconds |
+| Buckets | 60 (1m), 300 (5m), 900 (15m), 1800 (30m), 3600 (1h), 7200 (2h), 21600 (6h) |
+
+**Labels:**
+
+| Label | Description |
+|-------|-------------|
+| `team_name` | Team that owns the component; `unknown` if unclaimed |
+| `component_name` | Component name from config YAML; `unknown` if unclaimed |
+| `workflow_id` | Jenkins job name (e.g. `build-backend`) |
+| `workflow_name` | Human-readable pipeline name |
+| `status` | Build result: `SUCCESS`, `FAILURE`, or `ABORTED` |
+
+`team_name` and `component_name` are resolved at query time from component YAML files ingested by `dalikamata ingest config`. Runs not claimed by any component file are labelled `unknown`.
+
+**Update trigger:** computed on every Prometheus scrape via a server-side aggregation query to the domain.
+
+### `workflow_task_duration_seconds` (Histogram)
+
+Measures the duration of an individual pipeline stage within a Jenkins run.
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Histogram |
+| Unit | Seconds |
+| Buckets | 30, 60 (1m), 120 (2m), 300 (5m), 600 (10m), 1800 (30m), 3600 (1h) |
+
+**Labels:**
+
+| Label | Description |
+|-------|-------------|
+| `team_name` | Team that owns the component; `unknown` if unclaimed |
+| `component_name` | Component name from config YAML; `unknown` if unclaimed |
+| `workflow_id` | Jenkins job name |
+| `workflow_name` | Human-readable pipeline name |
+| `task_name` | Stage name (e.g. `Build`, `Test`, `Deploy`) |
+| `status` | Stage result: `SUCCESS`, `FAILED`, or `ABORTED` |
+
+**Update trigger:** computed on every Prometheus scrape via a server-side aggregation query to the domain.
+
+## NATS Subjects
+
+| Subject | Payload | Used by |
+|---------|---------|---------|
+| `ingest.git.pullrequest` | `model.PullRequest` JSON | `pr_cycle_time_seconds` |
+| `ingest.cicd.workflowRun` | workflow run event | `workflow_run_duration_seconds` |
+| `ingest.cicd.workflowTask` | workflow task/stage event | `workflow_task_duration_seconds` |
 
 ## HTTP Exposition
 
