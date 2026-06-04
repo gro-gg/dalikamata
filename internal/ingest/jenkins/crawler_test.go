@@ -5,6 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+
+	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 func discardLogger() *slog.Logger {
@@ -153,6 +155,100 @@ func TestExtractCommitSHA_NilRevision(t *testing.T) {
 func TestExtractCommitSHA_NoActions(t *testing.T) {
 	if got := extractCommitSHA(apiBuild{}); got != "" {
 		t.Errorf("extractCommitSHA = %q, want empty", got)
+	}
+}
+
+// ---- fakeCICDPublisher ------------------------------------------------------
+
+type fakeCICDPublisher struct {
+	workflows    []model.Workflow
+	workflowRuns []model.WorkflowRun
+	tasks        []model.WorkflowTask
+}
+
+func (f *fakeCICDPublisher) PublishWorkflow(_ context.Context, w model.Workflow) error {
+	f.workflows = append(f.workflows, w)
+	return nil
+}
+func (f *fakeCICDPublisher) PublishWorkflowRun(_ context.Context, r model.WorkflowRun) error {
+	f.workflowRuns = append(f.workflowRuns, r)
+	return nil
+}
+func (f *fakeCICDPublisher) PublishWorkflowTask(_ context.Context, t model.WorkflowTask) error {
+	f.tasks = append(f.tasks, t)
+	return nil
+}
+
+// ---- Crawl deduplication ----------------------------------------------------
+
+func TestCrawl_MultibranchDeduplicatesWorkflow(t *testing.T) {
+	// Two branch jobs under the same multibranch pipeline should produce exactly
+	// one Workflow (ID "payments") but two sets of WorkflowRuns.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"": {{Class: classMultibranchPipeline, Name: "payments"}},
+			"payments": {
+				{Class: classWorkflowJob, Name: "main"},
+				{Class: classWorkflowJob, Name: "hotfix"},
+			},
+		},
+		builds: map[string][]apiBuild{
+			"payments/main": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+			"payments/hotfix": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 30_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, nil, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(pub.workflows) != 1 {
+		t.Fatalf("workflows published = %d, want 1", len(pub.workflows))
+	}
+	if pub.workflows[0].ID != "payments" {
+		t.Errorf("workflow ID = %q, want %q", pub.workflows[0].ID, "payments")
+	}
+	if pub.workflows[0].Name != "payments" {
+		t.Errorf("workflow Name = %q, want %q", pub.workflows[0].Name, "payments")
+	}
+
+	if len(pub.workflowRuns) != 2 {
+		t.Fatalf("workflow runs published = %d, want 2", len(pub.workflowRuns))
+	}
+	for _, run := range pub.workflowRuns {
+		if run.WorkflowID != "payments" {
+			t.Errorf("run WorkflowID = %q, want %q", run.WorkflowID, "payments")
+		}
+	}
+	// Run IDs must retain the full path to stay unique across branches.
+	ids := map[string]bool{pub.workflowRuns[0].ID: true, pub.workflowRuns[1].ID: true}
+	if !ids["payments/main/1"] || !ids["payments/hotfix/1"] {
+		t.Errorf("run IDs = %v, want [payments/main/1 payments/hotfix/1]",
+			[]string{pub.workflowRuns[0].ID, pub.workflowRuns[1].ID})
+	}
+}
+
+func TestCrawl_PlainJobNotStripped(t *testing.T) {
+	// A plain WorkflowJob (not inside a MultibranchPipeline) must keep its full
+	// path as the workflow ID.
+	client := &fakeJenkinsClient{
+		jobs:   map[string][]apiJob{"": {{Class: classWorkflowJob, Name: "build-backend"}}},
+		builds: map[string][]apiBuild{"build-backend": {}},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	if err := NewCrawler(client, pub, nil, discardLogger()).Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if len(pub.workflows) != 1 || pub.workflows[0].ID != "build-backend" {
+		t.Errorf("workflow ID = %q, want %q", pub.workflows[0].ID, "build-backend")
 	}
 }
 
