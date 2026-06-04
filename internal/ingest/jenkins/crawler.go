@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -87,19 +88,20 @@ func (c *Crawler) discoverJobs(ctx context.Context, folderPath string) ([]string
 func (c *Crawler) crawlJob(ctx context.Context, jobPath string) error {
 	c.logger.Debug("crawling job", "job", jobPath)
 
-	workflow := model.Workflow{
-		ID:   jobPath,
-		Name: path.Base(jobPath),
-	}
-	if err := c.publisher.PublishWorkflow(ctx, workflow); err != nil {
-		c.logger.Error("publishing job as workflow", "job", jobPath, "error", err)
-	}
-
 	builds, err := c.client.GetBuilds(ctx, jobPath)
 	if err != nil {
 		return fmt.Errorf("fetching builds: %w", err)
 	}
 	c.logger.Debug("found builds", "count", len(builds))
+
+	workflow := model.Workflow{
+		ID:     jobPath,
+		Name:   path.Base(jobPath),
+		RepoID: extractRepoID(builds),
+	}
+	if err := c.publisher.PublishWorkflow(ctx, workflow); err != nil {
+		c.logger.Error("publishing job as workflow", "job", jobPath, "error", err)
+	}
 
 	for _, b := range builds {
 		if b.InProgress || b.Result == "" {
@@ -174,4 +176,47 @@ func extractCommitSHA(b apiBuild) string {
 		return action.LastBuiltRevision.SHA1
 	}
 	return ""
+}
+
+// extractRepoID derives a "projectKey/slug" repo ID from the first remote URL
+// found in any build's BuildData action. It takes the last two path segments of
+// the URL and strips a trailing ".git" from the slug, e.g.:
+//
+//	https://bitbucket.example.com/scm/ACME/backend.git → "ACME/backend"
+//	git@github.com:org/repo.git                        → "org/repo"
+func extractRepoID(builds []apiBuild) string {
+	for _, b := range builds {
+		for _, action := range b.Actions {
+			if !strings.Contains(action.Class, "BuildData") {
+				continue
+			}
+			for _, raw := range action.RemoteUrls {
+				if id := repoIDFromURL(raw); id != "" {
+					return id
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func repoIDFromURL(raw string) string {
+	// Normalise SCP-style git URLs (git@host:org/repo.git) to a parseable form.
+	if !strings.Contains(raw, "://") {
+		raw = "ssh://" + strings.Replace(raw, ":", "/", 1)
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(segments) < 2 {
+		return ""
+	}
+	project := segments[len(segments)-2]
+	slug := strings.TrimSuffix(segments[len(segments)-1], ".git")
+	if project == "" || slug == "" {
+		return ""
+	}
+	return project + "/" + slug
 }
