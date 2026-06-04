@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	classWorkflowJob  = "org.jenkinsci.plugins.workflow.job.WorkflowJob"
-	classGitBuildData = "hudson.plugins.git.util.BuildData"
+	classWorkflowJob         = "org.jenkinsci.plugins.workflow.job.WorkflowJob"
+	classMultibranchPipeline = "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject"
+	classGitBuildData        = "hudson.plugins.git.util.BuildData"
 )
 
 // These types mirror the jenkins package's API structs. The fakeserver is a
@@ -127,13 +128,15 @@ var jobConfigs = map[string]jobConfig{
 // jobRemoteURL maps each fixture job to its Bitbucket Server remote URL.
 // The project key and slug match the ACME fixture used in integration tests
 // so that extractRepoID round-trips to the expected "ACME/backend" /
-// "ACME/frontend" composite.
+// "ACME/frontend" / "ACME/shared-lib" composite.
 var jobRemoteURL = map[string]string{
-	"build-backend":   "https://bitbucket.example.com/scm/ACME/backend.git",
-	"test-backend":    "https://bitbucket.example.com/scm/ACME/backend.git",
-	"deploy-backend":  "https://bitbucket.example.com/scm/ACME/backend.git",
-	"build-frontend":  "https://bitbucket.example.com/scm/ACME/frontend.git",
-	"deploy-frontend": "https://bitbucket.example.com/scm/ACME/frontend.git",
+	"build-backend":    "https://bitbucket.example.com/scm/ACME/backend.git",
+	"test-backend":     "https://bitbucket.example.com/scm/ACME/backend.git",
+	"deploy-backend":   "https://bitbucket.example.com/scm/ACME/backend.git",
+	"build-frontend":   "https://bitbucket.example.com/scm/ACME/frontend.git",
+	"deploy-frontend":  "https://bitbucket.example.com/scm/ACME/frontend.git",
+	"shared-lib/main":  "https://bitbucket.example.com/scm/ACME/shared-lib.git",
+	"shared-lib/hotfix": "https://bitbucket.example.com/scm/ACME/shared-lib.git",
 }
 
 // jobOrder fixes the iteration order of jobs so the fixture is deterministic.
@@ -141,6 +144,17 @@ var jobOrder = []string{
 	"build-backend", "test-backend", "deploy-backend",
 	"build-frontend", "deploy-frontend",
 }
+
+// multibranchPipelines lists root-level MultiBranchPipeline jobs and their branches.
+var multibranchPipelines = map[string][]string{
+	"shared-lib": {"main", "hotfix"},
+}
+
+// multibranchOrder fixes the iteration order of multibranch pipelines.
+var multibranchOrder = []string{"shared-lib"}
+
+// multibranchBuilds holds pre-generated builds for each branch job path.
+var multibranchBuilds map[string][]apiBuild
 
 // buildResults cycles through results: 7 SUCCESS, 2 FAILURE, 1 ABORTED per 10 builds.
 var buildResults = [10]string{
@@ -165,9 +179,12 @@ var fakeBuilds map[string][]apiBuild
 var epoch = time.Now()
 
 func init() {
-	rootJobs = make([]apiJob, len(jobOrder))
-	for i, name := range jobOrder {
-		rootJobs[i] = apiJob{Class: classWorkflowJob, Name: name}
+	rootJobs = make([]apiJob, 0, len(jobOrder)+len(multibranchOrder))
+	for _, name := range jobOrder {
+		rootJobs = append(rootJobs, apiJob{Class: classWorkflowJob, Name: name})
+	}
+	for _, name := range multibranchOrder {
+		rootJobs = append(rootJobs, apiJob{Class: classMultibranchPipeline, Name: name})
 	}
 
 	fakeBuilds = make(map[string][]apiBuild, len(jobOrder))
@@ -202,6 +219,36 @@ func init() {
 			}
 		}
 		fakeBuilds[name] = builds
+	}
+
+	// Generate 3 builds per branch for each multibranch pipeline.
+	multibranchBuilds = make(map[string][]apiBuild)
+	mbResults := [3]string{"SUCCESS", "FAILURE", "SUCCESS"}
+	mbBranches := [3]string{"origin/main", "origin/main", "origin/hotfix"}
+	const mbSpan = 7 * 24 * time.Hour
+	for _, pipeline := range multibranchOrder {
+		for branchIdx, branch := range multibranchPipelines[pipeline] {
+			jobPath := pipeline + "/" + branch
+			builds := make([]apiBuild, 3)
+			for i := range builds {
+				buildTime := epoch.Add(-mbSpan + time.Duration(i)*(mbSpan/2))
+				builds[i] = apiBuild{
+					Number:    i + 1,
+					Result:    mbResults[i],
+					Timestamp: ms(buildTime),
+					Duration:  60_000,
+					Actions: []apiBuildAction{{
+						Class: classGitBuildData,
+						LastBuiltRevision: &apiRevision{
+							SHA1:   deterministicSHA(100+branchIdx, i),
+							Branch: []apiBranch{{Name: mbBranches[i]}},
+						},
+						RemoteUrls: []string{jobRemoteURL[jobPath]},
+					}},
+				}
+			}
+			multibranchBuilds[jobPath] = builds
+		}
 	}
 }
 
@@ -279,6 +326,8 @@ func New(addr string, logger *slog.Logger) *Server {
 	mux.HandleFunc("GET /api/json", s.handleRootJobs)
 	mux.HandleFunc("GET /job/{name}/api/json", s.handleJobAPI)
 	mux.HandleFunc("GET /job/{name}/{buildnum}/wfapi/describe", s.handleStages)
+	mux.HandleFunc("GET /job/{pipeline}/job/{branch}/api/json", s.handleBranchJobAPI)
+	mux.HandleFunc("GET /job/{pipeline}/job/{branch}/{buildnum}/wfapi/describe", s.handleBranchStages)
 	return s
 }
 
@@ -318,7 +367,29 @@ func (s *Server) handleJobAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, apiBuildList{Builds: fakeBuilds[name]})
 		return
 	}
+	// Return branch jobs when this is a known multibranch pipeline.
+	if branches, ok := multibranchPipelines[name]; ok {
+		branchJobs := make([]apiJob, len(branches))
+		for i, b := range branches {
+			branchJobs[i] = apiJob{Class: classWorkflowJob, Name: b}
+		}
+		writeJSON(w, apiJobList{Jobs: branchJobs})
+		return
+	}
 	writeJSON(w, apiJobList{Jobs: []apiJob{}})
+}
+
+func (s *Server) handleBranchJobAPI(w http.ResponseWriter, r *http.Request) {
+	pipeline := r.PathValue("pipeline")
+	branch := r.PathValue("branch")
+	jobPath := pipeline + "/" + branch
+	s.logger.Info("fake: branch job api", "pipeline", pipeline, "branch", branch)
+	writeJSON(w, apiBuildList{Builds: multibranchBuilds[jobPath]})
+}
+
+func (s *Server) handleBranchStages(w http.ResponseWriter, r *http.Request) {
+	s.logger.Info("fake: branch stages (none)", "pipeline", r.PathValue("pipeline"), "branch", r.PathValue("branch"))
+	writeJSON(w, apiWFDescribe{Stages: nil})
 }
 
 func (s *Server) handleStages(w http.ResponseWriter, r *http.Request) {
