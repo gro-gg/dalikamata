@@ -69,9 +69,53 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 		}
 	}
 
+	// Group entries by their canonical pipeline path so that all branches of a
+	// MultibranchPipeline share one Workflow and are not published separately.
+	// Use a slice to preserve discovery order for deterministic output.
+	type entryWithBuilds struct {
+		entry  jobEntry
+		builds []apiBuild
+	}
+	type pipelineGroup struct {
+		jobs []entryWithBuilds
+	}
+	groups := make(map[string]*pipelineGroup)
+	var order []string
 	for _, entry := range entries {
-		if err := c.crawlJob(ctx, entry.path); err != nil {
-			c.logger.Error("crawling job", "job", entry.path, "error", err)
+		pp := pipelinePath(entry)
+		if _, seen := groups[pp]; !seen {
+			groups[pp] = &pipelineGroup{}
+			order = append(order, pp)
+		}
+		builds, err := c.client.GetBuilds(ctx, entry.path)
+		if err != nil {
+			c.logger.Error("fetching builds", "job", entry.path, "error", err)
+		}
+		groups[pp].jobs = append(groups[pp].jobs, entryWithBuilds{entry: entry, builds: builds})
+	}
+
+	for _, pp := range order {
+		group := groups[pp]
+
+		// Collect builds from all branch jobs to derive the shared repo ID.
+		var allBuilds []apiBuild
+		for _, j := range group.jobs {
+			allBuilds = append(allBuilds, j.builds...)
+		}
+
+		workflow := model.Workflow{
+			ID:     pp,
+			Name:   pp,
+			RepoID: extractRepoID(allBuilds),
+		}
+		if err := c.publisher.PublishWorkflow(ctx, workflow); err != nil {
+			c.logger.Error("publishing workflow", "pipeline", pp, "error", err)
+		}
+
+		for _, j := range group.jobs {
+			if err := c.crawlJob(ctx, j.entry.path, pp, j.builds); err != nil {
+				c.logger.Error("crawling job", "job", j.entry.path, "error", err)
+			}
 		}
 	}
 	return nil
@@ -115,23 +159,9 @@ func (c *Crawler) discoverJobs(ctx context.Context, folderPath string) ([]jobEnt
 	return result, nil
 }
 
-func (c *Crawler) crawlJob(ctx context.Context, jobPath string) error {
-	c.logger.Debug("crawling job", "job", jobPath)
-
-	builds, err := c.client.GetBuilds(ctx, jobPath)
-	if err != nil {
-		return fmt.Errorf("fetching builds: %w", err)
-	}
+func (c *Crawler) crawlJob(ctx context.Context, jobPath, workflowID string, builds []apiBuild) error {
+	c.logger.Debug("crawling job", "job", jobPath, "workflow", workflowID)
 	c.logger.Debug("found builds", "count", len(builds))
-
-	workflow := model.Workflow{
-		ID:     jobPath,
-		Name:   path.Base(jobPath),
-		RepoID: extractRepoID(builds),
-	}
-	if err := c.publisher.PublishWorkflow(ctx, workflow); err != nil {
-		c.logger.Error("publishing job as workflow", "job", jobPath, "error", err)
-	}
 
 	for _, b := range builds {
 		if b.InProgress || b.Result == "" {
@@ -141,7 +171,7 @@ func (c *Crawler) crawlJob(ctx context.Context, jobPath string) error {
 		buildID := fmt.Sprintf("%s/%d", jobPath, b.Number)
 		workflowRun := model.WorkflowRun{
 			ID:         buildID,
-			WorkflowID: jobPath,
+			WorkflowID: workflowID,
 			Number:     b.Number,
 			Status:     b.Result,
 			Branch:     extractBranch(b),
