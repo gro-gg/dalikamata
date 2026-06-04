@@ -72,8 +72,8 @@ func TestCrawl_RepoIDAndNameMapped(t *testing.T) {
 	if len(pub.repos) != 1 {
 		t.Fatalf("repos = %d, want 1", len(pub.repos))
 	}
-	if pub.repos[0].RepoID != "my-repo" {
-		t.Errorf("RepoID = %q, want %q", pub.repos[0].RepoID, "my-repo")
+	if pub.repos[0].RepoID != model.NewRepoID("PROJ", "my-repo") {
+		t.Errorf("RepoID = %q, want %q", pub.repos[0].RepoID, model.NewRepoID("PROJ", "my-repo"))
 	}
 	if pub.repos[0].Name != "My Repo" {
 		t.Errorf("Name = %q, want %q", pub.repos[0].Name, "My Repo")

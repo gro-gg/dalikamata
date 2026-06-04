@@ -50,7 +50,7 @@ func (c *Crawler) crawlProject(ctx context.Context, projectKey string) error {
 
 	for _, apiRepo := range repos {
 		repo := model.Repo{
-			RepoID: apiRepo.Slug,
+			RepoID: model.NewRepoID(projectKey, apiRepo.Slug),
 			Name:   apiRepo.Name,
 		}
 		err = c.publisher.PublishRepo(ctx, repo)
