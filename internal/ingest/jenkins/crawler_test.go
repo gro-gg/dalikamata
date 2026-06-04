@@ -201,8 +201,11 @@ func TestDiscoverJobs_WorkflowJobsReturned(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %d jobs, want 2", len(got))
 	}
-	if got[0] != "build-service" || got[1] != "deploy-service" {
-		t.Errorf("jobs = %v, want [build-service deploy-service]", got)
+	if got[0].path != "build-service" || got[1].path != "deploy-service" {
+		t.Errorf("paths = [%s %s], want [build-service deploy-service]", got[0].path, got[1].path)
+	}
+	if got[0].isBranch || got[1].isBranch {
+		t.Errorf("plain workflow jobs must not be marked as branch jobs")
 	}
 }
 
@@ -226,8 +229,11 @@ func TestDiscoverJobs_RecursesIntoFolder(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %d jobs, want 2", len(got))
 	}
-	if got[0] != "team/api" || got[1] != "team/worker" {
-		t.Errorf("jobs = %v, want [team/api team/worker]", got)
+	if got[0].path != "team/api" || got[1].path != "team/worker" {
+		t.Errorf("paths = [%s %s], want [team/api team/worker]", got[0].path, got[1].path)
+	}
+	if got[0].isBranch || got[1].isBranch {
+		t.Errorf("folder children must not be marked as branch jobs")
 	}
 }
 
@@ -251,8 +257,11 @@ func TestDiscoverJobs_RecursesIntoMultibranchPipeline(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %d jobs, want 2", len(got))
 	}
-	if got[0] != "my-app/main" || got[1] != "my-app/feature-x" {
-		t.Errorf("jobs = %v, want [my-app/main my-app/feature-x]", got)
+	if got[0].path != "my-app/main" || got[1].path != "my-app/feature-x" {
+		t.Errorf("paths = [%s %s], want [my-app/main my-app/feature-x]", got[0].path, got[1].path)
+	}
+	if !got[0].isBranch || !got[1].isBranch {
+		t.Errorf("multibranch pipeline children must be marked as branch jobs")
 	}
 }
 
@@ -270,7 +279,7 @@ func TestDiscoverJobs_UnknownClassIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discoverJobs: %v", err)
 	}
-	if len(got) != 1 || got[0] != "kept" {
+	if len(got) != 1 || got[0].path != "kept" {
 		t.Errorf("jobs = %v, want [kept]", got)
 	}
 }

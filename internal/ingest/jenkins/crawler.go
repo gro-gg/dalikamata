@@ -20,6 +20,23 @@ const (
 	classGitBuildData        = "hudson.plugins.git.util.BuildData"
 )
 
+// jobEntry is a discovered Jenkins workflow job and the context needed to
+// derive its canonical pipeline identity.
+type jobEntry struct {
+	path     string
+	isBranch bool // true when discovered as a direct child of a MultibranchPipeline
+}
+
+// pipelinePath returns the canonical workflow identifier for an entry.
+// For branch jobs it strips the branch leaf so all branches of the same
+// pipeline share one ID, e.g. "payments/main" → "payments".
+func pipelinePath(e jobEntry) string {
+	if e.isBranch {
+		return path.Dir(e.path)
+	}
+	return e.path
+}
+
 type Crawler struct {
 	client    JenkinsClient
 	publisher domain.CICDPublisher
@@ -37,33 +54,37 @@ func NewCrawler(client JenkinsClient, publisher domain.CICDPublisher, jobs []str
 }
 
 func (c *Crawler) Crawl(ctx context.Context) error {
-	jobPaths := c.jobs
-	if len(jobPaths) == 0 {
+	var entries []jobEntry
+	if len(c.jobs) == 0 {
 		c.logger.Info("No jobs specified, discovering all jobs")
 		var err error
-		jobPaths, err = c.discoverJobs(ctx, "")
+		entries, err = c.discoverJobs(ctx, "")
 		if err != nil {
 			return fmt.Errorf("discovering jobs: %w", err)
 		}
-		c.logger.Info("Discovered jobs", "count", len(jobPaths), "jobs", jobPaths)
+		c.logger.Info("Discovered jobs", "count", len(entries))
+	} else {
+		for _, p := range c.jobs {
+			entries = append(entries, jobEntry{path: p})
+		}
 	}
 
-	for _, jobPath := range jobPaths {
-		if err := c.crawlJob(ctx, jobPath); err != nil {
-			c.logger.Error("crawling job", "job", jobPath, "error", err)
+	for _, entry := range entries {
+		if err := c.crawlJob(ctx, entry.path); err != nil {
+			c.logger.Error("crawling job", "job", entry.path, "error", err)
 		}
 	}
 	return nil
 }
 
-func (c *Crawler) discoverJobs(ctx context.Context, folderPath string) ([]string, error) {
+func (c *Crawler) discoverJobs(ctx context.Context, folderPath string) ([]jobEntry, error) {
 	jobs, err := c.client.GetJobs(ctx, folderPath)
 	if err != nil {
 		return nil, err
 	}
 	c.logger.Debug("jobs discovered", "count", len(jobs), "folder", folderPath)
 
-	var result []string
+	var result []jobEntry
 	for _, job := range jobs {
 		fullPath := job.Name
 		if folderPath != "" {
@@ -72,14 +93,23 @@ func (c *Crawler) discoverJobs(ctx context.Context, folderPath string) ([]string
 
 		switch job.Class {
 		case classWorkflowJob:
-			result = append(result, fullPath)
-		case classFolder, classMultibranchPipeline:
+			result = append(result, jobEntry{path: fullPath})
+		case classFolder:
 			subJobs, err := c.discoverJobs(ctx, fullPath)
 			if err != nil {
 				c.logger.Error("discovering jobs in folder", "folder", fullPath, "error", err)
 				continue
 			}
 			result = append(result, subJobs...)
+		case classMultibranchPipeline:
+			subJobs, err := c.discoverJobs(ctx, fullPath)
+			if err != nil {
+				c.logger.Error("discovering jobs in multibranch pipeline", "pipeline", fullPath, "error", err)
+				continue
+			}
+			for _, sub := range subJobs {
+				result = append(result, jobEntry{path: sub.path, isBranch: true})
+			}
 		}
 	}
 	return result, nil
