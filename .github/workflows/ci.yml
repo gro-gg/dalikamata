@@ -84,3 +84,25 @@ jobs:
           docker tag dalikamata:latest ghcr.io/${{ github.repository }}:latest
           docker push ghcr.io/${{ github.repository }}:${{ github.run_number }}
           docker push ghcr.io/${{ github.repository }}:latest
+
+  publish-helm:
+    needs: [e2e-test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package and push Helm chart
+        run: |
+          VERSION="0.0.${{ github.run_number }}"
+          sed -i "s/^version:.*/version: ${VERSION}/" deploy/helm/dalikamata/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ github.run_number }}\"/" deploy/helm/dalikamata/Chart.yaml
+          helm package deploy/helm/dalikamata
+          helm push dalikamata-${VERSION}.tgz oci://ghcr.io/${{ github.repository }}-helm
