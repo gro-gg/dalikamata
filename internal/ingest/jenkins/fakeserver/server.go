@@ -43,6 +43,7 @@ type apiBuild struct {
 type apiBuildAction struct {
 	Class             string       `json:"_class"`
 	LastBuiltRevision *apiRevision `json:"lastBuiltRevision,omitempty"`
+	RemoteUrls        []string     `json:"remoteUrls,omitempty"`
 }
 
 type apiRevision struct {
@@ -123,6 +124,18 @@ var jobConfigs = map[string]jobConfig{
 	},
 }
 
+// jobRemoteURL maps each fixture job to its Bitbucket Server remote URL.
+// The project key and slug match the ACME fixture used in integration tests
+// so that extractRepoID round-trips to the expected "ACME/backend" /
+// "ACME/frontend" composite.
+var jobRemoteURL = map[string]string{
+	"build-backend":   "https://bitbucket.example.com/scm/ACME/backend.git",
+	"test-backend":    "https://bitbucket.example.com/scm/ACME/backend.git",
+	"deploy-backend":  "https://bitbucket.example.com/scm/ACME/backend.git",
+	"build-frontend":  "https://bitbucket.example.com/scm/ACME/frontend.git",
+	"deploy-frontend": "https://bitbucket.example.com/scm/ACME/frontend.git",
+}
+
 // jobOrder fixes the iteration order of jobs so the fixture is deterministic.
 var jobOrder = []string{
 	"build-backend", "test-backend", "deploy-backend",
@@ -184,6 +197,7 @@ func init() {
 						SHA1:   deterministicSHA(jobIdx, i),
 						Branch: []apiBranch{{Name: branch}},
 					},
+					RemoteUrls: []string{jobRemoteURL[name]},
 				}},
 			}
 		}

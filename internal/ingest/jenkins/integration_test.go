@@ -61,6 +61,17 @@ func TestIngestJenkinsIntegration(t *testing.T) {
 	jobs := testhelper.CollectMessages[model.Workflow](t, js, dalinats.SubjectCicdWorkflow, 5, 20*time.Second)
 	is.Equal(len(jobs), 5)
 
+	// Every workflow must carry a non-empty RepoID in projectKey/slug form.
+	for _, wf := range jobs {
+		is.True(wf.RepoID != "") // RepoID must be populated from remote URL
+	}
+	// Backend jobs share one repo; frontend jobs share another.
+	repoIDs := map[string]bool{}
+	for _, wf := range jobs {
+		repoIDs[wf.RepoID] = true
+	}
+	is.Equal(len(repoIDs), 2) // ACME/backend and ACME/frontend
+
 	// 5 jobs × 10 builds each = 50 builds
 	builds := testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 50, 20*time.Second)
 	is.Equal(len(builds), 50)

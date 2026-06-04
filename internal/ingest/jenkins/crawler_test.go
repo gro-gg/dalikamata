@@ -156,6 +156,32 @@ func TestExtractCommitSHA_NoActions(t *testing.T) {
 	}
 }
 
+// ---- repoIDFromURL ----------------------------------------------------------
+
+func TestRepoIDFromURL(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{"bitbucket server https", "https://bitbucket.example.com/scm/ACME/backend.git", "ACME/backend"},
+		{"bitbucket server ssh", "ssh://git@bitbucket.example.com/ACME/backend.git", "ACME/backend"},
+		{"github https", "https://github.com/org/repo.git", "org/repo"},
+		{"github no .git suffix", "https://github.com/org/repo", "org/repo"},
+		{"scp-style git", "git@github.com:org/repo.git", "org/repo"},
+		{"empty string", "", ""},
+		{"single segment", "https://example.com/repo.git", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := repoIDFromURL(tc.url)
+			if got != tc.want {
+				t.Errorf("repoIDFromURL(%q) = %q, want %q", tc.url, got, tc.want)
+			}
+		})
+	}
+}
+
 // ---- discoverJobs -----------------------------------------------------------
 
 func TestDiscoverJobs_WorkflowJobsReturned(t *testing.T) {
