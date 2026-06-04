@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const buildTreeParam = "builds[number,result,timestamp,duration,inProgress,actions[_class,lastBuiltRevision[SHA1,branch[name]]]]"
+const buildTreeParam = "builds[number,result,timestamp,duration,inProgress,actions[_class,lastBuiltRevision[SHA1,branch[name]],remoteUrls]]"
 
 type JenkinsClient interface {
 	GetJobs(ctx context.Context, jobPath string) ([]apiJob, error)

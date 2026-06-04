@@ -25,6 +25,7 @@ type apiBuild struct {
 type apiBuildAction struct {
 	Class             string       `json:"_class"`
 	LastBuiltRevision *apiRevision `json:"lastBuiltRevision,omitempty"`
+	RemoteUrls        []string     `json:"remoteUrls,omitempty"`
 }
 
 type apiRevision struct {
