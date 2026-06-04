@@ -10,8 +10,9 @@ const (
 )
 
 type Workflow struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	RepoID string `json:"repo_id"`
 }
 
 type WorkflowRun struct {
