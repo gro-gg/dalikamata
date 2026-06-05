@@ -2,6 +2,7 @@ package metrics_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"strings"
@@ -165,17 +166,17 @@ func newWorkflowFixtureAggregator(t *testing.T) *stubAggregator {
 	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run2", WorkflowID: "wf-build", Status: "SUCCESS", Duration: 600}))
 
 	// Tasks for run1.
-	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run1", Name: "lint", Status: "SUCCESS", Duration: 30}))
-	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run1", Name: "test", Status: "SUCCESS", Duration: 60}))
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run1", Order: 0, Name: "lint", Status: "SUCCESS", Duration: 30}))
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run1", Order: 1, Name: "test", Status: "SUCCESS", Duration: 60}))
 
 	// Tasks for run2.
-	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run2", Name: "lint", Status: "SUCCESS", Duration: 28}))
-	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run2", Name: "test", Status: "FAILURE", Duration: 570}))
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run2", Order: 0, Name: "lint", Status: "SUCCESS", Duration: 28}))
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run2", Order: 1, Name: "test", Status: "FAILURE", Duration: 570}))
 
 	// --- Team Beta / component svc-b / workflow wf-deploy (no component file → "unknown") ---
 	mustAdd(r.AddWorkflow(ctx, model.Workflow{ID: "wf-orphan", Name: "Orphan Deploy"}))
 	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run3", WorkflowID: "wf-orphan", Status: "FAILURE", Duration: 45}))
-	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run3", Name: "deploy", Status: "FAILURE", Duration: 45}))
+	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run3", Order: 0, Name: "deploy", Status: "FAILURE", Duration: 45}))
 
 	return &stubAggregator{r: r}
 }
@@ -219,7 +220,7 @@ func TestCollect_WorkflowRunDurationHistogram(t *testing.T) {
 }
 
 // TestCollect_WorkflowTaskDurationHistogram verifies that workflow_task_duration_seconds
-// is emitted per task name and status.
+// is emitted per task name, order, run ID, and status.
 func TestCollect_WorkflowTaskDurationHistogram(t *testing.T) {
 	is := is.New(t)
 	agg := newWorkflowFixtureAggregator(t)
@@ -239,19 +240,81 @@ func TestCollect_WorkflowTaskDurationHistogram(t *testing.T) {
 	}
 	is.True(taskFam != nil)
 
-	// Collect label combos for owned tasks (team=alpha).
-	type key struct{ task, status string }
+	// Collect label combos for owned tasks (team=alpha), keyed by task+run+status.
+	type key struct{ task, order, runID, status string }
 	owned := map[key]bool{}
 	for _, m := range taskFam.GetMetric() {
 		labels := labelMap(m)
 		if labels["team_name"] == "alpha" {
-			owned[key{labels["task_name"], labels["status"]}] = true
+			owned[key{labels["task_name"], labels["task_order"], labels["workflow_run_id"], labels["status"]}] = true
 		}
 	}
-	// lint:SUCCESS, test:SUCCESS, test:FAILURE must all be present.
-	is.True(owned[key{"lint", "SUCCESS"}])
-	is.True(owned[key{"test", "SUCCESS"}])
-	is.True(owned[key{"test", "FAILURE"}])
+	// Each run × task × status must be present, with zero-padded order labels.
+	is.True(owned[key{"lint", "00", "run1", "SUCCESS"}])
+	is.True(owned[key{"test", "01", "run1", "SUCCESS"}])
+	is.True(owned[key{"lint", "00", "run2", "SUCCESS"}])
+	is.True(owned[key{"test", "01", "run2", "FAILURE"}])
+}
+
+// TestCollect_WorkflowTaskOrderAfterJSONRoundtrip verifies that task_order
+// labels survive a JSON marshal/unmarshal cycle, which is what happens when
+// the aggregation result travels over NATS. encoding/json decodes all JSON
+// numbers into float64 when the target type is any; intKey must handle that.
+func TestCollect_WorkflowTaskOrderAfterJSONRoundtrip(t *testing.T) {
+	is := is.New(t)
+
+	// jsonRoundtripAggregator wraps a MemoryRepository but marshals and
+	// unmarshals the aggregation result through JSON before returning it,
+	// simulating the NATS transport layer.
+	agg := &jsonRoundtripAggregator{r: newWorkflowFixtureAggregator(t).r}
+	svc := metrics.NewMetricsService(agg, discardLogger(), "")
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(svc)
+
+	families, err := reg.Gather()
+	is.NoErr(err)
+
+	var taskFam *dto.MetricFamily
+	for _, f := range families {
+		if f.GetName() == "workflow_task_duration_seconds" {
+			taskFam = f
+			break
+		}
+	}
+	is.True(taskFam != nil) // metric must be emitted even after JSON round-trip
+
+	type key struct{ task, order, runID, status string }
+	owned := map[key]bool{}
+	for _, m := range taskFam.GetMetric() {
+		labels := labelMap(m)
+		if labels["team_name"] == "alpha" {
+			owned[key{labels["task_name"], labels["task_order"], labels["workflow_run_id"], labels["status"]}] = true
+		}
+	}
+	is.True(owned[key{"lint", "00", "run1", "SUCCESS"}])
+	is.True(owned[key{"test", "01", "run1", "SUCCESS"}])
+}
+
+type jsonRoundtripAggregator struct {
+	r *repo.MemoryRepository
+}
+
+func (a *jsonRoundtripAggregator) Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error) {
+	result, err := a.r.Aggregate(ctx, q)
+	if err != nil || result == nil {
+		return result, err
+	}
+	// Simulate NATS transport: marshal to JSON then unmarshal back.
+	// This converts integer bucket keys (e.g. task_order) to float64.
+	b, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]query.AggregationResult
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // labelMap extracts prometheus label pairs into a plain map for easy assertion.
