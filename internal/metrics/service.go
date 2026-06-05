@@ -23,9 +23,9 @@ const (
 	DefaultAggregateTimeout = 30 * time.Second
 )
 
-// PullRequestAggregator is the incoming port for obtaining server-side PR
-// aggregation results from the domain.
-type PullRequestAggregator interface {
+// QueryAggregator is the incoming port for obtaining server-side aggregation
+// results from the domain for any entity type.
+type QueryAggregator interface {
 	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
 }
 
@@ -52,7 +52,7 @@ type cachedAggregation struct {
 // periodically refresh each metric by querying the domain; Collect emits the
 // last cached values so Prometheus scrapes never block on live queries.
 type MetricsService struct {
-	aggregator  PullRequestAggregator
+	aggregator  QueryAggregator
 	logger      *slog.Logger
 	metricsAddr string
 	prCycleDesc *prometheus.Desc
@@ -215,7 +215,7 @@ var prCycleQuery = query.Query{
 	},
 }
 
-func NewMetricsService(aggregator PullRequestAggregator, logger *slog.Logger, metricsAddr string, opts ...Option) *MetricsService {
+func NewMetricsService(aggregator QueryAggregator, logger *slog.Logger, metricsAddr string, opts ...Option) *MetricsService {
 	s := &MetricsService{
 		aggregator:       aggregator,
 		logger:           logger,

@@ -24,7 +24,7 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// stubAggregator implements metrics.PullRequestAggregator using a real
+// stubAggregator implements metrics.QueryAggregator using a real
 // MemoryRepository so we exercise the full aggregation path.
 type stubAggregator struct {
 	r *repo.MemoryRepository
