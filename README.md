@@ -11,10 +11,11 @@ Dalikamata (or Dalikmata) is a pre-colonial Visayan deity of the Philippines, re
 | `dalikamata nats` | Start the embedded NATS JetStream server |
 | `dalikamata domain` | Start the domain service — persists ingest events and serves typed queries (requires a running NATS server) |
 | `dalikamata metrics` | Start the metrics service (requires a running NATS server) |
+| `dalikamata api` | Start the HTTP query API service (requires a running NATS server) |
 | `dalikamata ingest bitbucket` | Crawl Bitbucket and publish events to NATS |
 | `dalikamata ingest jenkins` | Crawl Jenkins and publish pipeline events to NATS |
 | `dalikamata ingest config` | Read component YAML files and publish platform events to NATS |
-| `dalikamata mono` | Start NATS, domain, metrics, and ingest together in one process |
+| `dalikamata mono` | Start NATS, domain, metrics, API, and ingest together in one process |
 
 Key flags (available on all commands via root):
 
@@ -27,6 +28,8 @@ Key flags (available on all commands via root):
 | `--metrics-addr` | `0.0.0.0:2112` | Prometheus metrics listen address |
 | `--metric-refresh-interval` | `30s` | How often background loops recompute each metric |
 | `--metric-aggregate-timeout` | `30s` | Per-aggregation query timeout for metric refresh loops |
+| `--api-addr` | `0.0.0.0:2113` | HTTP query API listen address |
+| `--api-query-timeout` | `30s` | Per-request query timeout for the API server |
 
 The `nats` and `mono` commands also accept `--nats-data` (default `./data/nats`) to set the JetStream persistence directory.
 
@@ -73,6 +76,57 @@ Three Grafana dashboards are provisioned automatically when using the `--profile
 | **PR Cycle Time** | PR cycle-time percentiles by repository |
 | **PR Performance Dashboard** | Average cycle time and PR count by repository |
 | **Workflow Performance** | Run p50/p95/mean duration, total runs, slowest tasks by p95, and duration trends — filterable by team, component, and workflow |
+
+## Query API
+
+The API service (`dalikamata api`, port 2113 by default) exposes the domain's
+accumulated state as a JSON HTTP API, intended for use with Grafana's
+[Infinity data source](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/)
+to build dashboards showing raw entity data alongside Prometheus metrics.
+
+Eight endpoints — one per entity — support both GET (URL params) and POST
+(full `query.Query` JSON body):
+
+```
+GET/POST /api/v1/repos
+GET/POST /api/v1/commits
+GET/POST /api/v1/pullrequests
+GET/POST /api/v1/workflows
+GET/POST /api/v1/workflowRuns
+GET/POST /api/v1/workflowTasks
+GET/POST /api/v1/teams
+GET/POST /api/v1/components
+```
+
+Common GET parameters:
+
+| Parameter | Example | Meaning |
+|---|---|---|
+| `size` | `size=10` | Max hits (default 100; `0` = all) |
+| `from` | `from=20` | Offset for pagination |
+| `sort` | `sort=-started_at,task_order` | Comma-separated; `-` prefix = descending |
+| `filter.<field>` | `filter.team_name=platform` | Term filter; repeat key for multi-value |
+| `filter.<field>.gte/.lte/.gt/.lt` | `filter.started_at.gte=2026-01-01T00:00:00Z` | Range filter |
+| `filter.<field>.exists` | `filter.commit_sha.exists=true` | Exists filter |
+
+Field names are the constants in `internal/domain/query/fields.go`. All
+`WorkflowRun` and `WorkflowTask` responses include `team_name`,
+`component_name`, and `workflow_name` enriched from the component YAML
+configuration — no joins needed in dashboards.
+
+**Example: last 10 workflow runs for a team with their tasks**
+
+```
+# Panel 1 — runs (drive $runIds variable from column "id")
+GET /api/v1/workflowRuns?filter.team_name=$team&sort=-started_at&size=10
+
+# Panel 2 — tasks for those runs
+GET /api/v1/workflowTasks?filter.workflow_run_id=$runIds&sort=workflow_run_id,task_order
+```
+
+For complex queries (nested bool filters, server-side aggregations), use POST
+with a `query.Query` JSON body. See `docs/architecture/api.md` for the full
+design and a list of planned future enhancements.
 
 # Testing
 
