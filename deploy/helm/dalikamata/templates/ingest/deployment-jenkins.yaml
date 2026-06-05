@@ -1,4 +1,4 @@
-{{- if .Values.ingest.jenkins.enabled }}
+{{- if .Values.ingest.jenkins.url }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,7 +28,7 @@ spec:
             - "--nats-port={{ .Values.nats.port }}"
             - "ingest"
             - "jenkins"
-            - "--jenkins-url={{ required "ingest.jenkins.url is required" .Values.ingest.jenkins.url }}"
+            - "--jenkins-url={{ .Values.ingest.jenkins.url }}"
             - "--jenkins-user={{ required "ingest.jenkins.user is required" .Values.ingest.jenkins.user }}"
             - "--jenkins-token=$(JENKINS_TOKEN)"
           env:

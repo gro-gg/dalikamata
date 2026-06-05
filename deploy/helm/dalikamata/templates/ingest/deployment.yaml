@@ -1,4 +1,4 @@
-{{- if .Values.ingest.bitbucket.enabled }}
+{{- if .Values.ingest.bitbucket.url }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,7 +28,7 @@ spec:
             - "--nats-port={{ .Values.nats.port }}"
             - "ingest"
             - "bitbucket"
-            - "--bitbucket-url={{ required "ingest.bitbucket.url is required" .Values.ingest.bitbucket.url }}"
+            - "--bitbucket-url={{ .Values.ingest.bitbucket.url }}"
             - "--bitbucket-token=$(BITBUCKET_TOKEN)"
             - "--bitbucket-projects={{ required "ingest.bitbucket.projects is required" .Values.ingest.bitbucket.projects }}"
           env:
