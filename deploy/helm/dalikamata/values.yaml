@@ -4,13 +4,19 @@ image:
   pullPolicy: IfNotPresent
 
 nats:
+  enabled: true
   port: 4222
 
+domain:
+  enabled: true
+
 metrics:
+  enabled: true
   port: 2112
 
 ingest:
   bitbucket:
+    enabled: false
     # Required: base URL of your Bitbucket Server instance (e.g. https://bitbucket.example.com)
     url: ""
     # Required: comma-separated Bitbucket project keys to crawl (e.g. "PROJ,INFRA")
@@ -20,6 +26,7 @@ ingest:
     existingSecret: ""
 
   jenkins:
+    enabled: false
     # Required: base URL of your Jenkins instance (e.g. https://jenkins.example.com)
     url: ""
     # Required: Jenkins username for API access

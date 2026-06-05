@@ -1,3 +1,4 @@
+{{- if .Values.domain.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,3 +27,4 @@ spec:
             - "--nats-host={{ include "dalikamata.natsServiceName" . }}"
             - "--nats-port={{ .Values.nats.port }}"
             - "domain"
+{{- end }}

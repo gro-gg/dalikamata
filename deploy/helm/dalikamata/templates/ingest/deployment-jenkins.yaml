@@ -1,3 +1,4 @@
+{{- if .Values.ingest.jenkins.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -36,3 +37,4 @@ spec:
                 secretKeyRef:
                   name: {{ include "dalikamata.jenkinsSecretName" . }}
                   key: token
+{{- end }}
