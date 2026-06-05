@@ -38,6 +38,8 @@ var monoCmd = &cobra.Command{
 		metricsApp.NATSHost = natsURL
 		metricsApp.NATSPort = natsPort
 		metricsApp.MetricsURL = metricsAddr
+		metricsApp.RefreshInterval = metricRefreshInterval
+		metricsApp.AggregateTimeout = metricAggregateTimeout
 
 		ingestApp := app.NewIngestBitbucketApp(l)
 		ingestApp.NATSHost = natsURL

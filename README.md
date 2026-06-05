@@ -25,6 +25,8 @@ Key flags (available on all commands via root):
 | `--debug` | `false` | Enable debug logging |
 | `--grace-period` | `10s` | Shutdown grace period |
 | `--metrics-addr` | `0.0.0.0:2112` | Prometheus metrics listen address |
+| `--metric-refresh-interval` | `30s` | How often background loops recompute each metric |
+| `--metric-aggregate-timeout` | `30s` | Per-aggregation query timeout for metric refresh loops |
 
 The `nats` and `mono` commands also accept `--nats-data` (default `./data/nats`) to set the JetStream persistence directory.
 
@@ -54,7 +56,7 @@ Add `--profile monitoring` to either command to also start Prometheus (port 9090
 
 ## Metrics
 
-The metrics service (`dalikamata metrics`, port 2112 by default) exposes three Prometheus histograms on `/metrics`:
+The metrics service (`dalikamata metrics`, port 2112 by default) exposes three Prometheus histograms on `/metrics`. Each metric is computed by its own background goroutine loop; Prometheus scrapes are served from the last cached values and never block on live aggregation queries. The cache is updated every `--metric-refresh-interval` (default `30s`).
 
 | Metric | Labels | Description |
 |---|---|---|

@@ -71,6 +71,7 @@ func TestCollect_EmitsPRCycleTimeHistogram(t *testing.T) {
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(svc)
+	must(t, svc.Refresh(context.Background()))
 
 	// The MERGED PR has a cycle time of 7 days = 604800s.
 	// It falls into the last bucket (≤ 604800).
@@ -112,6 +113,7 @@ func TestCollect_OpenPRUsesClockTime(t *testing.T) {
 	svc := metrics.NewMetricsService(&stubAggregator{r: r}, discardLogger(), "")
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(svc)
+	must(t, svc.Refresh(context.Background()))
 
 	families, err := reg.Gather()
 	is.NoErr(err)
@@ -189,6 +191,7 @@ func TestCollect_WorkflowRunDurationHistogram(t *testing.T) {
 	svc := metrics.NewMetricsService(agg, discardLogger(), "")
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(svc)
+	must(t, svc.Refresh(context.Background()))
 
 	families, err := reg.Gather()
 	is.NoErr(err)
@@ -227,6 +230,7 @@ func TestCollect_WorkflowTaskDurationHistogram(t *testing.T) {
 	svc := metrics.NewMetricsService(agg, discardLogger(), "")
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(svc)
+	must(t, svc.Refresh(context.Background()))
 
 	families, err := reg.Gather()
 	is.NoErr(err)
@@ -270,6 +274,7 @@ func TestCollect_WorkflowTaskOrderAfterJSONRoundtrip(t *testing.T) {
 	svc := metrics.NewMetricsService(agg, discardLogger(), "")
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(svc)
+	must(t, svc.Refresh(context.Background()))
 
 	families, err := reg.Gather()
 	is.NoErr(err)

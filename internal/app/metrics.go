@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	dalinats "codeberg.org/aeforged/dalikamata/internal/domain/nats"
 	"codeberg.org/aeforged/dalikamata/internal/metrics"
@@ -11,18 +12,22 @@ import (
 )
 
 type MetricsApp struct {
-	NATSHost   string
-	NATSPort   int
-	MetricsURL string
-	logger     *slog.Logger
+	NATSHost        string
+	NATSPort        int
+	MetricsURL      string
+	RefreshInterval time.Duration
+	AggregateTimeout time.Duration
+	logger          *slog.Logger
 }
 
 func NewMetricsApp(logger *slog.Logger) *MetricsApp {
 	return &MetricsApp{
-		NATSHost:   nats.DefaultHost,
-		NATSPort:   nats.DefaultPort,
-		MetricsURL: metrics.DefaultMetricsAddr,
-		logger:     logger.With("service", "metrics"),
+		NATSHost:         nats.DefaultHost,
+		NATSPort:         nats.DefaultPort,
+		MetricsURL:       metrics.DefaultMetricsAddr,
+		RefreshInterval:  metrics.DefaultRefreshInterval,
+		AggregateTimeout: metrics.DefaultAggregateTimeout,
+		logger:           logger.With("service", "metrics"),
 	}
 }
 
@@ -33,7 +38,12 @@ func (a *MetricsApp) Run(ctx context.Context) error {
 	}
 	defer closeConn()
 
-	aggregator := dalinats.NewQueryClient(nc, a.logger.With("component", "query-client"))
-	svc := metrics.NewMetricsService(aggregator, a.logger, a.MetricsURL)
+	aggregator := dalinats.NewQueryClient(nc, a.logger.With("component", "query-client"),
+		dalinats.WithQueryTimeout(a.AggregateTimeout),
+	)
+	svc := metrics.NewMetricsService(aggregator, a.logger, a.MetricsURL,
+		metrics.WithRefreshInterval(a.RefreshInterval),
+		metrics.WithAggregateTimeout(a.AggregateTimeout),
+	)
 	return svc.Run(ctx)
 }

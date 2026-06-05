@@ -13,16 +13,18 @@ import (
 )
 
 var (
-	debugMode         bool
-	natsURL           string // TODO rename to natsHost
-	natsPort          int
-	natsPath          string
-	caCertsDir        string
-	gracePeriod       time.Duration
-	metricsAddr       string
-	bitbucketURL      string
-	bitbucketToken    string
-	bitbucketProjects []string
+	debugMode              bool
+	natsURL                string // TODO rename to natsHost
+	natsPort               int
+	natsPath               string
+	caCertsDir             string
+	gracePeriod            time.Duration
+	metricsAddr            string
+	metricRefreshInterval  time.Duration
+	metricAggregateTimeout time.Duration
+	bitbucketURL           string
+	bitbucketToken         string
+	bitbucketProjects      []string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -73,4 +75,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&caCertsDir, "ca-certs-dir", "", "directory containing custom CA certificates (.pem, .crt, .cer)")
 	rootCmd.PersistentFlags().DurationVar(&gracePeriod, "grace-period", 10*time.Second, "grace period for shutdown")
 	rootCmd.PersistentFlags().StringVar(&metricsAddr, "metrics-addr", metrics.DefaultMetricsAddr, "metrics HTTP listen address")
+	rootCmd.PersistentFlags().DurationVar(&metricRefreshInterval, "metric-refresh-interval", metrics.DefaultRefreshInterval, "how often background loops recompute each metric")
+	rootCmd.PersistentFlags().DurationVar(&metricAggregateTimeout, "metric-aggregate-timeout", metrics.DefaultAggregateTimeout, "per-aggregation query timeout for metric refresh loops")
 }

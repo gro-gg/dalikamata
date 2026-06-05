@@ -20,6 +20,8 @@ var metricsCmd = &cobra.Command{
 		metricsApp.MetricsURL = metricsAddr
 		metricsApp.NATSHost = natsURL
 		metricsApp.NATSPort = natsPort
+		metricsApp.RefreshInterval = metricRefreshInterval
+		metricsApp.AggregateTimeout = metricAggregateTimeout
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
 		var runErr error

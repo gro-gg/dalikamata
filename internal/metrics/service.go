@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,22 +18,53 @@ import (
 
 const DefaultMetricsAddr = "0.0.0.0:2112"
 
+const (
+	DefaultRefreshInterval  = 30 * time.Second
+	DefaultAggregateTimeout = 30 * time.Second
+)
+
 // PullRequestAggregator is the incoming port for obtaining server-side PR
 // aggregation results from the domain.
 type PullRequestAggregator interface {
 	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
 }
 
-// MetricsService implements prometheus.Collector. On every Prometheus scrape
-// it requests pre-computed histograms from the domain and emits const histograms
-// for PR cycle time, workflow run duration, and workflow task duration.
+// Option configures a MetricsService.
+type Option func(*MetricsService)
+
+// WithRefreshInterval sets how often background loops re-compute each metric.
+func WithRefreshInterval(d time.Duration) Option {
+	return func(s *MetricsService) { s.refreshInterval = d }
+}
+
+// WithAggregateTimeout sets the per-Aggregate call deadline used by each loop iteration.
+func WithAggregateTimeout(d time.Duration) Option {
+	return func(s *MetricsService) { s.aggregateTimeout = d }
+}
+
+// cachedAggregation holds the last successful aggregation tree for one metric.
+type cachedAggregation struct {
+	tree    map[string]query.AggregationResult
+	fetched time.Time
+}
+
+// MetricsService implements prometheus.Collector. Background goroutines
+// periodically refresh each metric by querying the domain; Collect emits the
+// last cached values so Prometheus scrapes never block on live queries.
 type MetricsService struct {
-	aggregator      PullRequestAggregator
-	logger          *slog.Logger
-	metricsAddr     string
-	prCycleDesc     *prometheus.Desc
-	wfRunDesc       *prometheus.Desc
-	wfTaskDesc      *prometheus.Desc
+	aggregator  PullRequestAggregator
+	logger      *slog.Logger
+	metricsAddr string
+	prCycleDesc *prometheus.Desc
+	wfRunDesc   *prometheus.Desc
+	wfTaskDesc  *prometheus.Desc
+
+	refreshInterval  time.Duration
+	aggregateTimeout time.Duration
+
+	prCycleCache atomic.Pointer[cachedAggregation]
+	wfRunCache   atomic.Pointer[cachedAggregation]
+	wfTaskCache  atomic.Pointer[cachedAggregation]
 }
 
 // prCycleBuckets mirrors the bucket boundaries of the original event-driven
@@ -182,11 +215,13 @@ var prCycleQuery = query.Query{
 	},
 }
 
-func NewMetricsService(aggregator PullRequestAggregator, logger *slog.Logger, metricsAddr string) *MetricsService {
+func NewMetricsService(aggregator PullRequestAggregator, logger *slog.Logger, metricsAddr string, opts ...Option) *MetricsService {
 	s := &MetricsService{
-		aggregator:  aggregator,
-		logger:      logger,
-		metricsAddr: DefaultMetricsAddr,
+		aggregator:       aggregator,
+		logger:           logger,
+		metricsAddr:      DefaultMetricsAddr,
+		refreshInterval:  DefaultRefreshInterval,
+		aggregateTimeout: DefaultAggregateTimeout,
 		prCycleDesc: prometheus.NewDesc(
 			"pr_cycle_time_seconds",
 			"Time from PR creation to current or final state in seconds.",
@@ -209,11 +244,16 @@ func NewMetricsService(aggregator PullRequestAggregator, logger *slog.Logger, me
 	if metricsAddr != "" {
 		s.metricsAddr = metricsAddr
 	}
+	for _, o := range opts {
+		o(s)
+	}
 	return s
 }
 
 // Run registers the MetricsService as a Prometheus collector, starts the HTTP
-// server, and blocks until ctx is cancelled.
+// server, launches one background refresh loop per metric, and blocks until
+// ctx is cancelled. Prometheus scrapes are served from cached data and never
+// block on live aggregation queries.
 func (s *MetricsService) Run(ctx context.Context) error {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(s)
@@ -226,18 +266,26 @@ func (s *MetricsService) Run(ctx context.Context) error {
 		Handler: mux,
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(4)
+
 	go func() {
+		defer wg.Done()
 		s.logger.Info("starting metrics HTTP server", "addr", s.metricsAddr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.logger.Error("metrics HTTP server error", "error", err)
 		}
 	}()
+	go func() { defer wg.Done(); s.runMetricLoop(ctx, "pr_cycle_time", s.refreshPRCycle) }()
+	go func() { defer wg.Done(); s.runMetricLoop(ctx, "workflow_run_duration", s.refreshWorkflowRun) }()
+	go func() { defer wg.Done(); s.runMetricLoop(ctx, "workflow_task_duration", s.refreshWorkflowTask) }()
 
 	<-ctx.Done()
 
 	if err := srv.Shutdown(context.Background()); err != nil {
 		s.logger.Error("shutting down metrics HTTP server", "error", err)
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -248,35 +296,96 @@ func (s *MetricsService) Describe(ch chan<- *prometheus.Desc) {
 	ch <- s.wfTaskDesc
 }
 
-// Collect implements prometheus.Collector. On every Prometheus scrape it issues
-// aggregation requests to the domain and emits const histograms for PR cycle
-// time, workflow run duration, and workflow task duration.
+// Collect implements prometheus.Collector. It emits the last cached histogram
+// values for each metric. If a metric has not been computed yet, it is omitted.
 func (s *MetricsService) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if result, err := s.aggregator.Aggregate(ctx, prCycleQuery); err != nil {
-		s.logger.Error("querying pr cycle time aggregation", "error", err)
-	} else if result != nil {
-		if err := s.emitPRCycleTree(ch, result); err != nil {
+	if c := s.prCycleCache.Load(); c != nil {
+		if err := s.emitPRCycleTree(ch, c.tree); err != nil {
 			s.logger.Error("emitting pr cycle time metrics", "error", err)
 		}
 	}
-
-	if result, err := s.aggregator.Aggregate(ctx, workflowRunQuery); err != nil {
-		s.logger.Error("querying workflow run duration aggregation", "error", err)
-	} else if result != nil {
-		if err := s.emitWorkflowRunTree(ch, result); err != nil {
+	if c := s.wfRunCache.Load(); c != nil {
+		if err := s.emitWorkflowRunTree(ch, c.tree); err != nil {
 			s.logger.Error("emitting workflow run duration metrics", "error", err)
 		}
 	}
-
-	if result, err := s.aggregator.Aggregate(ctx, workflowTaskQuery); err != nil {
-		s.logger.Error("querying workflow task duration aggregation", "error", err)
-	} else if result != nil {
-		if err := s.emitWorkflowTaskTree(ch, result); err != nil {
+	if c := s.wfTaskCache.Load(); c != nil {
+		if err := s.emitWorkflowTaskTree(ch, c.tree); err != nil {
 			s.logger.Error("emitting workflow task duration metrics", "error", err)
 		}
+	}
+}
+
+// Refresh synchronously computes all three metrics and stores them in the
+// cache. Tests call this to populate the cache before Gather().
+func (s *MetricsService) Refresh(ctx context.Context) error {
+	var errs []error
+	if err := s.refreshPRCycle(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("pr_cycle: %w", err))
+	}
+	if err := s.refreshWorkflowRun(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("workflow_run: %w", err))
+	}
+	if err := s.refreshWorkflowTask(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("workflow_task: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+func (s *MetricsService) refreshPRCycle(ctx context.Context) error {
+	res, err := s.aggregator.Aggregate(ctx, prCycleQuery)
+	if err != nil {
+		return err
+	}
+	s.prCycleCache.Store(&cachedAggregation{tree: res, fetched: time.Now()})
+	return nil
+}
+
+func (s *MetricsService) refreshWorkflowRun(ctx context.Context) error {
+	res, err := s.aggregator.Aggregate(ctx, workflowRunQuery)
+	if err != nil {
+		return err
+	}
+	s.wfRunCache.Store(&cachedAggregation{tree: res, fetched: time.Now()})
+	return nil
+}
+
+func (s *MetricsService) refreshWorkflowTask(ctx context.Context) error {
+	res, err := s.aggregator.Aggregate(ctx, workflowTaskQuery)
+	if err != nil {
+		return err
+	}
+	s.wfTaskCache.Store(&cachedAggregation{tree: res, fetched: time.Now()})
+	return nil
+}
+
+// runMetricLoop runs refresh immediately then on each tick of s.refreshInterval
+// until ctx is cancelled. Errors are logged; a failed refresh retains the last
+// cached value so dashboards see stale data rather than disappearing series.
+func (s *MetricsService) runMetricLoop(ctx context.Context, name string, refresh func(context.Context) error) {
+	s.tickRefresh(ctx, name, refresh)
+	t := time.NewTicker(s.refreshInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			s.tickRefresh(ctx, name, refresh)
+		}
+	}
+}
+
+func (s *MetricsService) tickRefresh(ctx context.Context, name string, refresh func(context.Context) error) {
+	start := time.Now()
+	rctx, cancel := context.WithTimeout(ctx, s.aggregateTimeout)
+	defer cancel()
+	if err := refresh(rctx); err != nil && !errors.Is(err, context.Canceled) {
+		s.logger.Error("metric refresh failed", "metric", name, "error", err)
+	}
+	if elapsed := time.Since(start); elapsed > s.refreshInterval {
+		s.logger.Warn("metric refresh exceeded interval; ticks may have been dropped",
+			"metric", name, "elapsed", elapsed, "interval", s.refreshInterval)
 	}
 }
 
