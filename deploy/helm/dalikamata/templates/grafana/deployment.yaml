@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
         - name: grafana
-          image: grafana/grafana:latest
-          imagePullPolicy: IfNotPresent
+          image: "{{ .Values.grafana.image.repository }}:{{ .Values.grafana.image.tag }}"
+          imagePullPolicy: {{ .Values.grafana.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 3000

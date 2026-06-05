@@ -18,4 +18,12 @@ data:
         access: proxy
         url: http://{{ include "dalikamata.fullname" . }}-prometheus:9090
         isDefault: true
+{{- if .Values.api.enabled }}
+
+      - name: Dalikamata API
+        uid: dalikamata-api
+        type: yesoreyeram-infinity-datasource
+        access: proxy
+        url: http://{{ include "dalikamata.fullname" . }}-api:{{ .Values.api.port }}
+{{- end }}
 {{- end }}

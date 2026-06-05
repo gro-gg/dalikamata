@@ -16,6 +16,10 @@ metrics:
   debug: false
   port: 2112
 
+api:
+  enabled: true
+  port: 2113
+
 ingest:
   bitbucket:
     # Set url to enable the Bitbucket ingestor.
@@ -77,6 +81,13 @@ prometheus:
 
 grafana:
   enabled: false
+  image:
+    # Custom image with the Infinity datasource plugin pre-installed.
+    # Build with: docker build -f deploy/docker/Dockerfile.grafana -t grafana-dalikamata:latest deploy/docker/
+    # Then push to your registry and set repository/tag accordingly.
+    repository: grafana-dalikamata
+    tag: latest
+    pullPolicy: IfNotPresent
   # Optional: name of a pre-existing Secret with key "admin-password".
   # If empty, the chart auto-creates a Secret named <release>-grafana with a random password.
   existingSecret: ""

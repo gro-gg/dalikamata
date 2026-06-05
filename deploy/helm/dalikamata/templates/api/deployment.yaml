@@ -1,0 +1,40 @@
+{{- if .Values.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dalikamata.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "dalikamata.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--nats-host={{ include "dalikamata.natsServiceName" . }}"
+            - "--nats-port={{ .Values.nats.port }}"
+            - "--api-addr=0.0.0.0:{{ .Values.api.port }}"
+            - "api"
+          ports:
+            - name: api
+              containerPort: {{ .Values.api.port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: api
+            initialDelaySeconds: 10
+            periodSeconds: 15
+{{- end }}
