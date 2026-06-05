@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/api"
 	"codeberg.org/aeforged/dalikamata/internal/metrics"
 	"github.com/spf13/cobra"
 )
@@ -22,6 +23,8 @@ var (
 	metricsAddr            string
 	metricRefreshInterval  time.Duration
 	metricAggregateTimeout time.Duration
+	apiAddr                string
+	apiQueryTimeout        time.Duration
 	bitbucketURL           string
 	bitbucketToken         string
 	bitbucketProjects      []string
@@ -77,4 +80,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&metricsAddr, "metrics-addr", metrics.DefaultMetricsAddr, "metrics HTTP listen address")
 	rootCmd.PersistentFlags().DurationVar(&metricRefreshInterval, "metric-refresh-interval", metrics.DefaultRefreshInterval, "how often background loops recompute each metric")
 	rootCmd.PersistentFlags().DurationVar(&metricAggregateTimeout, "metric-aggregate-timeout", metrics.DefaultAggregateTimeout, "per-aggregation query timeout for metric refresh loops")
+	rootCmd.PersistentFlags().StringVar(&apiAddr, "api-addr", api.DefaultAPIAddr, "query API HTTP listen address")
+	rootCmd.PersistentFlags().DurationVar(&apiQueryTimeout, "api-query-timeout", api.DefaultQueryTimeout, "per-request query timeout for the API server")
 }

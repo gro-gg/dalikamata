@@ -41,6 +41,12 @@ var monoCmd = &cobra.Command{
 		metricsApp.RefreshInterval = metricRefreshInterval
 		metricsApp.AggregateTimeout = metricAggregateTimeout
 
+		apiApp := app.NewAPIApp(l)
+		apiApp.NATSHost = natsURL
+		apiApp.NATSPort = natsPort
+		apiApp.APIAddr = apiAddr
+		apiApp.QueryTimeout = apiQueryTimeout
+
 		ingestApp := app.NewIngestBitbucketApp(l)
 		ingestApp.NATSHost = natsURL
 		ingestApp.NATSPort = natsPort
@@ -89,6 +95,11 @@ var monoCmd = &cobra.Command{
 		wg.Go(func() {
 			if err := metricsApp.Run(ctx); err != nil {
 				l.Error("running metrics service", "error", err)
+			}
+		})
+		wg.Go(func() {
+			if err := apiApp.Run(ctx); err != nil {
+				l.Error("running API service", "error", err)
 			}
 		})
 		wg.Go(func() {
