@@ -215,7 +215,11 @@ func (r *MemoryRepository) QueryWorkflowRuns(ctx context.Context, q query.Query,
 	r.mu.RUnlock()
 	return queryEntities(ctx, snapshot, q, func(run model.WorkflowRun) map[string]any {
 		return projectWorkflowRun(run, lkp)
-	}, emit)
+	}, func(run model.WorkflowRun) error {
+		run.WorkflowName = lkp.workflowName(run.WorkflowID)
+		run.ComponentName, run.TeamName = lkp.ownership(run.WorkflowID)
+		return emit(run)
+	})
 }
 
 func (r *MemoryRepository) QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error {
@@ -232,7 +236,14 @@ func (r *MemoryRepository) QueryWorkflowTasks(ctx context.Context, q query.Query
 	r.mu.RUnlock()
 	return queryEntities(ctx, snapTasks, q, func(t model.WorkflowTask) map[string]any {
 		return projectWorkflowTask(t, snapRuns, lkp)
-	}, emit)
+	}, func(t model.WorkflowTask) error {
+		if run, ok := snapRuns[t.WorkflowRunID]; ok {
+			t.WorkflowID = run.WorkflowID
+		}
+		t.WorkflowName = lkp.workflowName(t.WorkflowID)
+		t.ComponentName, t.TeamName = lkp.ownership(t.WorkflowID)
+		return emit(t)
+	})
 }
 
 func (r *MemoryRepository) QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error {
