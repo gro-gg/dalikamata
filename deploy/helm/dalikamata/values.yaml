@@ -1,6 +1,6 @@
 image:
-  repository: dalikamata
-  tag: latest
+  repository: ghcr.io/gro-gg/dalikamata
+  tag: ""
   pullPolicy: IfNotPresent
 
 nats:

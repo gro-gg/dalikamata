@@ -104,6 +104,7 @@ jobs:
           VERSION="0.0.${{ github.run_number }}"
           sed -i "s/^version:.*/version: ${VERSION}/" deploy/helm/dalikamata/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"${{ github.run_number }}\"/" deploy/helm/dalikamata/Chart.yaml
+          sed -i "s/^  tag:.*/  tag: \"${{ github.run_number }}\"/" deploy/helm/dalikamata/values.yaml
           helm package deploy/helm/dalikamata
           helm push dalikamata-${VERSION}.tgz oci://ghcr.io/${{ github.repository_owner }}/helm
 
