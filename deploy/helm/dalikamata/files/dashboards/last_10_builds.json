@@ -433,7 +433,7 @@
         "name": "team",
         "options": [],
         "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/teams\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
-        "refresh": 2,
+        "refresh": 1,
         "regex": "",
         "sort": 1,
         "type": "query"
@@ -452,7 +452,7 @@
         "name": "workflow",
         "options": [],
         "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/workflowRuns?filter.team_name=${team}&size=200\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"workflow_name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"workflow_name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
-        "refresh": 2,
+        "refresh": 1,
         "regex": "",
         "sort": 1,
         "type": "query"
