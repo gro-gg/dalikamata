@@ -27,4 +27,7 @@ spec:
             - "--nats-host={{ include "dalikamata.natsServiceName" . }}"
             - "--nats-port={{ .Values.nats.port }}"
             - "domain"
+            {{- if .Values.domain.debug }}
+            - "--debug"
+            {{- end }}
 {{- end }}

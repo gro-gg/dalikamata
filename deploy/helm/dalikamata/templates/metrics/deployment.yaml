@@ -28,6 +28,9 @@ spec:
             - "--nats-port={{ .Values.nats.port }}"
             - "--metrics-addr=0.0.0.0:{{ .Values.metrics.port }}"
             - "metrics"
+            {{- if .Values.metrics.debug }}
+            - "--debug"
+            {{- end }}
           ports:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}

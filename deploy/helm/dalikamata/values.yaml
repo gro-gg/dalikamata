@@ -9,15 +9,18 @@ nats:
 
 domain:
   enabled: true
+  debug: false
 
 metrics:
   enabled: true
+  debug: false
   port: 2112
 
 ingest:
   bitbucket:
     # Set url to enable the Bitbucket ingestor.
     url: ""
+    debug: false
     # Required when url is set: comma-separated Bitbucket project keys to crawl (e.g. "PROJ,INFRA")
     projects: ""
     # Optional: name of a pre-existing Secret with key "token".
@@ -27,6 +30,7 @@ ingest:
   jenkins:
     # Set url to enable the Jenkins ingestor.
     url: ""
+    debug: false
     # Required when url is set: Jenkins username for API access
     user: ""
     # Optional: name of a pre-existing Secret with key "token".
@@ -38,6 +42,7 @@ ingest:
     # Each key is mounted as a file under /components inside the crawler container.
     # If empty, the config ingest Deployment is not created.
     existingConfigMap: ""
+    debug: false
 
 prometheus:
   enabled: false

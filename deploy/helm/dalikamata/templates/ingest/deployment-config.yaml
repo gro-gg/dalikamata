@@ -29,6 +29,9 @@ spec:
             - "ingest"
             - "config"
             - "--dir=/components"
+            {{- if .Values.ingest.config.debug }}
+            - "--debug"
+            {{- end }}
           volumeMounts:
             - name: components
               mountPath: /components
