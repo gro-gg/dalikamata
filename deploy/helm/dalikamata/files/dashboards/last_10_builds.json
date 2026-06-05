@@ -1,0 +1,291 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Last 10 workflow builds and their task breakdown, selectable by team and workflow.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "dalikamata-api"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Build #" },
+            "properties": [
+              { "id": "custom.width", "value": 80 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "SUCCESS":  { "color": "green",  "index": 0, "text": "SUCCESS"  },
+                      "FAILURE":  { "color": "red",    "index": 1, "text": "FAILURE"  },
+                      "ABORTED":  { "color": "text",   "index": 2, "text": "ABORTED"  },
+                      "UNSTABLE": { "color": "yellow", "index": 3, "text": "UNSTABLE" }
+                    }
+                  }
+                ]
+              },
+              { "id": "custom.displayMode", "value": "color-background" },
+              { "id": "custom.width", "value": 110 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Duration (s)" },
+            "properties": [
+              { "id": "unit", "value": "s" },
+              { "id": "custom.width", "value": 120 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Run ID" },
+            "properties": [
+              { "id": "custom.width", "value": 260 }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "dalikamata-api"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "/api/v1/workflowRuns?filter.team_name=${team}&filter.workflow_name=${workflow}&sort=-started_at&size=10",
+          "url_options": { "method": "GET", "data": "" },
+          "root_selector": "hits",
+          "columns": [
+            { "selector": "number",        "text": "Build #",      "type": "number" },
+            { "selector": "workflow_name",  "text": "Workflow",     "type": "string" },
+            { "selector": "status",         "text": "Status",       "type": "string" },
+            { "selector": "branch",         "text": "Branch",       "type": "string" },
+            { "selector": "started_at",     "text": "Started At",   "type": "string" },
+            { "selector": "duration",       "text": "Duration (s)", "type": "number" },
+            { "selector": "id",             "text": "Run ID",       "type": "string" }
+          ],
+          "filters": []
+        }
+      ],
+      "title": "Last 10 Builds — $workflow ($team)",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "dalikamata-api"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "#" },
+            "properties": [
+              { "id": "custom.width", "value": 60 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "SUCCESS":  { "color": "green",  "index": 0, "text": "SUCCESS"  },
+                      "FAILURE":  { "color": "red",    "index": 1, "text": "FAILURE"  },
+                      "ABORTED":  { "color": "text",   "index": 2, "text": "ABORTED"  },
+                      "UNSTABLE": { "color": "yellow", "index": 3, "text": "UNSTABLE" }
+                    }
+                  }
+                ]
+              },
+              { "id": "custom.displayMode", "value": "color-background" },
+              { "id": "custom.width", "value": 110 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Duration (s)" },
+            "properties": [
+              { "id": "unit", "value": "s" },
+              { "id": "custom.width", "value": 120 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Run ID" },
+            "properties": [
+              { "id": "custom.width", "value": 260 }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 9 },
+      "id": 2,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "dalikamata-api"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "/api/v1/workflowTasks?filter.team_name=${team}&filter.workflow_name=${workflow}&sort=-started_at,order&size=200",
+          "url_options": { "method": "GET", "data": "" },
+          "root_selector": "hits",
+          "columns": [
+            { "selector": "workflow_run_id", "text": "Run ID",       "type": "string" },
+            { "selector": "order",           "text": "#",            "type": "number" },
+            { "selector": "name",            "text": "Task",         "type": "string" },
+            { "selector": "status",          "text": "Status",       "type": "string" },
+            { "selector": "duration",        "text": "Duration (s)", "type": "number" },
+            { "selector": "started_at",      "text": "Started At",   "type": "string" }
+          ],
+          "filters": []
+        }
+      ],
+      "title": "Task Breakdown — last builds of $workflow ($team)",
+      "type": "table"
+    }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 42,
+  "tags": ["dalikamata", "cicd", "workflow"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "dalikamata-api"
+        },
+        "definition": "",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Team",
+        "multi": false,
+        "name": "team",
+        "options": [],
+        "query": {
+          "refId": "StandardVariableQuery",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "/api/v1/teams",
+          "url_options": { "method": "GET", "data": "" },
+          "root_selector": "hits",
+          "columns": [{ "selector": "name", "text": "name", "type": "string" }],
+          "filters": []
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "dalikamata-api"
+        },
+        "definition": "",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Workflow",
+        "multi": false,
+        "name": "workflow",
+        "options": [],
+        "query": {
+          "refId": "StandardVariableQuery",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "/api/v1/workflowRuns?filter.team_name=${team}&size=200",
+          "url_options": { "method": "GET", "data": "" },
+          "root_selector": "hits",
+          "columns": [{ "selector": "workflow_name", "text": "workflow_name", "type": "string" }],
+          "filters": []
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Last 10 Workflow Builds",
+  "uid": "dalikamata-last-builds",
+  "version": 1,
+  "weekStart": ""
+}
