@@ -106,3 +106,16 @@ jobs:
           sed -i "s/^appVersion:.*/appVersion: \"${{ github.run_number }}\"/" deploy/helm/dalikamata/Chart.yaml
           helm package deploy/helm/dalikamata
           helm push dalikamata-${VERSION}.tgz oci://ghcr.io/${{ github.repository_owner }}/helm
+
+  tag-release:
+    needs: [publish, publish-helm]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Create and push release tag
+        run: |
+          git tag v${{ github.run_number }}
+          git push origin v${{ github.run_number }}
