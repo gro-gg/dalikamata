@@ -423,33 +423,14 @@
           "type": "yesoreyeram-infinity-datasource",
           "uid": "dalikamata-api"
         },
-        "definition": "",
+        "definition": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"url\":\"/api/v1/teams\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
         "hide": 0,
         "includeAll": false,
         "label": "Team",
         "multi": false,
         "name": "team",
         "options": [],
-        "query": {
-          "refId": "StandardVariableQuery",
-          "type": "json",
-          "source": "url",
-          "format": "variable",
-          "url": "/api/v1/teams",
-          "url_options": {
-            "method": "GET",
-            "data": ""
-          },
-          "root_selector": "hits",
-          "columns": [
-            {
-              "selector": "name",
-              "text": "name",
-              "type": "string"
-            }
-          ],
-          "filters": []
-        },
+        "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"url\":\"/api/v1/teams\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
         "refresh": 2,
         "regex": "",
         "sort": 1,
@@ -461,33 +442,14 @@
           "type": "yesoreyeram-infinity-datasource",
           "uid": "dalikamata-api"
         },
-        "definition": "",
+        "definition": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"url\":\"/api/v1/workflowRuns?filter.team_name=${team}&size=200\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"workflow_name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"workflow_name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
         "hide": 0,
         "includeAll": false,
         "label": "Workflow",
         "multi": false,
         "name": "workflow",
         "options": [],
-        "query": {
-          "refId": "StandardVariableQuery",
-          "type": "json",
-          "source": "url",
-          "format": "variable",
-          "url": "/api/v1/workflowRuns?filter.team_name=${team}&size=200",
-          "url_options": {
-            "method": "GET",
-            "data": ""
-          },
-          "root_selector": "hits",
-          "columns": [
-            {
-              "selector": "workflow_name",
-              "text": "workflow_name",
-              "type": "string"
-            }
-          ],
-          "filters": []
-        },
+        "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"url\":\"/api/v1/workflowRuns?filter.team_name=${team}&size=200\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"workflow_name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"workflow_name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
         "refresh": 2,
         "regex": "",
         "sort": 1,
