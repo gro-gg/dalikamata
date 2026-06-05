@@ -51,6 +51,18 @@ services:
     ports:
       - "22112:22112"
 
+  dalikamata-api:
+    image: dalikamata:latest
+    command:
+      - "--nats-host=dalikamata-nats"
+      - "--nats-port=24222"
+      - "--api-addr=0.0.0.0:22113"
+      - "api"
+    depends_on:
+      - dalikamata-nats
+    ports:
+      - "22113:22113"
+
   dalikamata-ingest:
     image: dalikamata:latest
     command:
@@ -104,7 +116,10 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana-dalikamata:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.grafana
     container_name: grafana
     profiles: ["monitoring"]
     ports:
@@ -114,6 +129,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_DISABLE_INITIAL_ADMIN_CREATION=false
       - GF_USERS_ALLOW_SIGN_UP=false
+      - DALIKAMATA_API_URL=http://dalikamata-api:22113
     volumes:
       - ./grafana_provisioning:/etc/grafana/provisioning
       - grafana_storage:/var/lib/grafana

@@ -1,0 +1,15 @@
+FROM grafana/grafana:latest
+
+# Install the Infinity data source plugin at build time so no internet access
+# is required at runtime.  Plugins are written to /grafana-plugins (not under
+# /var/lib/grafana) so the grafana_storage named-volume mount does not overlay
+# them on container start.
+USER root
+
+RUN grafana-cli \
+        --pluginsDir /grafana-plugins \
+        plugins install yesoreyeram-infinity-datasource
+
+ENV GF_PATHS_PLUGINS=/grafana-plugins
+
+USER grafana

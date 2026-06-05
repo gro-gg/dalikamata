@@ -26,6 +26,7 @@ services:
     command:
       - "--nats-port=14222"
       - "--metrics-addr=0.0.0.0:12112"
+      - "--api-addr=0.0.0.0:12113"
       - "mono"
       - "--nats-data=/tmp/nats"
       - "--bitbucket-url=http://dalikamata-fake-bitbucket:17990"
@@ -37,6 +38,7 @@ services:
     ports:
       - "14222:14222"
       - "12112:12112"
+      - "12113:12113"
     volumes:
       - ./components:/components:ro
 
@@ -66,7 +68,10 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana-dalikamata:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.grafana
     container_name: grafana
     profiles: ["monitoring"]
     ports:
@@ -76,6 +81,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_DISABLE_INITIAL_ADMIN_CREATION=false
       - GF_USERS_ALLOW_SIGN_UP=false
+      - DALIKAMATA_API_URL=http://dalikamata:12113
     volumes:
       - ./grafana_provisioning:/etc/grafana/provisioning
       - grafana_storage:/var/lib/grafana

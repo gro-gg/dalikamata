@@ -7,3 +7,9 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
+
+  - name: Dalikamata API
+    uid: dalikamata-api
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    url: ${DALIKAMATA_API_URL}
