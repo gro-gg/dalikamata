@@ -79,7 +79,7 @@ func (c *Crawler) crawlRepo(ctx context.Context, projectKey, repoSlug string) er
 }
 
 func (c *Crawler) crawlCommits(ctx context.Context, projectKey, repoSlug string) error {
-	commits, err := c.client.GetCommits(ctx, projectKey, repoSlug)
+	commits, err := c.client.GetCommits(ctx, projectKey, repoSlug, "")
 	if err != nil {
 		return fmt.Errorf("get commits: %w", err)
 	}

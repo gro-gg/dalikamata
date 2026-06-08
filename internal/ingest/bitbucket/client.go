@@ -15,7 +15,7 @@ const pageLimit = 100
 // BitbucketClient fetches data from a Bitbucket Server instance.
 type BitbucketClient interface {
 	GetRepos(ctx context.Context, projectKey string) ([]apiRepo, error)
-	GetCommits(ctx context.Context, projectKey, repoSlug string) ([]apiCommit, error)
+	GetCommits(ctx context.Context, projectKey, repoSlug, sinceSHA string) ([]apiCommit, error)
 	GetPullRequests(ctx context.Context, projectKey, repoSlug string) ([]apiPullRequest, error)
 }
 
@@ -41,9 +41,13 @@ func (c *httpClient) GetRepos(ctx context.Context, projectKey string) ([]apiRepo
 	return paginate[apiRepo](ctx, c, path, nil)
 }
 
-func (c *httpClient) GetCommits(ctx context.Context, projectKey, repoSlug string) ([]apiCommit, error) {
+func (c *httpClient) GetCommits(ctx context.Context, projectKey, repoSlug, sinceSHA string) ([]apiCommit, error) {
 	path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s/commits", projectKey, repoSlug)
-	return paginate[apiCommit](ctx, c, path, nil)
+	var params url.Values
+	if sinceSHA != "" {
+		params = url.Values{"since": {sinceSHA}}
+	}
+	return paginate[apiCommit](ctx, c, path, params)
 }
 
 func (c *httpClient) GetPullRequests(ctx context.Context, projectKey, repoSlug string) ([]apiPullRequest, error) {

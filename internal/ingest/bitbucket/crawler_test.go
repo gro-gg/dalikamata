@@ -43,7 +43,7 @@ func (f *fakeBitbucketClient) GetRepos(_ context.Context, projectKey string) ([]
 	return f.repos[projectKey], nil
 }
 
-func (f *fakeBitbucketClient) GetCommits(_ context.Context, projectKey, repoSlug string) ([]apiCommit, error) {
+func (f *fakeBitbucketClient) GetCommits(_ context.Context, projectKey, repoSlug, _ string) ([]apiCommit, error) {
 	return f.commits[projectKey+"/"+repoSlug], nil
 }
 
