@@ -33,13 +33,24 @@ Key flags (available on all commands via root):
 
 The `nats` and `mono` commands also accept `--nats-data` (default `./data/nats`) to set the JetStream persistence directory.
 
+`dalikamata ingest bitbucket` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--bitbucket-url` | _(required)_ | Bitbucket Server base URL (e.g. `https://bitbucket.example.com`) |
+| `--bitbucket-token` | _(required)_ | Bitbucket personal access token |
+| `--bitbucket-projects` | _(required)_ | Comma-separated list of Bitbucket project keys to crawl |
+| `--bitbucket-interval` | `5m` | How often to re-crawl for new commits and pull requests |
+
+The Bitbucket ingestor runs on a repeating ticker loop. The first crawl fires immediately on startup; subsequent crawls are spaced by `--bitbucket-interval`. Each repo's newest published commit SHA is persisted in a JetStream KV bucket (`ingest-bitbucket-cursors`) so that restarts do not re-ingest already-published commits. Only new commits (those reachable from the default branch tip but not from the cursor SHA) are fetched on subsequent ticks; pull requests and repos are refetched in full on every tick (they are small and re-publish is idempotent).
+
 `dalikamata ingest config` flags:
 
 | Flag | Default | Description |
 |---|---|---|
 | `--dir` | _(required)_ | Directory of per-component YAML files (`*.yaml` / `*.yml`) |
 
-`dalikamata mono` also accepts `--components-dir` (optional) to run the config crawler alongside the other ingest sources.
+`dalikamata mono` also accepts `--components-dir` (optional) to run the config crawler alongside the other ingest sources, and `--bitbucket-interval` to control the Bitbucket crawl cadence.
 
 ## Docker Compose
 
