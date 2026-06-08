@@ -4,31 +4,56 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
-// Crawler performs a full crawl of the configured Bitbucket projects.
+// Crawler performs incremental crawls of the configured Bitbucket projects.
 type Crawler struct {
 	client    BitbucketClient
 	publisher domain.GitPublisher
+	store     Cursors
 	projects  []string
 	logger    *slog.Logger
+
+	mu      sync.Mutex
+	cursors map[string]string // repoID → newest published SHA
+	loaded  bool              // true after the first Load from the store
 }
 
-func NewCrawler(client BitbucketClient, publisher domain.GitPublisher, projects []string, logger *slog.Logger) *Crawler {
+func NewCrawler(client BitbucketClient, publisher domain.GitPublisher, store Cursors, projects []string, logger *slog.Logger) *Crawler {
 	return &Crawler{
 		client:    client,
 		publisher: publisher,
+		store:     store,
 		projects:  projects,
+		cursors:   map[string]string{},
 		logger:    logger.With("component", "bitbucket_crawler"),
 	}
 }
 
 func (c *Crawler) Crawl(ctx context.Context) error {
 	c.logger.Info("Start Crawling Bitbucket")
+
+	// Hydrate per-repo cursors from the persistent store on the very first tick.
+	// On failure we log and continue with an empty map (full refetch), which is
+	// safe because downstream storage is idempotent.
+	c.mu.Lock()
+	if !c.loaded {
+		c.mu.Unlock()
+		loaded, err := c.store.Load(ctx)
+		c.mu.Lock()
+		if err != nil {
+			c.logger.Warn("loading commit cursors failed; starting fresh", "error", err)
+			loaded = map[string]string{}
+		}
+		c.cursors = loaded
+		c.loaded = true
+	}
+	c.mu.Unlock()
 
 	for _, projectKey := range c.projects {
 		if err := c.crawlProject(ctx, projectKey); err != nil {
@@ -79,15 +104,38 @@ func (c *Crawler) crawlRepo(ctx context.Context, projectKey, repoSlug string) er
 }
 
 func (c *Crawler) crawlCommits(ctx context.Context, projectKey, repoSlug string) error {
-	commits, err := c.client.GetCommits(ctx, projectKey, repoSlug, "")
+	repoID := model.NewRepoID(projectKey, repoSlug)
+
+	c.mu.Lock()
+	since := c.cursors[repoID]
+	c.mu.Unlock()
+
+	commits, err := c.client.GetCommits(ctx, projectKey, repoSlug, since)
+	if err != nil && since != "" {
+		// The cursor SHA may have been rewritten (force-push). Clear it and
+		// fall back to a full refetch for this repo; the duplicate commits are
+		// collapsed downstream by the idempotent in-memory repository.
+		c.logger.Warn("GetCommits with cursor failed; retrying from scratch",
+			"repo", repoID, "since", since, "error", err)
+		if clearErr := c.store.Clear(ctx, repoID); clearErr != nil {
+			c.logger.Error("clearing cursor after GetCommits error", "repo", repoID, "error", clearErr)
+		}
+		c.mu.Lock()
+		delete(c.cursors, repoID)
+		c.mu.Unlock()
+		commits, err = c.client.GetCommits(ctx, projectKey, repoSlug, "")
+	}
 	if err != nil {
 		return fmt.Errorf("get commits: %w", err)
+	}
+	if len(commits) == 0 {
+		return nil
 	}
 
 	for _, commit := range commits {
 		event := model.Commit{
 			SHA:       commit.ID,
-			RepoID:    model.NewRepoID(projectKey, repoSlug),
+			RepoID:    repoID,
 			Author:    commit.Author.Name,
 			Timestamp: time.UnixMilli(commit.AuthorTimestamp),
 		}
@@ -96,6 +144,19 @@ func (c *Crawler) crawlCommits(ctx context.Context, projectKey, repoSlug string)
 			c.logger.Error("publish commit", "sha", event.SHA, "error", err)
 		}
 	}
+
+	// commits[0] is the newest commit (Bitbucket returns reverse-chronological order).
+	// Save the cursor only after publishing to preserve "side of duplicate pulls":
+	// a failed save means the next tick re-fetches, not skips.
+	newSHA := commits[0].ID
+	if saveErr := c.store.Save(ctx, repoID, newSHA); saveErr != nil {
+		c.logger.Error("saving commit cursor", "repo", repoID, "sha", newSHA, "error", saveErr)
+		return nil
+	}
+	c.mu.Lock()
+	c.cursors[repoID] = newSHA
+	c.mu.Unlock()
+
 	return nil
 }
 

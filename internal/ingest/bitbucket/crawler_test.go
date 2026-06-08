@@ -2,8 +2,10 @@ package bitbucket
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,18 +34,34 @@ func (f *fakePublisher) PublishPullRequest(_ context.Context, pr model.PullReque
 	return nil
 }
 
-// fakeBitbucketClient returns caller-supplied fixture data.
+// fakeBitbucketClient returns caller-supplied fixture data and records the
+// sinceSHA argument passed to GetCommits so tests can assert cursor wiring.
+// Set errOnSince to simulate a GetCommits failure when a cursor is active.
 type fakeBitbucketClient struct {
 	repos        map[string][]apiRepo
 	commits      map[string][]apiCommit
 	pullRequests map[string][]apiPullRequest
+	errOnSince   error // returned by GetCommits when sinceSHA != ""
+
+	mu        sync.Mutex
+	sinceArgs map[string]string // key: "project/repo", value: last sinceSHA arg
 }
 
 func (f *fakeBitbucketClient) GetRepos(_ context.Context, projectKey string) ([]apiRepo, error) {
 	return f.repos[projectKey], nil
 }
 
-func (f *fakeBitbucketClient) GetCommits(_ context.Context, projectKey, repoSlug, _ string) ([]apiCommit, error) {
+func (f *fakeBitbucketClient) GetCommits(_ context.Context, projectKey, repoSlug, sinceSHA string) ([]apiCommit, error) {
+	f.mu.Lock()
+	if f.sinceArgs == nil {
+		f.sinceArgs = map[string]string{}
+	}
+	f.sinceArgs[projectKey+"/"+repoSlug] = sinceSHA
+	f.mu.Unlock()
+
+	if f.errOnSince != nil && sinceSHA != "" {
+		return nil, f.errOnSince
+	}
 	return f.commits[projectKey+"/"+repoSlug], nil
 }
 
@@ -51,8 +69,51 @@ func (f *fakeBitbucketClient) GetPullRequests(_ context.Context, projectKey, rep
 	return f.pullRequests[projectKey+"/"+repoSlug], nil
 }
 
+// fakeCursors is a map-backed Cursors for unit tests. It records every Save
+// and Clear call so tests can assert correct cursor wiring.
+type fakeCursors struct {
+	mu     sync.Mutex
+	data   map[string]string
+	saves  []struct{ repoID, sha string }
+	clears []string
+}
+
+func newFakeCursors() *fakeCursors {
+	return &fakeCursors{data: map[string]string{}}
+}
+
+func (f *fakeCursors) Load(_ context.Context) (map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]string, len(f.data))
+	for k, v := range f.data {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (f *fakeCursors) Save(_ context.Context, repoID, sha string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.data[repoID] = sha
+	f.saves = append(f.saves, struct{ repoID, sha string }{repoID, sha})
+	return nil
+}
+
+func (f *fakeCursors) Clear(_ context.Context, repoID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.data, repoID)
+	f.clears = append(f.clears, repoID)
+	return nil
+}
+
+func newTestLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 func newCrawler(client BitbucketClient, pub *fakePublisher, projects []string) *Crawler {
-	return NewCrawler(client, pub, projects, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return NewCrawler(client, pub, newFakeCursors(), projects, newTestLogger())
 }
 
 // ---- Repo mapping -----------------------------------------------------------
@@ -234,5 +295,99 @@ func TestCrawl_EmptyProject(t *testing.T) {
 	if len(pub.repos) != 0 || len(pub.commits) != 0 || len(pub.pullRequests) != 0 {
 		t.Errorf("expected nothing published; got repos=%d commits=%d prs=%d",
 			len(pub.repos), len(pub.commits), len(pub.pullRequests))
+	}
+}
+
+// ---- Cursor wiring ----------------------------------------------------------
+
+// TestCrawl_CommitCursorAdvances verifies that after the first Crawl the
+// cursor is saved with the newest commit SHA, and that the second Crawl passes
+// that SHA as the since argument to GetCommits.
+func TestCrawl_CommitCursorAdvances(t *testing.T) {
+	client := &fakeBitbucketClient{
+		repos: map[string][]apiRepo{
+			"PROJ": {{Slug: "svc", Name: "svc"}},
+		},
+		// Bitbucket returns commits newest-first.
+		commits:      map[string][]apiCommit{"PROJ/svc": {{ID: "newer-sha"}, {ID: "older-sha"}}},
+		pullRequests: map[string][]apiPullRequest{"PROJ/svc": {}},
+	}
+	store := newFakeCursors()
+	pub := &fakePublisher{}
+	crawler := NewCrawler(client, pub, store, []string{"PROJ"}, newTestLogger())
+
+	// First crawl: no prior cursor — sinceSHA must be empty.
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.sinceArgs["PROJ/svc"]; got != "" {
+		t.Errorf("first crawl: sinceSHA = %q, want empty", got)
+	}
+	if len(pub.commits) != 2 {
+		t.Fatalf("first crawl: want 2 commits published, got %d", len(pub.commits))
+	}
+	if len(store.saves) != 1 || store.saves[0].sha != "newer-sha" {
+		t.Errorf("first crawl: want cursor saved as newer-sha, got saves=%v", store.saves)
+	}
+
+	// Second crawl: cursor must be forwarded as sinceSHA.
+	pub.commits = nil
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.sinceArgs["PROJ/svc"]; got != "newer-sha" {
+		t.Errorf("second crawl: sinceSHA = %q, want newer-sha", got)
+	}
+}
+
+// TestCrawl_CursorHydratedFromStore verifies that a cursor pre-existing in
+// the store is loaded and used on the first Crawl, simulating a process
+// restart with a persisted cursor.
+func TestCrawl_CursorHydratedFromStore(t *testing.T) {
+	client := &fakeBitbucketClient{
+		repos:        map[string][]apiRepo{"PROJ": {{Slug: "svc", Name: "svc"}}},
+		commits:      map[string][]apiCommit{"PROJ/svc": {}},
+		pullRequests: map[string][]apiPullRequest{"PROJ/svc": {}},
+	}
+	store := newFakeCursors()
+	store.data["PROJ/svc"] = "persisted-sha" // pre-load as if restored from KV
+
+	pub := &fakePublisher{}
+	crawler := NewCrawler(client, pub, store, []string{"PROJ"}, newTestLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.sinceArgs["PROJ/svc"]; got != "persisted-sha" {
+		t.Errorf("sinceSHA = %q, want persisted-sha", got)
+	}
+}
+
+// TestCrawl_CursorClearedOnGetCommitsError verifies that when GetCommits
+// returns an error while a cursor is active (simulating a force-push), the
+// cursor is cleared and a full refetch is attempted.
+func TestCrawl_CursorClearedOnGetCommitsError(t *testing.T) {
+	client := &fakeBitbucketClient{
+		repos:        map[string][]apiRepo{"PROJ": {{Slug: "svc", Name: "svc"}}},
+		commits:      map[string][]apiCommit{"PROJ/svc": {{ID: "fresh-sha"}}},
+		pullRequests: map[string][]apiPullRequest{"PROJ/svc": {}},
+		errOnSince:   errors.New("404 commit not found"),
+	}
+	store := newFakeCursors()
+	store.data["PROJ/svc"] = "stale-sha" // simulate a force-pushed-away cursor
+
+	pub := &fakePublisher{}
+	crawler := NewCrawler(client, pub, store, []string{"PROJ"}, newTestLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Cursor cleared from store.
+	if len(store.clears) != 1 || store.clears[0] != "PROJ/svc" {
+		t.Errorf("want cursor cleared for PROJ/svc, got clears=%v", store.clears)
+	}
+	// Full refetch succeeded: commits published.
+	if len(pub.commits) != 1 || pub.commits[0].SHA != "fresh-sha" {
+		t.Errorf("want 1 commit published after fallback, got commits=%v", pub.commits)
 	}
 }
