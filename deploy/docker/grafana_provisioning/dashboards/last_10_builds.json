@@ -431,8 +431,27 @@
         "label": "Team",
         "multi": false,
         "name": "team",
+                "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "parser": "backend",
+            "refId": "variable",
+            "root_selector": "$.hits",
+            "source": "url",
+            "type": "json",
+            "url": "/api/v1/teams",
+            "url_options": {
+              "data": "",
+              "method": "GET"
+            }
+          },
+          "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/teams\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
+          "queryType": "infinity",
+          "refId": "variable"
+        },
         "options": [],
-        "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/teams\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
         "refresh": 1,
         "regex": "",
         "sort": 1,
@@ -445,15 +464,33 @@
           "uid": "dalikamata-api"
         },
         "definition": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/workflowRuns?filter.team_name=${team}&size=200\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"workflow_name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"workflow_name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
-        "hide": 0,
         "includeAll": false,
         "label": "Workflow",
-        "multi": false,
         "name": "workflow",
         "options": [],
-        "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/workflowRuns?filter.team_name=${team}&size=200\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"workflow_name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"workflow_name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "parser": "backend",
+            "refId": "variable",
+            "root_selector": "$.hits",
+            "source": "url",
+            "type": "json",
+            "url": "/api/v1/workflows",
+            "url_options": {
+              "data": "",
+              "method": "GET"
+            }
+          },
+          "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/workflowRuns?filter.team_name=${team}&size=200\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"workflow_name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"workflow_name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
+          "queryType": "infinity",
+          "refId": "variable"
+        },
         "refresh": 1,
         "regex": "",
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       }
