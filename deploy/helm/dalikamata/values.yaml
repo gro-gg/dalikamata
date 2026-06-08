@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/gro-gg/dalikamata
-  tag: ""
+  tag: "PIPELINE_WILL_REPLACE_ME_WITH_VERSION"
   pullPolicy: IfNotPresent
 
 nats:
@@ -80,7 +80,7 @@ prometheus:
   enabled: false
   scrapeInterval: 15s
   service:
-    type: LoadBalancer
+    type: ClusterIP
   persistence:
     size: 8Gi
     storageClass: ""
