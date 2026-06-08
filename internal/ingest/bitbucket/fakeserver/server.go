@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -103,7 +104,8 @@ var alicePR = apiPRUser{Name: "asmith", EmailAddress: "alice@example.com", Displ
 var bobPR = apiPRUser{Name: "bjones", EmailAddress: "bob@example.com", DisplayName: "Bob Jones"}
 var carolPR = apiPRUser{Name: "cwhite", EmailAddress: "carol@example.com", DisplayName: "Carol White"}
 
-var fakeCommits = map[string][]apiCommit{
+// initialCommits holds the factory fixtures (newest-first per repo).
+var initialCommits = map[string][]apiCommit{
 	"backend-api": {
 		{ID: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", Message: "feat: add user authentication endpoint", Author: alice, AuthorTimestamp: ms(now.Add(-72 * time.Hour)), Committer: alice, CommitterTimestamp: ms(now.Add(-72 * time.Hour))},
 		{ID: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3", Message: "fix: resolve null pointer in payment service", Author: bob, AuthorTimestamp: ms(now.Add(-48 * time.Hour)), Committer: bob, CommitterTimestamp: ms(now.Add(-48 * time.Hour))},
@@ -225,18 +227,30 @@ var fakePullRequests = map[string][]apiPullRequest{
 	},
 }
 
-// Server is a fake Bitbucket Server HTTP server.
+// Server is a fake Bitbucket Server HTTP server. Each Server instance owns a
+// mutable copy of the commit fixtures so that AddCommit does not affect other
+// instances (useful in parallel tests).
 type Server struct {
 	httpServer *http.Server
 	logger     *slog.Logger
+	mu         sync.Mutex
+	commits    map[string][]apiCommit // mutable per-instance, newest-first
 }
 
 // New creates a new fake Bitbucket Server listening on addr.
 func New(addr string, logger *slog.Logger) *Server {
+	commitsCopy := make(map[string][]apiCommit, len(initialCommits))
+	for k, v := range initialCommits {
+		c := make([]apiCommit, len(v))
+		copy(c, v)
+		commitsCopy[k] = c
+	}
+
 	mux := http.NewServeMux()
 	s := &Server{
 		httpServer: &http.Server{Addr: addr, Handler: mux},
 		logger:     logger,
+		commits:    commitsCopy,
 	}
 	mux.HandleFunc("GET /rest/api/1.0/projects/{projectKey}/repos", s.handleRepos)
 	mux.HandleFunc("GET /rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/commits", s.handleCommits)
@@ -264,6 +278,28 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
+// AddCommit prepends c to repoSlug's commit list so it becomes the newest
+// commit returned by subsequent GET /commits requests. Safe to call
+// concurrently with in-flight HTTP requests.
+func (s *Server) AddCommit(repoSlug string, c apiCommit) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.commits[repoSlug] = append([]apiCommit{c}, s.commits[repoSlug]...)
+}
+
+// NewCommit is a convenience helper that builds an apiCommit with the given
+// id and a committer timestamp of now, suitable for passing to AddCommit.
+func NewCommit(id, message string) apiCommit {
+	return apiCommit{
+		ID:                 id,
+		Message:            message,
+		Author:             alice,
+		AuthorTimestamp:    ms(time.Now()),
+		Committer:          alice,
+		CommitterTimestamp: ms(time.Now()),
+	}
+}
+
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 	projectKey := r.PathValue("projectKey")
 	s.logger.Info("fake: list repos", "project", projectKey)
@@ -275,10 +311,34 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCommits(w http.ResponseWriter, r *http.Request) {
 	projectKey := r.PathValue("projectKey")
 	repoSlug := r.PathValue("repoSlug")
-	s.logger.Info("fake: list commits", "project", projectKey, "repo", repoSlug)
+	since := r.URL.Query().Get("since")
+	s.logger.Info("fake: list commits", "project", projectKey, "repo", repoSlug, "since", since)
 
-	commits := fakeCommits[repoSlug]
-	writePagedJSON(w, commits)
+	s.mu.Lock()
+	all := make([]apiCommit, len(s.commits[repoSlug]))
+	copy(all, s.commits[repoSlug])
+	s.mu.Unlock()
+
+	if since != "" {
+		// Commits are stored newest-first. Return only commits that appear
+		// before (i.e. are newer than) the since SHA.
+		found := false
+		for i, c := range all {
+			if c.ID == since {
+				all = all[:i]
+				found = true
+				break
+			}
+		}
+		if !found {
+			// The since SHA is unknown — simulate Bitbucket's 400/404 for a
+			// rewritten commit so the crawler's force-push recovery triggers.
+			http.Error(w, "since commit not found", http.StatusBadRequest)
+			return
+		}
+	}
+
+	writePagedJSON(w, all)
 }
 
 func (s *Server) handlePullRequests(w http.ResponseWriter, r *http.Request) {
