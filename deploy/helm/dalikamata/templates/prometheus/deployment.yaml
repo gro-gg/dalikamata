@@ -56,6 +56,10 @@ spec:
           configMap:
             name: {{ include "dalikamata.fullname" . }}-prometheus-config
         - name: data
+          {{- if .Values.prometheus.persistence }}
           persistentVolumeClaim:
             claimName: {{ include "dalikamata.fullname" . }}-prometheus-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
 {{- end }}
