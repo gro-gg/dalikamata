@@ -30,6 +30,7 @@ var bitbucketCmd = &cobra.Command{
 		app.BitbucketToken = bitbucketToken
 		app.Projects = bitbucketProjects
 		app.CACertsDir = caCertsDir
+		app.Interval = bitbucketInterval
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
 		var runErr error
@@ -60,4 +61,5 @@ func init() {
 	bitbucketCmd.Flags().StringVar(&bitbucketURL, "bitbucket-url", "", "Bitbucket Server base URL (e.g. https://bitbucket.example.com)")
 	bitbucketCmd.Flags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
 	bitbucketCmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
+	bitbucketCmd.Flags().DurationVar(&bitbucketInterval, "bitbucket-interval", 5*time.Minute, "how often to re-crawl Bitbucket for new commits and pull requests")
 }

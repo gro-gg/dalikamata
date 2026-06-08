@@ -28,6 +28,7 @@ var (
 	bitbucketURL           string
 	bitbucketToken         string
 	bitbucketProjects      []string
+	bitbucketInterval      time.Duration
 )
 
 // rootCmd represents the base command when called without any subcommands
