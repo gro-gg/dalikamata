@@ -98,7 +98,7 @@ grafana:
   # If empty, the chart auto-creates a Secret named <release>-grafana with a random password.
   existingSecret: ""
   service:
-    type: LoadBalancer
+    type: ClusterIP
   persistence:
     size: 2Gi
     storageClass: ""
