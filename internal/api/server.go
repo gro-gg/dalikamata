@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	dalapi "codeberg.org/aeforged/dalikamata/api"
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
@@ -161,6 +162,19 @@ func (s *Server) newMux() *http.ServeMux {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml")
+		_, _ = w.Write(dalapi.Spec)
+	})
+	mux.HandleFunc("/api/v1/scalar.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(dalapi.ScalarJS)
+	})
+	mux.HandleFunc("/api/v1/docs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(scalarDocsHTML))
+	})
 	for _, e := range entries {
 		mux.HandleFunc("/api/v1/"+e.path, s.entityHandler(e.entity, e.fetch))
 	}
@@ -251,3 +265,19 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 		Error string `json:"error"`
 	}{Error: msg})
 }
+
+const scalarDocsHTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <title>Dalikamata API Reference</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <script
+      id="api-reference"
+      data-url="/api/v1/openapi.yaml"
+    ></script>
+    <script src="/api/v1/scalar.js"></script>
+  </body>
+</html>`

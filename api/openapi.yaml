@@ -1,0 +1,1243 @@
+openapi: "3.1.0"
+
+info:
+  title: Dalikamata API
+  description: |
+    HTTP query API for raw entity access over the Dalikamata CD metrics platform.
+
+    Each endpoint accepts both **GET** (URL query parameters) and **POST**
+    (a full `Query` JSON body).  The GET interface is a convenient shorthand;
+    the POST interface gives access to the complete query DSL including boolean
+    filter trees and server-side aggregations.
+
+    ### Aggregation mode
+    POST a body with `"size": -1` to suppress entity hits and receive only
+    aggregation results.  The response shape switches from `HitsResponse` to
+    `AggregationResponse`.
+
+    ### GET filter parameters
+    Filters are expressed as query parameters with a `filter.` prefix:
+
+    | Pattern | Filter type | Example |
+    |---|---|---|
+    | `filter.<field>=<value>` | term (exact match) | `filter.state=MERGED` |
+    | `filter.<field>=<v1>&filter.<field>=<v2>` | terms (any of) | `filter.status=SUCCESS&filter.status=FAILURE` |
+    | `filter.<field>.gte=<value>` | range lower bound (inclusive) | `filter.started_at.gte=2024-01-01T00:00:00Z` |
+    | `filter.<field>.lte=<value>` | range upper bound (inclusive) | `filter.started_at.lte=2024-12-31T23:59:59Z` |
+    | `filter.<field>.gt=<value>` | range lower bound (exclusive) | |
+    | `filter.<field>.lt=<value>` | range upper bound (exclusive) | |
+    | `filter.<field>.exists=true` | field presence check | `filter.component_name.exists=true` |
+
+    Time values must be RFC 3339 (`2006-01-02T15:04:05Z`).  Integer and float
+    strings are coerced automatically; everything else is treated as a string.
+
+    ### GET sort parameter
+    `sort` accepts a comma-separated list of field names.  Prefix a field with
+    `-` for descending order (e.g. `sort=-started_at,workflow_name`).
+  version: "1"
+  license:
+    name: AGPL-3.0-or-later
+    identifier: AGPL-3.0-or-later
+
+servers:
+  - url: http://localhost:2113
+    description: Local default
+
+security: []
+
+tags:
+  - name: git
+    description: Git entities — repositories, commits, pull requests
+  - name: cicd
+    description: CI/CD entities — workflows, workflow runs, workflow tasks
+  - name: platform
+    description: Platform entities — teams, components
+
+paths:
+  # ── Git ──────────────────────────────────────────────────────────────────
+
+  /api/v1/repos:
+    get:
+      operationId: listRepos
+      summary: Query repositories
+      tags: [git]
+      parameters:
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/sort"
+        - name: filter.repo_id
+          in: query
+          schema:
+            type: string
+        - name: filter.name
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Repository results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReposResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+    post:
+      operationId: queryRepos
+      summary: Query repositories (full DSL)
+      tags: [git]
+      requestBody:
+        $ref: "#/components/requestBodies/Query"
+      responses:
+        "200":
+          description: Repository results or aggregations
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ReposResponse"
+                  - $ref: "#/components/schemas/AggregationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  /api/v1/commits:
+    get:
+      operationId: listCommits
+      summary: Query commits
+      tags: [git]
+      parameters:
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/sort"
+        - name: filter.sha
+          in: query
+          schema:
+            type: string
+        - name: filter.repo_id
+          in: query
+          schema:
+            type: string
+        - name: filter.author
+          in: query
+          schema:
+            type: string
+        - name: filter.timestamp.gte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.timestamp.lte
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Commit results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+    post:
+      operationId: queryCommits
+      summary: Query commits (full DSL)
+      tags: [git]
+      requestBody:
+        $ref: "#/components/requestBodies/Query"
+      responses:
+        "200":
+          description: Commit results or aggregations
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/CommitsResponse"
+                  - $ref: "#/components/schemas/AggregationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  /api/v1/pullrequests:
+    get:
+      operationId: listPullRequests
+      summary: Query pull requests
+      tags: [git]
+      parameters:
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/sort"
+        - name: filter.id
+          in: query
+          schema:
+            type: string
+        - name: filter.repo_id
+          in: query
+          schema:
+            type: string
+        - name: filter.author
+          in: query
+          schema:
+            type: string
+        - name: filter.state
+          in: query
+          description: "`OPEN`, `MERGED`, or `DECLINED`"
+          schema:
+            $ref: "#/components/schemas/PullRequestState"
+        - name: filter.name
+          in: query
+          schema:
+            type: string
+        - name: filter.title
+          in: query
+          schema:
+            type: string
+        - name: filter.createdAt.gte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.createdAt.lte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.updatedAt.gte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.updatedAt.lte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.cycle_time_seconds.gte
+          in: query
+          description: Filter by computed cycle-time (seconds from creation to final state)
+          schema:
+            type: number
+        - name: filter.cycle_time_seconds.lte
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Pull request results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PullRequestsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+    post:
+      operationId: queryPullRequests
+      summary: Query pull requests (full DSL)
+      tags: [git]
+      requestBody:
+        $ref: "#/components/requestBodies/Query"
+      responses:
+        "200":
+          description: Pull request results or aggregations
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/PullRequestsResponse"
+                  - $ref: "#/components/schemas/AggregationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  # ── CI/CD ─────────────────────────────────────────────────────────────────
+
+  /api/v1/workflows:
+    get:
+      operationId: listWorkflows
+      summary: Query workflows
+      tags: [cicd]
+      parameters:
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/sort"
+        - name: filter.id
+          in: query
+          schema:
+            type: string
+        - name: filter.name
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Workflow results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+    post:
+      operationId: queryWorkflows
+      summary: Query workflows (full DSL)
+      tags: [cicd]
+      requestBody:
+        $ref: "#/components/requestBodies/Query"
+      responses:
+        "200":
+          description: Workflow results or aggregations
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/WorkflowsResponse"
+                  - $ref: "#/components/schemas/AggregationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  /api/v1/workflowRuns:
+    get:
+      operationId: listWorkflowRuns
+      summary: Query workflow runs
+      tags: [cicd]
+      parameters:
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/sort"
+        - name: filter.id
+          in: query
+          schema:
+            type: string
+        - name: filter.workflow_id
+          in: query
+          schema:
+            type: string
+        - name: filter.number
+          in: query
+          schema:
+            type: integer
+        - name: filter.status
+          in: query
+          description: "`SUCCESS`, `FAILURE`, `ABORTED`, or `UNSTABLE`"
+          schema:
+            $ref: "#/components/schemas/BuildStatus"
+        - name: filter.branch
+          in: query
+          schema:
+            type: string
+        - name: filter.commit_sha
+          in: query
+          schema:
+            type: string
+        - name: filter.started_at.gte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.started_at.lte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.duration.gte
+          in: query
+          schema:
+            type: number
+        - name: filter.duration.lte
+          in: query
+          schema:
+            type: number
+        - name: filter.workflow_name
+          in: query
+          description: Enriched field — resolved workflow name
+          schema:
+            type: string
+        - name: filter.component_name
+          in: query
+          description: Enriched field — owning component name
+          schema:
+            type: string
+        - name: filter.team_name
+          in: query
+          description: Enriched field — owning team name
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Workflow run results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowRunsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+    post:
+      operationId: queryWorkflowRuns
+      summary: Query workflow runs (full DSL)
+      tags: [cicd]
+      requestBody:
+        $ref: "#/components/requestBodies/Query"
+      responses:
+        "200":
+          description: Workflow run results or aggregations
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/WorkflowRunsResponse"
+                  - $ref: "#/components/schemas/AggregationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  /api/v1/workflowTasks:
+    get:
+      operationId: listWorkflowTasks
+      summary: Query workflow tasks
+      tags: [cicd]
+      parameters:
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/sort"
+        - name: filter.workflow_run_id
+          in: query
+          schema:
+            type: string
+        - name: filter.order
+          in: query
+          schema:
+            type: integer
+        - name: filter.name
+          in: query
+          schema:
+            type: string
+        - name: filter.status
+          in: query
+          description: "`SUCCESS`, `FAILURE`, `ABORTED`, or `UNSTABLE`"
+          schema:
+            $ref: "#/components/schemas/BuildStatus"
+        - name: filter.started_at.gte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.started_at.lte
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: filter.duration.gte
+          in: query
+          schema:
+            type: number
+        - name: filter.duration.lte
+          in: query
+          schema:
+            type: number
+        - name: filter.workflow_id
+          in: query
+          description: Enriched field — parent workflow ID
+          schema:
+            type: string
+        - name: filter.workflow_name
+          in: query
+          description: Enriched field — parent workflow name
+          schema:
+            type: string
+        - name: filter.component_name
+          in: query
+          description: Enriched field — owning component name
+          schema:
+            type: string
+        - name: filter.team_name
+          in: query
+          description: Enriched field — owning team name
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Workflow task results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowTasksResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+    post:
+      operationId: queryWorkflowTasks
+      summary: Query workflow tasks (full DSL)
+      tags: [cicd]
+      requestBody:
+        $ref: "#/components/requestBodies/Query"
+      responses:
+        "200":
+          description: Workflow task results or aggregations
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/WorkflowTasksResponse"
+                  - $ref: "#/components/schemas/AggregationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  # ── Platform ──────────────────────────────────────────────────────────────
+
+  /api/v1/teams:
+    get:
+      operationId: listTeams
+      summary: Query teams
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/sort"
+        - name: filter.name
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+    post:
+      operationId: queryTeams
+      summary: Query teams (full DSL)
+      tags: [platform]
+      requestBody:
+        $ref: "#/components/requestBodies/Query"
+      responses:
+        "200":
+          description: Team results or aggregations
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/TeamsResponse"
+                  - $ref: "#/components/schemas/AggregationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  /api/v1/components:
+    get:
+      operationId: listComponents
+      summary: Query components
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/sort"
+        - name: filter.name
+          in: query
+          schema:
+            type: string
+        - name: filter.team_name
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Component results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+    post:
+      operationId: queryComponents
+      summary: Query components (full DSL)
+      tags: [platform]
+      requestBody:
+        $ref: "#/components/requestBodies/Query"
+      responses:
+        "200":
+          description: Component results or aggregations
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ComponentsResponse"
+                  - $ref: "#/components/schemas/AggregationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+# ── Reusable components ───────────────────────────────────────────────────────
+
+components:
+
+  parameters:
+    size:
+      name: size
+      in: query
+      description: Maximum number of results to return (default 100, 0 = all matches)
+      schema:
+        type: integer
+        default: 100
+        minimum: 0
+    from:
+      name: from
+      in: query
+      description: Zero-based offset for pagination
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+    sort:
+      name: sort
+      in: query
+      description: |
+        Comma-separated sort fields. Prefix a field with `-` for descending order.
+        Example: `-started_at,workflow_name`
+      schema:
+        type: string
+
+  requestBodies:
+    Query:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Query"
+          examples:
+            basicList:
+              summary: List with filter and sort
+              value:
+                entity: workflowRun
+                filter:
+                  op: term
+                  field: status
+                  value:
+                    kind: string
+                    string: SUCCESS
+                sort:
+                  - field: started_at
+                    order: desc
+                size: 50
+                from: 0
+            aggregationOnly:
+              summary: Aggregation-only (size -1)
+              value:
+                entity: pullRequest
+                size: -1
+                aggs:
+                  by_state:
+                    op: terms
+                    field: state
+                  cycle_time_hist:
+                    op: histogram
+                    field: cycle_time_seconds
+                    buckets: [3600, 86400, 259200, 604800, 1209600]
+
+  responses:
+    BadRequest:
+      description: Invalid query parameters or request body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    GatewayTimeout:
+      description: Query exceeded the configured timeout
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+
+    # ── Query DSL ────────────────────────────────────────────────────────────
+
+    Query:
+      type: object
+      required: [entity]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        filter:
+          $ref: "#/components/schemas/Filter"
+        sort:
+          type: array
+          items:
+            $ref: "#/components/schemas/SortField"
+        from:
+          type: integer
+          default: 0
+          minimum: 0
+          description: Zero-based offset for pagination
+        size:
+          type: integer
+          default: 100
+          description: |
+            Maximum results to return.  `0` returns all matches.
+            `-1` suppresses hits and returns aggregations only.
+        aggs:
+          type: object
+          description: Named aggregation definitions (ignored when `size` ≥ 0)
+          additionalProperties:
+            $ref: "#/components/schemas/Aggregation"
+
+    Filter:
+      type: object
+      required: [op]
+      description: |
+        A single node in the filter tree.  The `op` field is the discriminator:
+
+        - `bool` — combine child filters via `must` / `must_not` / `should`
+        - `term` — exact match (`field` + `value`)
+        - `terms` — match any of a list (`field` + `values`)
+        - `range` — numeric or time bounds (`field` + `range`)
+        - `exists` — field presence check (`field`)
+      properties:
+        op:
+          $ref: "#/components/schemas/FilterOp"
+        must:
+          type: array
+          items:
+            $ref: "#/components/schemas/Filter"
+          description: All child filters must match (AND)
+        must_not:
+          type: array
+          items:
+            $ref: "#/components/schemas/Filter"
+          description: No child filter may match (NOT)
+        should:
+          type: array
+          items:
+            $ref: "#/components/schemas/Filter"
+          description: |
+            When `must` is empty, at least one child must match (OR).
+            When `must` is non-empty, `should` clauses are optional.
+        field:
+          type: string
+          description: Target field (all ops except `bool`)
+        value:
+          $ref: "#/components/schemas/Value"
+        values:
+          type: array
+          items:
+            $ref: "#/components/schemas/Value"
+          description: Value list for `terms` op
+        range:
+          $ref: "#/components/schemas/Range"
+
+    FilterOp:
+      type: string
+      enum: [bool, term, terms, range, exists]
+
+    Range:
+      type: object
+      description: Numeric or time bounds for an `OpRange` filter. At least one bound is required.
+      properties:
+        gt:
+          $ref: "#/components/schemas/Value"
+        gte:
+          $ref: "#/components/schemas/Value"
+        lt:
+          $ref: "#/components/schemas/Value"
+        lte:
+          $ref: "#/components/schemas/Value"
+
+    Value:
+      type: object
+      required: [kind]
+      description: Tagged-union scalar used in filter comparisons
+      properties:
+        kind:
+          $ref: "#/components/schemas/ValueKind"
+        string:
+          type: string
+        int:
+          type: integer
+          format: int64
+        float:
+          type: number
+          format: double
+        bool:
+          type: boolean
+        time:
+          type: string
+          format: date-time
+      examples:
+        - { kind: string, string: "MERGED" }
+        - { kind: int, int: 42 }
+        - { kind: float, float: 3600.0 }
+        - { kind: time, time: "2024-06-01T00:00:00Z" }
+
+    ValueKind:
+      type: string
+      enum: [string, int, float, bool, time]
+
+    SortField:
+      type: object
+      required: [field, order]
+      properties:
+        field:
+          type: string
+        order:
+          type: string
+          enum: [asc, desc]
+
+    Aggregation:
+      type: object
+      required: [op]
+      description: |
+        A single aggregation node.
+
+        - `terms` — group by distinct field values
+        - `histogram` — bucket a numeric field into explicit upper bounds (cumulative)
+        - `date_histogram` — bucket a time field into calendar intervals
+      properties:
+        op:
+          $ref: "#/components/schemas/AggregationOp"
+        field:
+          type: string
+        buckets:
+          type: array
+          items:
+            type: number
+          description: Explicit upper bounds for `histogram` aggregations
+        interval:
+          type: string
+          enum: [month, day, hour]
+          description: Calendar truncation unit for `date_histogram`
+        format:
+          type: string
+          description: Go time layout for bucket keys (e.g. `2006-01`)
+        aggs:
+          type: object
+          description: Sub-aggregations evaluated within each bucket
+          additionalProperties:
+            $ref: "#/components/schemas/Aggregation"
+
+    AggregationOp:
+      type: string
+      enum: [terms, histogram, date_histogram]
+
+    AggregationResult:
+      type: object
+      properties:
+        buckets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bucket"
+        doc_count:
+          type: integer
+          format: uint64
+          description: Total observation count (histogram leaves)
+        sum:
+          type: number
+          format: double
+          description: Sum of all observed values (histogram leaves)
+
+    Bucket:
+      type: object
+      required: [key, doc_count]
+      properties:
+        key:
+          description: Bucket key — string for `terms`/`date_histogram`, number for `histogram`
+          oneOf:
+            - type: string
+            - type: number
+        doc_count:
+          type: integer
+          format: uint64
+        aggs:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
+
+    # ── Response envelopes ───────────────────────────────────────────────────
+
+    AggregationResponse:
+      type: object
+      required: [entity, aggregations]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
+
+    ReposResponse:
+      type: object
+      required: [entity, size, from, hits]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        size:
+          type: integer
+        from:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/Repo"
+
+    CommitsResponse:
+      type: object
+      required: [entity, size, from, hits]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        size:
+          type: integer
+        from:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/Commit"
+
+    PullRequestsResponse:
+      type: object
+      required: [entity, size, from, hits]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        size:
+          type: integer
+        from:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/PullRequest"
+
+    WorkflowsResponse:
+      type: object
+      required: [entity, size, from, hits]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        size:
+          type: integer
+        from:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/Workflow"
+
+    WorkflowRunsResponse:
+      type: object
+      required: [entity, size, from, hits]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        size:
+          type: integer
+        from:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowRun"
+
+    WorkflowTasksResponse:
+      type: object
+      required: [entity, size, from, hits]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        size:
+          type: integer
+        from:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowTask"
+
+    TeamsResponse:
+      type: object
+      required: [entity, size, from, hits]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        size:
+          type: integer
+        from:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/Team"
+
+    ComponentsResponse:
+      type: object
+      required: [entity, size, from, hits]
+      properties:
+        entity:
+          $ref: "#/components/schemas/EntityName"
+        size:
+          type: integer
+        from:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/Component"
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # ── Entity names ─────────────────────────────────────────────────────────
+
+    EntityName:
+      type: string
+      enum:
+        - repo
+        - commit
+        - pullRequest
+        - workflow
+        - workflowRun
+        - workflowTask
+        - team
+        - component
+
+    # ── Domain models ─────────────────────────────────────────────────────────
+
+    Repo:
+      type: object
+      required: [repo_id, name]
+      properties:
+        repo_id:
+          type: string
+          description: "`<projectKey>/<repoSlug>`"
+          example: "MYPROJ/my-repo"
+        name:
+          type: string
+          example: "my-repo"
+
+    Commit:
+      type: object
+      required: [sha, repo_id, author, timestamp]
+      properties:
+        sha:
+          type: string
+          example: "abc123def456"
+        repo_id:
+          type: string
+          example: "MYPROJ/my-repo"
+        author:
+          type: string
+          example: "alice"
+        timestamp:
+          type: string
+          format: date-time
+
+    PullRequestState:
+      type: string
+      enum: [OPEN, MERGED, DECLINED]
+
+    PullRequest:
+      type: object
+      required: [id, repo_id, name, title, description, state, author, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: "`<projectKey>/<repoSlug>/<prNumber>`"
+          example: "MYPROJ/my-repo/42"
+        repo_id:
+          type: string
+          example: "MYPROJ/my-repo"
+        name:
+          type: string
+          example: "PR-42"
+        title:
+          type: string
+          example: "feat: add new endpoint"
+        description:
+          type: string
+        state:
+          $ref: "#/components/schemas/PullRequestState"
+        author:
+          type: string
+          example: "alice"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Workflow:
+      type: object
+      required: [id, name, repo_id]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        repo_id:
+          type: string
+
+    BuildStatus:
+      type: string
+      enum: [SUCCESS, FAILURE, ABORTED, UNSTABLE]
+
+    WorkflowRun:
+      type: object
+      required: [id, workflow_id, number, status, branch, commit_sha, started_at, duration]
+      properties:
+        id:
+          type: string
+        workflow_id:
+          type: string
+        number:
+          type: integer
+        status:
+          $ref: "#/components/schemas/BuildStatus"
+        branch:
+          type: string
+        commit_sha:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        duration:
+          type: number
+          format: double
+          description: Duration in seconds
+        workflow_name:
+          type: string
+          description: Enriched at query time — resolved workflow name
+        component_name:
+          type: string
+          description: Enriched at query time — owning component name
+        team_name:
+          type: string
+          description: Enriched at query time — owning team name
+
+    WorkflowTask:
+      type: object
+      required: [workflow_run_id, order, name, status, started_at, duration]
+      properties:
+        workflow_run_id:
+          type: string
+        order:
+          type: integer
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/BuildStatus"
+        started_at:
+          type: string
+          format: date-time
+        duration:
+          type: number
+          format: double
+          description: Duration in seconds
+        workflow_id:
+          type: string
+          description: Enriched at query time — parent workflow ID
+        workflow_name:
+          type: string
+          description: Enriched at query time — parent workflow name
+        component_name:
+          type: string
+          description: Enriched at query time — owning component name
+        team_name:
+          type: string
+          description: Enriched at query time — owning team name
+
+    Team:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    DeliveryRole:
+      type: string
+      enum: [CI, CD, CICD]
+
+    ComponentRepo:
+      type: object
+      required: [repo_id, role]
+      properties:
+        repo_id:
+          type: string
+        role:
+          $ref: "#/components/schemas/DeliveryRole"
+
+    ComponentWorkflow:
+      type: object
+      required: [workflow_id, role]
+      properties:
+        workflow_id:
+          type: string
+        role:
+          $ref: "#/components/schemas/DeliveryRole"
+
+    Artifact:
+      type: object
+      required: [name, type, repository]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        repository:
+          type: string
+
+    Component:
+      type: object
+      required: [name, team_name, repos, workflows, artifacts]
+      properties:
+        name:
+          type: string
+        team_name:
+          type: string
+        repos:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentRepo"
+        workflows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentWorkflow"
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Artifact"
