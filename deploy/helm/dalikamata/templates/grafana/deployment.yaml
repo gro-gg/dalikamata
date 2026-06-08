@@ -60,8 +60,12 @@ spec:
               mountPath: /etc/grafana/provisioning/dashboards
       volumes:
         - name: grafana-data
+          {{- if .Values.grafana.persistence }}
           persistentVolumeClaim:
             claimName: {{ include "dalikamata.fullname" . }}-grafana-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
         - name: datasources
           configMap:
             name: {{ include "dalikamata.fullname" . }}-grafana-datasources
