@@ -31,6 +31,9 @@ spec:
             - "--jenkins-url={{ .Values.ingest.jenkins.url }}"
             - "--jenkins-user={{ required "ingest.jenkins.user is required" .Values.ingest.jenkins.user }}"
             - "--jenkins-token=$(JENKINS_TOKEN)"
+            {{- if .Values.ingest.jenkins.caCertsDir }}
+            - "--ca-certs-dir={{ .Values.ingest.jenkins.caCertsDir }}"
+            {{- end }}
             {{- if .Values.ingest.jenkins.debug }}
             - "--debug"
             {{- end }}

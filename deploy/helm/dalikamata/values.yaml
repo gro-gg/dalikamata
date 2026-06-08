@@ -30,6 +30,9 @@ ingest:
     # Optional: name of a pre-existing Secret with key "token".
     # If empty, the chart auto-creates a Secret named <release>-bitbucket with a random token.
     existingSecret: ""
+    # Optional: directory inside the container where CA certificates are stored.
+    # Pass the mount path of your extraVolumeMounts cert bundle here (e.g. "/etc/ssl/certs/custom").
+    caCertsDir: ""
     # Extra volumes to attach to the Bitbucket ingest pod (e.g. CA certificate ConfigMaps).
     extraVolumes: []
     # - name: ca-certs
@@ -51,6 +54,9 @@ ingest:
     # Optional: name of a pre-existing Secret with key "token".
     # If empty, the chart auto-creates a Secret named <release>-jenkins with a random token.
     existingSecret: ""
+    # Optional: directory inside the container where CA certificates are stored.
+    # Pass the mount path of your extraVolumeMounts cert bundle here (e.g. "/etc/ssl/certs/custom").
+    caCertsDir: ""
     # Extra volumes to attach to the Jenkins ingest pod (e.g. CA certificate ConfigMaps).
     extraVolumes: []
     # - name: ca-certs

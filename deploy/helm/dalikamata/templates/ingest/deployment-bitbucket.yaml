@@ -31,6 +31,9 @@ spec:
             - "--bitbucket-url={{ .Values.ingest.bitbucket.url }}"
             - "--bitbucket-token=$(BITBUCKET_TOKEN)"
             - "--bitbucket-projects={{ required "ingest.bitbucket.projects is required" .Values.ingest.bitbucket.projects }}"
+            {{- if .Values.ingest.bitbucket.caCertsDir }}
+            - "--ca-certs-dir={{ .Values.ingest.bitbucket.caCertsDir }}"
+            {{- end }}
             {{- if .Values.ingest.bitbucket.debug }}
             - "--debug"
             {{- end }}
