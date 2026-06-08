@@ -26,6 +26,17 @@ ingest:
     # Optional: name of a pre-existing Secret with key "token".
     # If empty, the chart auto-creates a Secret named <release>-bitbucket with a random token.
     existingSecret: ""
+    # Extra volumes to attach to the Bitbucket ingest pod (e.g. CA certificate ConfigMaps).
+    extraVolumes: []
+    # - name: ca-certs
+    #   configMap:
+    #     name: my-ca-bundle
+    # Extra volume mounts for the Bitbucket ingest container.
+    extraVolumeMounts: []
+    # - name: ca-certs
+    #   mountPath: /etc/ssl/certs/my-ca.crt
+    #   subPath: ca.crt
+    #   readOnly: true
 
   jenkins:
     # Set url to enable the Jenkins ingestor.
@@ -36,6 +47,17 @@ ingest:
     # Optional: name of a pre-existing Secret with key "token".
     # If empty, the chart auto-creates a Secret named <release>-jenkins with a random token.
     existingSecret: ""
+    # Extra volumes to attach to the Jenkins ingest pod (e.g. CA certificate ConfigMaps).
+    extraVolumes: []
+    # - name: ca-certs
+    #   configMap:
+    #     name: my-ca-bundle
+    # Extra volume mounts for the Jenkins ingest container.
+    extraVolumeMounts: []
+    # - name: ca-certs
+    #   mountPath: /etc/ssl/certs/my-ca.crt
+    #   subPath: ca.crt
+    #   readOnly: true
 
   config:
     # Optional: name of a ConfigMap whose keys are component YAML files (*.yaml / *.yml).
