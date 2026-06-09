@@ -1,3 +1,4 @@
+{{- if .Values.ingest.jenkins.url }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
