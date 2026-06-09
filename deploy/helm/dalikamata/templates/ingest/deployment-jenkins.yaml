@@ -1,4 +1,3 @@
-{{- if .Values.ingest.jenkins.url }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,6 +30,9 @@ spec:
             - "--jenkins-url={{ .Values.ingest.jenkins.url }}"
             - "--jenkins-user={{ required "ingest.jenkins.user is required" .Values.ingest.jenkins.user }}"
             - "--jenkins-token=$(JENKINS_TOKEN)"
+            {{- if .Values.ingest.jenkins.jobs }}
+            - "--jenkins-jobs={{ join "," .Values.ingest.jenkins.jobs }}"
+            {{- end }}
             {{- if .Values.ingest.jenkins.caCertsDir }}
             - "--ca-certs-dir={{ .Values.ingest.jenkins.caCertsDir }}"
             {{- end }}

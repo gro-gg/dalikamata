@@ -51,6 +51,9 @@ ingest:
     debug: false
     # Required when url is set: Jenkins username for API access
     user: ""
+    # Optional: full Jenkins job paths to crawl (e.g. ["folder/job-a", "folder/job-b"]).
+    # Crawls all jobs when empty.
+    jobs: []
     # Optional: name of a pre-existing Secret with key "token".
     # If empty, the chart auto-creates a Secret named <release>-jenkins with a random token.
     existingSecret: ""
