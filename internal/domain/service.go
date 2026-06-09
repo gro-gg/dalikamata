@@ -81,7 +81,7 @@ func (s *DomainService) HandleWorkflowRun(ctx context.Context, workflowRun model
 }
 
 func (s *DomainService) HandleWorkflowTask(ctx context.Context, workflowTask model.WorkflowTask) error {
-	s.logger.Info("handling pipeline workflow task", "id", workflowTask.WorkflowRunID, "name", workflowTask.Name)
+	s.logger.Info("handling workflow task", "id", workflowTask.WorkflowRunID, "name", workflowTask.Name)
 	return s.repo.AddWorkflowTask(ctx, workflowTask)
 }
 
