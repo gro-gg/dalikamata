@@ -116,10 +116,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
 
   grafana:
-    image: grafana-dalikamata:latest
-    build:
-      context: .
-      dockerfile: Dockerfile.grafana
+    image: grafana/grafana:latest
     container_name: grafana
     profiles: ["monitoring"]
     ports:
@@ -129,6 +126,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_DISABLE_INITIAL_ADMIN_CREATION=false
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_PLUGINS_PREINSTALL=yesoreyeram-infinity-datasource
       - DALIKAMATA_API_URL=http://dalikamata-api:22113
     volumes:
       - ./grafana_provisioning:/etc/grafana/provisioning
