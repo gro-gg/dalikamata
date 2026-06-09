@@ -1,0 +1,44 @@
+# Standalone ConfigMap for local testing of the config ingest service.
+#
+# Apply with:
+#   kubectl apply -f deploy/helm/configmap-components-local.yaml
+#
+# Then reference it in your Helm values:
+#   ingest:
+#     config:
+#       existingConfigMap: dalikamata-components-local
+#
+# Each key in data is treated as a separate component YAML file mounted
+# under /components inside the ingest-config container.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dalikamata-components-local
+data:
+  frontend.yaml: |
+    version: "1"
+    name: frontend
+    team: platform
+    repos:
+      - id: PROJ/frontend-app
+        role: cicd
+    workflows:
+      - id: build-frontend
+        role: ci
+      - id: deploy-frontend
+        role: cd
+
+  backend.yaml: |
+    version: "1"
+    name: backend
+    team: platform
+    repos:
+      - id: PROJ/backend-api
+        role: cicd
+    workflows:
+      - id: build-backend
+        role: ci
+      - id: test-backend
+        role: ci
+      - id: deploy-backend
+        role: cd

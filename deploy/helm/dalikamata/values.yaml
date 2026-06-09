@@ -73,9 +73,16 @@ ingest:
     #   readOnly: true
 
   config:
-    # Optional: name of a ConfigMap whose keys are component YAML files (*.yaml / *.yml).
-    # Each key is mounted as a file under /components inside the crawler container.
-    # If empty, the config ingest Deployment is not created.
+    # Component YAML files (*.yaml / *.yml) drive the config ingest crawler.
+    # The chart auto-creates the ingest-config Deployment and a ConfigMap as
+    # soon as either source below is present:
+    #
+    # 1. Files dropped into deploy/helm/dalikamata/files/components/ in this
+    #    chart — the chart packages them into a ConfigMap automatically.
+    # 2. An externally managed ConfigMap referenced by existingConfigMap below.
+    #
+    # If both are set, existingConfigMap wins and the chart-managed ConfigMap
+    # is not created. If neither is set, the Deployment is not created.
     existingConfigMap: ""
     debug: false
 

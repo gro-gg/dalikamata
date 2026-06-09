@@ -1,0 +1,24 @@
+{{- $yamlFiles := .Files.Glob "files/components/*.yaml" -}}
+{{- $ymlFiles  := .Files.Glob "files/components/*.yml"  -}}
+{{- if and (not .Values.ingest.config.existingConfigMap) (or $yamlFiles $ymlFiles) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-ingest-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest-config
+data:
+  # Component YAML files are sourced from files/components/*.{yaml,yml} in this chart.
+  # range+base produces clean keys (e.g. "frontend.yaml") without path separators,
+  # which Kubernetes ConfigMap keys do not allow.
+{{- range $path, $bytes := $yamlFiles }}
+  {{ base $path }}: |
+{{ $bytes | toString | indent 4 }}
+{{- end }}
+{{- range $path, $bytes := $ymlFiles }}
+  {{ base $path }}: |
+{{ $bytes | toString | indent 4 }}
+{{- end }}
+{{- end }}

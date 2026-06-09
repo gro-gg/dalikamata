@@ -1,4 +1,7 @@
-{{- if .Values.ingest.config.existingConfigMap }}
+{{- $yamlFiles := .Files.Glob "files/components/*.yaml" -}}
+{{- $ymlFiles  := .Files.Glob "files/components/*.yml"  -}}
+{{- $hasFiles  := or $yamlFiles $ymlFiles -}}
+{{- if or $hasFiles .Values.ingest.config.existingConfigMap }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -39,5 +42,5 @@ spec:
       volumes:
         - name: components
           configMap:
-            name: {{ .Values.ingest.config.existingConfigMap }}
+            name: {{ include "dalikamata.ingestConfigConfigMapName" . }}
 {{- end }}

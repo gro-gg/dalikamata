@@ -37,5 +37,7 @@ func (a *IngestConfigApp) Run(ctx context.Context) error {
 	if err := crawler.Run(ctx); err != nil {
 		return fmt.Errorf("running config crawler: %w", err)
 	}
+
+	<-ctx.Done()
 	return nil
 }

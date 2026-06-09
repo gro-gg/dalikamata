@@ -76,3 +76,10 @@ Name of the Grafana Secret (existing or auto-created).
 {{- define "dalikamata.grafanaSecretName" -}}
 {{- .Values.grafana.existingSecret | default (printf "%s-grafana" (include "dalikamata.fullname" .)) }}
 {{- end }}
+
+{{/*
+Name of the ingest-config ConfigMap (existing or chart-managed).
+*/}}
+{{- define "dalikamata.ingestConfigConfigMapName" -}}
+{{- .Values.ingest.config.existingConfigMap | default (printf "%s-ingest-config" (include "dalikamata.fullname" .)) }}
+{{- end }}
