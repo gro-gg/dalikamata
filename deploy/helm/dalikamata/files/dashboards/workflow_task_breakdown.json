@@ -32,24 +32,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
           },
           "mappings": [],
@@ -78,28 +64,23 @@
       },
       "id": 1,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "colorByField": "task_name",
-        "fullHighlight": false,
-        "groupWidth": 0.7,
+        "displayMode": "lcd",
         "legend": {
-          "calcs": [],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true
         },
         "orientation": "horizontal",
-        "showValue": "auto",
-        "stacking": "none",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "xField": "Time",
-        "xTickLabelRotation": -30,
-        "xTickLabelSpacing": 100
+        "showUnfilled": true,
+        "text": {},
+        "valueMode": "color"
       },
       "pluginVersion": "12.4.1",
       "targets": [
@@ -110,23 +91,16 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum by(task_name, task_order)(workflow_task_duration_seconds_sum{team_name=~\"$team\",workflow_name=~\"$workflow\",workflow_run_id=~\"$run_id\"}) / sum by(task_name, task_order)(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\",workflow_run_id=~\"$run_id\"})",
-          "format": "heatmap",
+          "expr": "sum by(task_name, task_order)(workflow_task_duration_seconds_sum{team_name=~\"$team\",workflow_name=~\"$workflow\"}) / sum by(task_name, task_order)(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"})",
+          "format": "table",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Mean Task Duration — Run: $run_id",
+      "title": "Mean Task Duration",
       "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns",
-            "valueLabel": "task_name"
-          }
-        },
         {
           "id": "sortBy",
           "options": {
@@ -135,11 +109,41 @@
                 "desc": false,
                 "displayName": "task_order"
               }
+            ],
+            "sort": [
+              {
+                "field": "task_order"
+              }
             ]
+          }
+        },
+        {
+          "id": "rowsToFields",
+          "options": {
+            "mappings": [
+              {
+                "fieldName": "task_order",
+                "handlerKey": "__ignore"
+              },
+              {
+                "fieldName": "Time",
+                "handlerKey": "__ignore"
+              },
+              {
+                "fieldName": "Value",
+                "handlerKey": "field.value"
+              },
+              {
+                "fieldName": "task_name",
+                "handlerKey": "field.name"
+              }
+            ],
+            "nameField": "task_name",
+            "valueField": "Value"
           }
         }
       ],
-      "type": "barchart"
+      "type": "bargauge"
     }
   ],
   "preload": false,
@@ -197,28 +201,6 @@
         "options": [],
         "query": {
           "query": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\"}, workflow_name)",
-          "refId": "StandardVariableQuery"
-        },
-        "refresh": 2,
-        "regex": "",
-        "regexApplyTo": "value",
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "allValue": ".*",
-        "current": {},
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
-        },
-        "definition": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"}, workflow_run_id)",
-        "includeAll": true,
-        "label": "Run ID",
-        "name": "run_id",
-        "options": [],
-        "query": {
-          "query": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"}, workflow_run_id)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
