@@ -391,3 +391,162 @@ func TestDiscoverJobs_EmptyRoot(t *testing.T) {
 		t.Errorf("got %d jobs, want 0", len(got))
 	}
 }
+
+// ---- classifyConfiguredJobs / explicit-jobs path ----------------------------
+
+func TestCrawl_ExplicitBranchJobStripsBranch(t *testing.T) {
+	// Jobs: ["shared-lib/main"] — parent "shared-lib" is a MultibranchPipeline.
+	// Workflow should be published as "shared-lib", not "shared-lib/main".
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"": {{Class: classMultibranchPipeline, Name: "shared-lib"}},
+		},
+		builds: map[string][]apiBuild{
+			"shared-lib/main": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, []string{"shared-lib/main"}, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(pub.workflows) != 1 {
+		t.Fatalf("workflows published = %d, want 1", len(pub.workflows))
+	}
+	if pub.workflows[0].ID != "shared-lib" {
+		t.Errorf("workflow ID = %q, want %q", pub.workflows[0].ID, "shared-lib")
+	}
+	if pub.workflows[0].Name != "shared-lib" {
+		t.Errorf("workflow Name = %q, want %q", pub.workflows[0].Name, "shared-lib")
+	}
+	if len(pub.workflowRuns) != 1 {
+		t.Fatalf("workflow runs published = %d, want 1", len(pub.workflowRuns))
+	}
+	if pub.workflowRuns[0].WorkflowID != "shared-lib" {
+		t.Errorf("run WorkflowID = %q, want %q", pub.workflowRuns[0].WorkflowID, "shared-lib")
+	}
+	if pub.workflowRuns[0].ID != "shared-lib/main/1" {
+		t.Errorf("run ID = %q, want %q", pub.workflowRuns[0].ID, "shared-lib/main/1")
+	}
+}
+
+func TestCrawl_ExplicitMultipleBranchesSamePipeline(t *testing.T) {
+	// Jobs: ["shared-lib/main", "shared-lib/hotfix"] — both are branches of one
+	// MultibranchPipeline. Should produce exactly one Workflow and two runs.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"": {{Class: classMultibranchPipeline, Name: "shared-lib"}},
+		},
+		builds: map[string][]apiBuild{
+			"shared-lib/main": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+			"shared-lib/hotfix": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 30_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, []string{"shared-lib/main", "shared-lib/hotfix"}, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(pub.workflows) != 1 {
+		t.Fatalf("workflows published = %d, want 1", len(pub.workflows))
+	}
+	if pub.workflows[0].ID != "shared-lib" {
+		t.Errorf("workflow ID = %q, want %q", pub.workflows[0].ID, "shared-lib")
+	}
+	if len(pub.workflowRuns) != 2 {
+		t.Fatalf("workflow runs published = %d, want 2", len(pub.workflowRuns))
+	}
+	for _, run := range pub.workflowRuns {
+		if run.WorkflowID != "shared-lib" {
+			t.Errorf("run WorkflowID = %q, want %q", run.WorkflowID, "shared-lib")
+		}
+	}
+	ids := map[string]bool{pub.workflowRuns[0].ID: true, pub.workflowRuns[1].ID: true}
+	if !ids["shared-lib/main/1"] || !ids["shared-lib/hotfix/1"] {
+		t.Errorf("run IDs = %v, want [shared-lib/main/1 shared-lib/hotfix/1]",
+			[]string{pub.workflowRuns[0].ID, pub.workflowRuns[1].ID})
+	}
+}
+
+func TestCrawl_ExplicitNestedBranchJobStripsBranch(t *testing.T) {
+	// Jobs: ["team/shared-lib/main"] — parent "shared-lib" is nested inside folder
+	// "team". GetJobs("team") should reveal it as a MultibranchPipeline.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"team": {{Class: classMultibranchPipeline, Name: "shared-lib"}},
+		},
+		builds: map[string][]apiBuild{
+			"team/shared-lib/main": {
+				{Number: 2, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 45_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, []string{"team/shared-lib/main"}, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(pub.workflows) != 1 {
+		t.Fatalf("workflows published = %d, want 1", len(pub.workflows))
+	}
+	if pub.workflows[0].ID != "team/shared-lib" {
+		t.Errorf("workflow ID = %q, want %q", pub.workflows[0].ID, "team/shared-lib")
+	}
+}
+
+func TestCrawl_ExplicitPlainJobNotStripped(t *testing.T) {
+	// Jobs: ["build-backend"] — root-level plain WorkflowJob. No parent lookup
+	// should occur and the workflow ID must keep its full path.
+	client := &fakeJenkinsClient{
+		jobs:   map[string][]apiJob{},
+		builds: map[string][]apiBuild{"build-backend": {}},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, []string{"build-backend"}, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(pub.workflows) != 1 || pub.workflows[0].ID != "build-backend" {
+		t.Errorf("workflow ID = %q, want %q", pub.workflows[0].ID, "build-backend")
+	}
+}
+
+func TestCrawl_ExplicitJobParentNotMultibranch(t *testing.T) {
+	// Jobs: ["team/api"] — parent "team" is a Folder, not a MultibranchPipeline.
+	// Workflow ID must not be stripped.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"": {{Class: classFolder, Name: "team"}},
+		},
+		builds: map[string][]apiBuild{"team/api": {}},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, []string{"team/api"}, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(pub.workflows) != 1 || pub.workflows[0].ID != "team/api" {
+		t.Errorf("workflow ID = %q, want %q", pub.workflows[0].ID, "team/api")
+	}
+}

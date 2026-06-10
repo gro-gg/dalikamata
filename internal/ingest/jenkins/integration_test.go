@@ -95,3 +95,53 @@ func TestIngestJenkinsIntegration(t *testing.T) {
 	stages := testhelper.CollectMessages[model.WorkflowTask](t, js, dalinats.SubjectCicdWorkflowTask, 190, 20*time.Second)
 	is.Equal(len(stages), 190)
 }
+
+func TestIngestJenkins_ExplicitBranchStripsName(t *testing.T) {
+	// When a single branch of a MultibranchPipeline is given in Jobs, the
+	// published Workflow must carry the parent pipeline name, not the branch path.
+	is := is.New(t)
+	l := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	natsURL, natsPort := testhelper.StartNATS(t)
+	js := testhelper.NewJetStream(t, natsURL)
+	testhelper.CreateIngestStream(t, js)
+
+	jkPort := testhelper.FreePort(t)
+	jkSrv := jenkinsfake.New(fmt.Sprintf("127.0.0.1:%d", jkPort), l.With("service", "fake-jenkins"))
+	jkCtx, jkCancel := context.WithCancel(t.Context())
+	t.Cleanup(jkCancel)
+	go func() {
+		if err := jkSrv.Start(jkCtx); err != nil {
+			t.Logf("fake jenkins stopped: %v", err)
+		}
+	}()
+	testhelper.WaitHTTP(t, fmt.Sprintf("http://127.0.0.1:%d/api/json", jkPort))
+
+	ingestApp := app.NewIngestJenkinsApp(l)
+	ingestApp.NATSHost = "127.0.0.1"
+	ingestApp.NATSPort = natsPort
+	ingestApp.JenkinsURL = fmt.Sprintf("http://127.0.0.1:%d", jkPort)
+	ingestApp.JenkinsUser = "test"
+	ingestApp.JenkinsToken = "test-token"
+	ingestApp.Jobs = []string{"shared-lib/main"}
+
+	ingestCtx, ingestCancel := context.WithCancel(t.Context())
+	t.Cleanup(ingestCancel)
+	go func() {
+		if err := ingestApp.Run(ingestCtx); err != nil {
+			t.Logf("ingest app stopped: %v", err)
+		}
+	}()
+
+	// One branch configured → one Workflow, three runs (shared-lib/main has 3 builds).
+	workflows := testhelper.CollectMessages[model.Workflow](t, js, dalinats.SubjectCicdWorkflow, 1, 20*time.Second)
+	is.Equal(len(workflows), 1)
+	is.Equal(workflows[0].ID, "shared-lib")
+	is.Equal(workflows[0].Name, "shared-lib")
+
+	runs := testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 3, 20*time.Second)
+	is.Equal(len(runs), 3)
+	for _, r := range runs {
+		is.Equal(r.WorkflowID, "shared-lib") // must reference parent, not branch path
+	}
+}

@@ -64,9 +64,12 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 		}
 		c.logger.Info("Discovered jobs", "count", len(entries))
 	} else {
-		for _, p := range c.jobs {
-			entries = append(entries, jobEntry{path: p})
+		var err error
+		entries, err = c.classifyConfiguredJobs(ctx)
+		if err != nil {
+			return fmt.Errorf("classifying configured jobs: %w", err)
 		}
+		c.logger.Info("Classified configured jobs", "count", len(entries))
 	}
 
 	// Group entries by their canonical pipeline path so that all branches of a
@@ -157,6 +160,47 @@ func (c *Crawler) discoverJobs(ctx context.Context, folderPath string) ([]jobEnt
 		}
 	}
 	return result, nil
+}
+
+// classifyConfiguredJobs resolves isBranch for each explicitly-configured job
+// path by looking up the parent's class via GetJobs. Results from the same
+// grandparent folder are cached so sibling branches share one API call.
+// On lookup failure the entry falls back to isBranch=false rather than
+// aborting the crawl.
+func (c *Crawler) classifyConfiguredJobs(ctx context.Context) ([]jobEntry, error) {
+	cache := make(map[string][]apiJob)
+	var entries []jobEntry
+	for _, p := range c.jobs {
+		parent := path.Dir(p)
+		if parent == "." {
+			entries = append(entries, jobEntry{path: p})
+			continue
+		}
+		grandparent := path.Dir(parent)
+		if grandparent == "." {
+			grandparent = ""
+		}
+		if _, cached := cache[grandparent]; !cached {
+			jobs, err := c.client.GetJobs(ctx, grandparent)
+			if err != nil {
+				c.logger.Warn("classifying configured job: failed to look up parent class",
+					"job", p, "grandparent", grandparent, "error", err)
+				cache[grandparent] = nil
+			} else {
+				cache[grandparent] = jobs
+			}
+		}
+		isBranch := false
+		parentName := path.Base(parent)
+		for _, sibling := range cache[grandparent] {
+			if sibling.Name == parentName && sibling.Class == classMultibranchPipeline {
+				isBranch = true
+				break
+			}
+		}
+		entries = append(entries, jobEntry{path: p, isBranch: isBranch})
+	}
+	return entries, nil
 }
 
 func (c *Crawler) crawlJob(ctx context.Context, jobPath, workflowID string, builds []apiBuild) error {
