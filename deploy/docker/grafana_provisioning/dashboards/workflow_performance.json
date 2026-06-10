@@ -55,7 +55,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.5, sum by (le)(rate(workflow_run_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[30d])))",
+          "expr": "histogram_quantile(0.5, sum by (le)(rate(workflow_run_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[30d])))",
           "legendFormat": "p50",
           "refId": "A"
         }
@@ -97,7 +97,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le)(rate(workflow_run_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[30d])))",
+          "expr": "histogram_quantile(0.95, sum by (le)(rate(workflow_run_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[30d])))",
           "legendFormat": "p95",
           "refId": "A"
         }
@@ -139,7 +139,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(workflow_run_duration_seconds_sum{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[30d])) / sum(rate(workflow_run_duration_seconds_count{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[30d]))",
+          "expr": "sum(rate(workflow_run_duration_seconds_sum{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[30d])) / sum(rate(workflow_run_duration_seconds_count{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[30d]))",
           "legendFormat": "mean",
           "refId": "A"
         }
@@ -179,7 +179,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(workflow_run_duration_seconds_count{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"})",
+          "expr": "sum(workflow_run_duration_seconds_count{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"})",
           "legendFormat": "total runs",
           "refId": "A"
         }
@@ -214,7 +214,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "topk(10, histogram_quantile(0.95, sum by (le, task_name, workflow_name)(rate(workflow_task_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[30d]))))",
+          "expr": "topk(10, histogram_quantile(0.95, sum by (le, task_name, workflow_name)(rate(workflow_task_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[30d]))))",
           "legendFormat": "{{task_name}} ({{workflow_name}})",
           "refId": "A"
         }
@@ -253,13 +253,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le, workflow_name)(rate(workflow_run_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, workflow_name)(rate(workflow_run_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[$__rate_interval])))",
           "legendFormat": "{{workflow_name}} p95",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.5, sum by (le, workflow_name)(rate(workflow_run_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le, workflow_name)(rate(workflow_run_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[$__rate_interval])))",
           "legendFormat": "{{workflow_name}} p50",
           "refId": "B"
         }
@@ -298,13 +298,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.5, sum by (le, task_name)(rate(workflow_task_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le, task_name)(rate(workflow_task_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[$__rate_interval])))",
           "legendFormat": "{{task_name}} p50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le, task_name)(rate(workflow_task_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, task_name)(rate(workflow_task_duration_seconds_bucket{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}[$__rate_interval])))",
           "legendFormat": "{{task_name}} p95",
           "refId": "B"
         }
@@ -391,6 +391,28 @@
         "options": [],
         "query": {
           "query": "label_values(workflow_run_duration_seconds_count{team_name=~\"$team\",component_name=~\"$component\"}, workflow_name)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "regexApplyTo": "value",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(workflow_run_duration_seconds_count{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}, branch)",
+        "includeAll": true,
+        "label": "Branch",
+        "multi": true,
+        "name": "branch",
+        "options": [],
+        "query": {
+          "query": "label_values(workflow_run_duration_seconds_count{team_name=~\"$team\",component_name=~\"$component\",workflow_name=~\"$workflow\",branch=~\"$branch\"}, branch)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
