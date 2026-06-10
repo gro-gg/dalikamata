@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
 
 	"codeberg.org/aeforged/dalikamata/pkg/model"
@@ -15,9 +16,13 @@ func discardLogger() *slog.Logger {
 
 // fakeJenkinsClient is an in-package fake used for unit testing Crawler logic.
 type fakeJenkinsClient struct {
-	jobs   map[string][]apiJob
-	builds map[string][]apiBuild
-	stages map[string][]apiStage
+	jobs          map[string][]apiJob
+	builds        map[string][]apiBuild
+	stages        map[string][]apiStage
+	lastCompleted map[string]int // jobPath → newest completed build number; absent ⇒ (0, false)
+
+	mu                 sync.Mutex
+	lastCompletedCalls map[string]int // jobPath → number of probe calls
 }
 
 func (f *fakeJenkinsClient) GetJobs(_ context.Context, jobPath string) ([]apiJob, error) {
@@ -31,6 +36,14 @@ func (f *fakeJenkinsClient) GetBuilds(_ context.Context, jobPath string) ([]apiB
 func (f *fakeJenkinsClient) GetStages(_ context.Context, jobPath string, buildNumber int) ([]apiStage, error) {
 	key := jobPath + "/" + itoa(buildNumber)
 	return f.stages[key], nil
+}
+
+func (f *fakeJenkinsClient) GetLastCompletedBuildNumber(_ context.Context, jobPath string) (int, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastCompletedCalls[jobPath]++
+	n, ok := f.lastCompleted[jobPath]
+	return n, ok, nil
 }
 
 func itoa(n int) string {

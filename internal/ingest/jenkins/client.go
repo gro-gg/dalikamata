@@ -15,6 +15,9 @@ type JenkinsClient interface {
 	GetJobs(ctx context.Context, jobPath string) ([]apiJob, error)
 	GetBuilds(ctx context.Context, jobPath string) ([]apiBuild, error)
 	GetStages(ctx context.Context, jobPath string, buildNumber int) ([]apiStage, error)
+	// GetLastCompletedBuildNumber returns the highest finished build number for
+	// jobPath. The bool is false when the job exists but has no completed build.
+	GetLastCompletedBuildNumber(ctx context.Context, jobPath string) (int, bool, error)
 }
 
 type httpClient struct {
@@ -63,6 +66,19 @@ func (c *httpClient) GetBuilds(ctx context.Context, jobPath string) ([]apiBuild,
 		return nil, fmt.Errorf("getting builds for %q: %w", jobPath, err)
 	}
 	return list.Builds, nil
+}
+
+func (c *httpClient) GetLastCompletedBuildNumber(ctx context.Context, jobPath string) (int, bool, error) {
+	url := c.baseURL + jobURLPath(jobPath) + "/api/json?tree=lastCompletedBuild[number]"
+
+	var probe apiLastCompletedProbe
+	if err := c.get(ctx, url, &probe); err != nil {
+		return 0, false, fmt.Errorf("probing lastCompletedBuild for %q: %w", jobPath, err)
+	}
+	if probe.LastCompletedBuild == nil {
+		return 0, false, nil
+	}
+	return probe.LastCompletedBuild.Number, true, nil
 }
 
 func (c *httpClient) GetStages(ctx context.Context, jobPath string, buildNumber int) ([]apiStage, error) {

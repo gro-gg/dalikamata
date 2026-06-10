@@ -47,3 +47,12 @@ type apiStage struct {
 	StartTimeMillis int64  `json:"startTimeMillis"`
 	DurationMillis  int64  `json:"durationMillis"`
 }
+
+// apiLastCompletedProbe is the response shape for
+// /job/.../api/json?tree=lastCompletedBuild[number]. The field is null when the
+// job exists but has no completed build yet.
+type apiLastCompletedProbe struct {
+	LastCompletedBuild *struct {
+		Number int `json:"number"`
+	} `json:"lastCompletedBuild"`
+}
