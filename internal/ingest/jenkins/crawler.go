@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
@@ -40,20 +41,44 @@ func pipelinePath(e jobEntry) string {
 type Crawler struct {
 	client    JenkinsClient
 	publisher domain.CICDPublisher
+	store     Cursors
 	jobs      []string
 	logger    *slog.Logger
+
+	mu      sync.Mutex
+	cursors map[string]int // jobPath → highest completed build number published
+	loaded  bool           // true after the first Load from the store
 }
 
-func NewCrawler(client JenkinsClient, publisher domain.CICDPublisher, jobs []string, logger *slog.Logger) *Crawler {
+func NewCrawler(client JenkinsClient, publisher domain.CICDPublisher, store Cursors, jobs []string, logger *slog.Logger) *Crawler {
 	return &Crawler{
 		client:    client,
 		publisher: publisher,
+		store:     store,
 		jobs:      jobs,
+		cursors:   map[string]int{},
 		logger:    logger.With("component", "jenkins-crawler"),
 	}
 }
 
 func (c *Crawler) Crawl(ctx context.Context) error {
+	// Hydrate per-job cursors from the persistent store on the very first tick.
+	// On failure we log and continue with an empty map (full refetch), which is
+	// safe because downstream storage is idempotent.
+	c.mu.Lock()
+	if !c.loaded {
+		c.mu.Unlock()
+		loaded, err := c.store.Load(ctx)
+		c.mu.Lock()
+		if err != nil {
+			c.logger.Warn("loading build cursors failed; starting fresh", "error", err)
+			loaded = map[string]int{}
+		}
+		c.cursors = loaded
+		c.loaded = true
+	}
+	c.mu.Unlock()
+
 	var entries []jobEntry
 	if len(c.jobs) == 0 {
 		c.logger.Info("No jobs specified, discovering all jobs")
@@ -90,35 +115,103 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 			groups[pp] = &pipelineGroup{}
 			order = append(order, pp)
 		}
-		builds, err := c.client.GetBuilds(ctx, entry.path)
+
+		c.mu.Lock()
+		cursor := c.cursors[entry.path]
+		c.mu.Unlock()
+
+		// Probe the last completed build to decide whether a fetch is needed.
+		last, hasBuilds, err := c.client.GetLastCompletedBuildNumber(ctx, entry.path)
+		if err != nil {
+			c.logger.Error("probing last completed build", "job", entry.path, "error", err)
+			// Fall through: fetch anyway so we don't silently skip jobs on transient errors.
+		} else if !hasBuilds {
+			c.logger.Debug("no completed builds yet", "job", entry.path)
+			groups[pp].jobs = append(groups[pp].jobs, entryWithBuilds{entry: entry})
+			continue
+		} else if last < cursor {
+			// Job was reset or builds were purged. Clear the cursor and full-refetch.
+			c.logger.Warn("last completed build is behind cursor; clearing cursor for full refetch",
+				"job", entry.path, "last", last, "cursor", cursor)
+			if clearErr := c.store.Clear(ctx, entry.path); clearErr != nil {
+				c.logger.Error("clearing cursor", "job", entry.path, "error", clearErr)
+			}
+			c.mu.Lock()
+			delete(c.cursors, entry.path)
+			cursor = 0
+			c.mu.Unlock()
+		} else if last == cursor {
+			c.logger.Debug("no new builds", "job", entry.path, "cursor", cursor)
+			groups[pp].jobs = append(groups[pp].jobs, entryWithBuilds{entry: entry})
+			continue
+		}
+
+		allBuilds, err := c.client.GetBuilds(ctx, entry.path)
 		if err != nil {
 			c.logger.Error("fetching builds", "job", entry.path, "error", err)
 		}
-		groups[pp].jobs = append(groups[pp].jobs, entryWithBuilds{entry: entry, builds: builds})
+
+		// Keep only completed builds newer than the cursor.
+		var newBuilds []apiBuild
+		for _, b := range allBuilds {
+			if b.InProgress || b.Result == "" {
+				continue
+			}
+			if b.Number > cursor {
+				newBuilds = append(newBuilds, b)
+			}
+		}
+
+		groups[pp].jobs = append(groups[pp].jobs, entryWithBuilds{entry: entry, builds: newBuilds})
 	}
 
 	for _, pp := range order {
 		group := groups[pp]
 
-		// Collect builds from all branch jobs to derive the shared repo ID.
-		var allBuilds []apiBuild
+		// Collect all new builds across branch jobs to derive the shared repo ID.
+		var allNewBuilds []apiBuild
 		for _, j := range group.jobs {
-			allBuilds = append(allBuilds, j.builds...)
+			allNewBuilds = append(allNewBuilds, j.builds...)
+		}
+
+		// Skip the workflow re-publish when there is nothing new for this pipeline.
+		if len(allNewBuilds) == 0 {
+			continue
 		}
 
 		workflow := model.Workflow{
 			ID:     pp,
 			Name:   pp,
-			RepoID: extractRepoID(allBuilds),
+			RepoID: extractRepoID(allNewBuilds),
 		}
 		if err := c.publisher.PublishWorkflow(ctx, workflow); err != nil {
 			c.logger.Error("publishing workflow", "pipeline", pp, "error", err)
 		}
 
 		for _, j := range group.jobs {
+			if len(j.builds) == 0 {
+				continue
+			}
 			if err := c.crawlJob(ctx, j.entry.path, pp, j.builds); err != nil {
 				c.logger.Error("crawling job", "job", j.entry.path, "error", err)
+				continue
 			}
+			// Advance the cursor to the highest build number published for this
+			// job. Save only after successful publish — a save failure means the
+			// next tick re-fetches rather than silently skipping.
+			maxPublished := 0
+			for _, b := range j.builds {
+				if b.Number > maxPublished {
+					maxPublished = b.Number
+				}
+			}
+			if saveErr := c.store.Save(ctx, j.entry.path, maxPublished); saveErr != nil {
+				c.logger.Error("saving build cursor", "job", j.entry.path, "number", maxPublished, "error", saveErr)
+				continue
+			}
+			c.mu.Lock()
+			c.cursors[j.entry.path] = maxPublished
+			c.mu.Unlock()
 		}
 	}
 	return nil
@@ -208,10 +301,6 @@ func (c *Crawler) crawlJob(ctx context.Context, jobPath, workflowID string, buil
 	c.logger.Debug("found builds", "count", len(builds))
 
 	for _, b := range builds {
-		if b.InProgress || b.Result == "" {
-			continue
-		}
-
 		buildID := fmt.Sprintf("%s/%d", jobPath, b.Number)
 		workflowRun := model.WorkflowRun{
 			ID:         buildID,

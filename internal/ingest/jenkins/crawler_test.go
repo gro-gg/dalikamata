@@ -41,9 +41,24 @@ func (f *fakeJenkinsClient) GetStages(_ context.Context, jobPath string, buildNu
 func (f *fakeJenkinsClient) GetLastCompletedBuildNumber(_ context.Context, jobPath string) (int, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.lastCompletedCalls == nil {
+		f.lastCompletedCalls = map[string]int{}
+	}
 	f.lastCompletedCalls[jobPath]++
-	n, ok := f.lastCompleted[jobPath]
-	return n, ok, nil
+	// Explicit override wins.
+	if n, ok := f.lastCompleted[jobPath]; ok {
+		return n, true, nil
+	}
+	// Fall back to computing the max completed build number from the builds map.
+	max := 0
+	found := false
+	for _, b := range f.builds[jobPath] {
+		if !b.InProgress && b.Result != "" && b.Number > max {
+			max = b.Number
+			found = true
+		}
+	}
+	return max, found, nil
 }
 
 func itoa(n int) string {
@@ -171,6 +186,47 @@ func TestExtractCommitSHA_NoActions(t *testing.T) {
 	}
 }
 
+// ---- fakeCursors ------------------------------------------------------------
+
+// fakeCursors is a map-backed Cursors for unit tests. It records every Save
+// and Clear call so tests can assert correct cursor wiring.
+type fakeCursors struct {
+	mu     sync.Mutex
+	data   map[string]int
+	saves  []struct{ jobPath string; number int }
+	clears []string
+}
+
+func newFakeCursors() *fakeCursors {
+	return &fakeCursors{data: map[string]int{}}
+}
+
+func (f *fakeCursors) Load(_ context.Context) (map[string]int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]int, len(f.data))
+	for k, v := range f.data {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (f *fakeCursors) Save(_ context.Context, jobPath string, number int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.data[jobPath] = number
+	f.saves = append(f.saves, struct{ jobPath string; number int }{jobPath, number})
+	return nil
+}
+
+func (f *fakeCursors) Clear(_ context.Context, jobPath string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.data, jobPath)
+	f.clears = append(f.clears, jobPath)
+	return nil
+}
+
 // ---- fakeCICDPublisher ------------------------------------------------------
 
 type fakeCICDPublisher struct {
@@ -216,7 +272,7 @@ func TestCrawl_MultibranchDeduplicatesWorkflow(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, nil, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -252,12 +308,14 @@ func TestCrawl_PlainJobNotStripped(t *testing.T) {
 	// A plain WorkflowJob (not inside a MultibranchPipeline) must keep its full
 	// path as the workflow ID.
 	client := &fakeJenkinsClient{
-		jobs:   map[string][]apiJob{"": {{Class: classWorkflowJob, Name: "build-backend"}}},
-		builds: map[string][]apiBuild{"build-backend": {}},
+		jobs: map[string][]apiJob{"": {{Class: classWorkflowJob, Name: "build-backend"}}},
+		builds: map[string][]apiBuild{
+			"build-backend": {{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000}},
+		},
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	if err := NewCrawler(client, pub, nil, discardLogger()).Crawl(context.Background()); err != nil {
+	if err := NewCrawler(client, pub, newFakeCursors(), nil, discardLogger()).Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
 	}
 	if len(pub.workflows) != 1 || pub.workflows[0].ID != "build-backend" {
@@ -422,7 +480,7 @@ func TestCrawl_ExplicitBranchJobStripsBranch(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, []string{"shared-lib/main"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"shared-lib/main"}, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -466,7 +524,7 @@ func TestCrawl_ExplicitMultipleBranchesSamePipeline(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, []string{"shared-lib/main", "shared-lib/hotfix"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"shared-lib/main", "shared-lib/hotfix"}, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -508,7 +566,7 @@ func TestCrawl_ExplicitNestedBranchJobStripsBranch(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, []string{"team/shared-lib/main"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"team/shared-lib/main"}, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -526,12 +584,14 @@ func TestCrawl_ExplicitPlainJobNotStripped(t *testing.T) {
 	// Jobs: ["build-backend"] — root-level plain WorkflowJob. No parent lookup
 	// should occur and the workflow ID must keep its full path.
 	client := &fakeJenkinsClient{
-		jobs:   map[string][]apiJob{},
-		builds: map[string][]apiBuild{"build-backend": {}},
+		jobs: map[string][]apiJob{},
+		builds: map[string][]apiBuild{
+			"build-backend": {{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000}},
+		},
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, []string{"build-backend"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"build-backend"}, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -549,11 +609,13 @@ func TestCrawl_ExplicitJobParentNotMultibranch(t *testing.T) {
 		jobs: map[string][]apiJob{
 			"": {{Class: classFolder, Name: "team"}},
 		},
-		builds: map[string][]apiBuild{"team/api": {}},
+		builds: map[string][]apiBuild{
+			"team/api": {{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000}},
+		},
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, []string{"team/api"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"team/api"}, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -561,5 +623,292 @@ func TestCrawl_ExplicitJobParentNotMultibranch(t *testing.T) {
 
 	if len(pub.workflows) != 1 || pub.workflows[0].ID != "team/api" {
 		t.Errorf("workflow ID = %q, want %q", pub.workflows[0].ID, "team/api")
+	}
+}
+
+// ---- incremental cursor tests -----------------------------------------------
+
+func TestCrawl_BuildCursorAdvances(t *testing.T) {
+	// First crawl: cursor is 0, all 3 builds published, cursor saved to 3.
+	// Second crawl: probe returns same value as cursor → no builds published.
+	// After adding a 4th build: probe returns 4 → only build 4 published.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{"": {{Class: classWorkflowJob, Name: "build-backend"}}},
+		builds: map[string][]apiBuild{
+			"build-backend": {
+				{Number: 3, Result: "SUCCESS", Timestamp: 3_000_000, Duration: 60_000},
+				{Number: 2, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 60_000},
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	store := newFakeCursors()
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+
+	// First crawl: all 3 builds published, cursor saved as 3.
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 1: %v", err)
+	}
+	if len(pub.workflowRuns) != 3 {
+		t.Fatalf("after crawl 1: runs = %d, want 3", len(pub.workflowRuns))
+	}
+	if store.data["build-backend"] != 3 {
+		t.Errorf("cursor after crawl 1 = %d, want 3", store.data["build-backend"])
+	}
+
+	// Second crawl: probe returns 3 == cursor → GetBuilds not called, 0 new runs.
+	pub2 := &fakeCICDPublisher{}
+	crawler.publisher = pub2
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 2: %v", err)
+	}
+	if len(pub2.workflowRuns) != 0 {
+		t.Errorf("after crawl 2 (no new builds): runs = %d, want 0", len(pub2.workflowRuns))
+	}
+	if len(pub2.workflows) != 0 {
+		t.Errorf("after crawl 2 (no new builds): workflows = %d, want 0", len(pub2.workflows))
+	}
+
+	// Add build #4; third crawl publishes only the new build.
+	client.mu.Lock()
+	client.builds["build-backend"] = append(
+		[]apiBuild{{Number: 4, Result: "SUCCESS", Timestamp: 4_000_000, Duration: 60_000}},
+		client.builds["build-backend"]...,
+	)
+	client.mu.Unlock()
+
+	pub3 := &fakeCICDPublisher{}
+	crawler.publisher = pub3
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 3: %v", err)
+	}
+	if len(pub3.workflowRuns) != 1 {
+		t.Fatalf("after crawl 3 (one new build): runs = %d, want 1", len(pub3.workflowRuns))
+	}
+	if pub3.workflowRuns[0].Number != 4 {
+		t.Errorf("new run number = %d, want 4", pub3.workflowRuns[0].Number)
+	}
+	if store.data["build-backend"] != 4 {
+		t.Errorf("cursor after crawl 3 = %d, want 4", store.data["build-backend"])
+	}
+}
+
+func TestCrawl_CursorHydratedFromStore(t *testing.T) {
+	// Pre-populate the cursor store (simulates restart with persisted cursor).
+	// First crawl should use that cursor and publish 0 runs since probe == cursor.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{"": {{Class: classWorkflowJob, Name: "build-backend"}}},
+		builds: map[string][]apiBuild{
+			"build-backend": {
+				{Number: 3, Result: "SUCCESS", Timestamp: 3_000_000, Duration: 60_000},
+				{Number: 2, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 60_000},
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	store := newFakeCursors()
+	store.data["build-backend"] = 3 // simulate persisted cursor from prior run
+
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if len(pub.workflowRuns) != 0 {
+		t.Errorf("runs = %d, want 0 (cursor covers all existing builds)", len(pub.workflowRuns))
+	}
+
+	// After adding a new build, second crawl picks it up.
+	client.mu.Lock()
+	client.builds["build-backend"] = append(
+		[]apiBuild{{Number: 4, Result: "SUCCESS", Timestamp: 4_000_000, Duration: 60_000}},
+		client.builds["build-backend"]...,
+	)
+	client.mu.Unlock()
+
+	pub2 := &fakeCICDPublisher{}
+	crawler.publisher = pub2
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 2: %v", err)
+	}
+	if len(pub2.workflowRuns) != 1 || pub2.workflowRuns[0].Number != 4 {
+		t.Errorf("runs after new build = %d, want 1 with number 4", len(pub2.workflowRuns))
+	}
+}
+
+func TestCrawl_CursorClearedOnReset(t *testing.T) {
+	// Cursor is ahead of lastCompletedBuild (job was reset). Cursor should be
+	// cleared and all current builds re-fetched.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{"": {{Class: classWorkflowJob, Name: "build-backend"}}},
+		builds: map[string][]apiBuild{
+			"build-backend": {
+				{Number: 2, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 60_000},
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	store := newFakeCursors()
+	store.data["build-backend"] = 99 // stale cursor ahead of actual max
+
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(store.clears) == 0 || store.clears[0] != "build-backend" {
+		t.Errorf("expected cursor to be cleared; clears = %v", store.clears)
+	}
+	if len(pub.workflowRuns) != 2 {
+		t.Errorf("runs after reset = %d, want 2 (full refetch)", len(pub.workflowRuns))
+	}
+	if store.data["build-backend"] != 2 {
+		t.Errorf("cursor after reset+refetch = %d, want 2", store.data["build-backend"])
+	}
+}
+
+func TestCrawl_NoWorkflowRepublishWhenNoNewBuilds(t *testing.T) {
+	// Second crawl with no new builds must not re-publish the Workflow entity.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{"": {{Class: classWorkflowJob, Name: "build-backend"}}},
+		builds: map[string][]apiBuild{
+			"build-backend": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	store := newFakeCursors()
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 1: %v", err)
+	}
+	if len(pub.workflows) != 1 {
+		t.Fatalf("crawl 1: workflows = %d, want 1", len(pub.workflows))
+	}
+
+	pub2 := &fakeCICDPublisher{}
+	crawler.publisher = pub2
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 2: %v", err)
+	}
+	if len(pub2.workflows) != 0 {
+		t.Errorf("crawl 2 (no new builds): workflows = %d, want 0", len(pub2.workflows))
+	}
+}
+
+func TestCrawl_InProgressBuildDoesNotAdvanceCursor(t *testing.T) {
+	// An in-progress build must not be published and must not advance the cursor.
+	// When it completes on the next tick, it should then be published.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{"": {{Class: classWorkflowJob, Name: "build-backend"}}},
+		builds: map[string][]apiBuild{
+			"build-backend": {
+				{Number: 3, InProgress: true, Result: ""},
+				{Number: 2, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 60_000},
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+		},
+		// Probe should see lastCompleted as 2 (build 3 is in-progress).
+		lastCompleted: map[string]int{"build-backend": 2},
+		stages:        map[string][]apiStage{},
+	}
+	store := newFakeCursors()
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 1: %v", err)
+	}
+	if len(pub.workflowRuns) != 2 {
+		t.Fatalf("crawl 1: runs = %d, want 2 (builds 1+2 only)", len(pub.workflowRuns))
+	}
+	if store.data["build-backend"] != 2 {
+		t.Errorf("cursor after crawl 1 = %d, want 2 (in-progress build must not advance cursor)", store.data["build-backend"])
+	}
+
+	// Build 3 completes between ticks.
+	client.mu.Lock()
+	client.builds["build-backend"] = []apiBuild{
+		{Number: 3, Result: "SUCCESS", Timestamp: 3_000_000, Duration: 60_000},
+		{Number: 2, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 60_000},
+		{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+	}
+	client.lastCompleted = map[string]int{"build-backend": 3}
+	client.mu.Unlock()
+
+	pub2 := &fakeCICDPublisher{}
+	crawler.publisher = pub2
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 2: %v", err)
+	}
+	if len(pub2.workflowRuns) != 1 || pub2.workflowRuns[0].Number != 3 {
+		t.Errorf("crawl 2: runs = %d, want 1 (build 3 now complete)", len(pub2.workflowRuns))
+	}
+	if store.data["build-backend"] != 3 {
+		t.Errorf("cursor after crawl 2 = %d, want 3", store.data["build-backend"])
+	}
+}
+
+func TestCrawl_MultibranchPerBranchCursors(t *testing.T) {
+	// Two explicit branches of the same MM pipeline should get independent
+	// cursors keyed by their full job paths.
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"": {{Class: classMultibranchPipeline, Name: "shared-lib"}},
+		},
+		builds: map[string][]apiBuild{
+			"shared-lib/main": {
+				{Number: 2, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 60_000},
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000},
+			},
+			"shared-lib/hotfix": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_500_000, Duration: 60_000},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	store := newFakeCursors()
+	pub := &fakeCICDPublisher{}
+	crawler := NewCrawler(client, pub, store, []string{"shared-lib/main", "shared-lib/hotfix"}, discardLogger())
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(pub.workflows) != 1 || pub.workflows[0].ID != "shared-lib" {
+		t.Fatalf("workflows = %v, want one workflow 'shared-lib'", pub.workflows)
+	}
+	if len(pub.workflowRuns) != 3 {
+		t.Fatalf("runs = %d, want 3", len(pub.workflowRuns))
+	}
+	// Cursors are keyed by full job path, not by pipelinePath.
+	if store.data["shared-lib/main"] != 2 {
+		t.Errorf("cursor shared-lib/main = %d, want 2", store.data["shared-lib/main"])
+	}
+	if store.data["shared-lib/hotfix"] != 1 {
+		t.Errorf("cursor shared-lib/hotfix = %d, want 1", store.data["shared-lib/hotfix"])
+	}
+
+	// Second crawl: no new builds → no re-publishes.
+	pub2 := &fakeCICDPublisher{}
+	crawler.publisher = pub2
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl 2: %v", err)
+	}
+	if len(pub2.workflows) != 0 {
+		t.Errorf("crawl 2: workflows = %d, want 0", len(pub2.workflows))
+	}
+	if len(pub2.workflowRuns) != 0 {
+		t.Errorf("crawl 2: runs = %d, want 0", len(pub2.workflowRuns))
 	}
 }
