@@ -74,6 +74,7 @@ var monoCmd = &cobra.Command{
 			jenkinsApp.JenkinsToken = jenkinsToken
 			jenkinsApp.Jobs = jenkinsJobs
 			jenkinsApp.CACertsDir = caCertsDir
+			jenkinsApp.Interval = jenkinsInterval
 		}
 
 		ctx := cmd.Root().Context()
@@ -152,4 +153,5 @@ func init() {
 	monoCmd.Flags().StringVar(&jenkinsUser, "jenkins-user", "", "Jenkins username")
 	monoCmd.Flags().StringVar(&jenkinsToken, "jenkins-token", "", "Jenkins API token")
 	monoCmd.Flags().StringSliceVar(&jenkinsJobs, "jenkins-jobs", nil, "Jenkins job paths to crawl (comma-separated); crawl all if omitted")
+	monoCmd.Flags().DurationVar(&jenkinsInterval, "jenkins-interval", 5*time.Minute, "how often to re-crawl Jenkins for new builds")
 }
