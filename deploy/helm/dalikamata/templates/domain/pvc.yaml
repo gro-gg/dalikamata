@@ -1,0 +1,19 @@
+{{- if and .Values.domain.enabled .Values.domain.persistence }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: domain
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.domain.persistence.size }}
+  {{- with .Values.domain.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}

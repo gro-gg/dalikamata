@@ -47,5 +47,10 @@ spec:
             periodSeconds: 20
       volumes:
         - name: nats-data
+          {{- if and .Values.domain.enabled .Values.domain.persistence }}
+          persistentVolumeClaim:
+            claimName: {{ include "dalikamata.fullname" . }}-data
+          {{- else }}
           emptyDir: {}
+          {{- end }}
 {{- end }}

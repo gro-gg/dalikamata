@@ -10,6 +10,10 @@ nats:
 domain:
   enabled: true
   debug: false
+  persistence: {}
+  # persistence:
+  #   size: 1Gi
+  #   storageClass: ""
 
 metrics:
   enabled: true
