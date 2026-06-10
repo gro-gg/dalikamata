@@ -39,6 +39,9 @@ spec:
               value: "false"
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
+            {{- if .Values.grafana.extraEnv }}
+            {{- toYaml .Values.grafana.extraEnv | nindent 12 }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /api/health

@@ -111,6 +111,9 @@ grafana:
   # Optional: name of a pre-existing Secret with key "admin-password".
   # If empty, the chart auto-creates a Secret named <release>-grafana with a random password.
   existingSecret: ""
+  # Extra environment variables injected into the Grafana container.
+  # Use GF_* variables to override any grafana.ini setting.
+  extraEnv: []
   service:
     type: ClusterIP
   persistence:
