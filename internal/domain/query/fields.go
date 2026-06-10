@@ -70,12 +70,13 @@ const (
 	TaskDuration      = "duration"
 
 	// Enriched at projection time. Tasks only carry WorkflowRunID on the
-	// model, so workflow_id/workflow_name/component_name/team_name are all
-	// looked up via the parent run.
+	// model, so workflow_id/workflow_name/component_name/team_name/branch are
+	// all looked up via the parent run.
 	TaskWorkflowID    = "workflow_id"
 	TaskWorkflowName  = "workflow_name"
 	TaskComponentName = "component_name"
 	TaskTeamName      = "team_name"
+	TaskBranch        = "branch"
 )
 
 // Team fields.

@@ -98,8 +98,10 @@ func projectWorkflowRun(r model.WorkflowRun, lkp ownerLookup) map[string]any {
 // Enriched fields are looked up via runs (task→run→workflowID) and then lkp.
 func projectWorkflowTask(t model.WorkflowTask, runs map[string]model.WorkflowRun, lkp ownerLookup) map[string]any {
 	workflowID := ""
+	branch := ""
 	if run, ok := runs[t.WorkflowRunID]; ok {
 		workflowID = run.WorkflowID
+		branch = run.Branch
 	}
 	component, team := lkp.ownership(workflowID)
 	return map[string]any{
@@ -113,6 +115,7 @@ func projectWorkflowTask(t model.WorkflowTask, runs map[string]model.WorkflowRun
 		q.TaskWorkflowName:  lkp.workflowName(workflowID),
 		q.TaskComponentName: component,
 		q.TaskTeamName:      team,
+		q.TaskBranch:        branch,
 	}
 }
 

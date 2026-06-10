@@ -70,6 +70,7 @@ var validFields = map[query.Entity]map[string]struct{}{
 		query.TaskWorkflowName:  {},
 		query.TaskComponentName: {},
 		query.TaskTeamName:      {},
+		query.TaskBranch:        {},
 	},
 	query.EntityTeam: {
 		query.TeamName: {},
