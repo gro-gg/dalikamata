@@ -44,13 +44,25 @@ The `nats` and `mono` commands also accept `--nats-data` (default `./data/nats`)
 
 The Bitbucket ingestor runs on a repeating ticker loop. The first crawl fires immediately on startup; subsequent crawls are spaced by `--bitbucket-interval`. Each repo's newest published commit SHA is persisted in a JetStream KV bucket (`ingest-bitbucket-cursors`) so that restarts do not re-ingest already-published commits. Only new commits (those reachable from the default branch tip but not from the cursor SHA) are fetched on subsequent ticks; pull requests and repos are refetched in full on every tick (they are small and re-publish is idempotent).
 
+`dalikamata ingest jenkins` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--jenkins-url` | _(required)_ | Jenkins base URL (e.g. `https://jenkins.example.com`) |
+| `--jenkins-user` | _(required)_ | Jenkins username |
+| `--jenkins-token` | _(required)_ | Jenkins API token |
+| `--jenkins-jobs` | _(all jobs)_ | Comma-separated list of full job paths to crawl; discovers all if omitted |
+| `--jenkins-interval` | `5m` | How often to re-crawl Jenkins for new builds |
+
+The Jenkins ingestor runs on the same repeating ticker pattern as the Bitbucket ingestor. The first crawl fires immediately on startup; subsequent crawls are spaced by `--jenkins-interval`. Before fetching the full build list for a job, the crawler probes `lastCompletedBuild[number]` (a single-field Jenkins API call) to check whether anything has finished since the last tick — if the probe matches the stored cursor the full fetch is skipped entirely. Each job's highest published build number is persisted in a JetStream KV bucket (`ingest-jenkins-cursors`) so that restarts do not re-ingest already-published builds. Cursors are keyed by full job path (e.g. `shared-lib/main`) so branches of a multibranch pipeline track independent watermarks while still collapsing onto one `Workflow` entity in the domain.
+
 `dalikamata ingest config` flags:
 
 | Flag | Default | Description |
 |---|---|---|
 | `--dir` | _(required)_ | Directory of per-component YAML files (`*.yaml` / `*.yml`) |
 
-`dalikamata mono` also accepts `--components-dir` (optional) to run the config crawler alongside the other ingest sources, and `--bitbucket-interval` to control the Bitbucket crawl cadence.
+`dalikamata mono` also accepts `--components-dir` (optional) to run the config crawler alongside the other ingest sources, `--bitbucket-interval` to control the Bitbucket crawl cadence, and `--jenkins-interval` to control the Jenkins crawl cadence.
 
 ## Docker Compose
 
