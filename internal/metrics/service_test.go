@@ -164,8 +164,8 @@ func newWorkflowFixtureAggregator(t *testing.T) *stubAggregator {
 	mustAdd(r.AddWorkflow(ctx, model.Workflow{ID: "wf-build", Name: "Build"}))
 
 	// Two runs: 90s success, 600s success.
-	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run1", WorkflowID: "wf-build", Status: "SUCCESS", Duration: 90}))
-	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run2", WorkflowID: "wf-build", Status: "SUCCESS", Duration: 600}))
+	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run1", WorkflowID: "wf-build", Status: "SUCCESS", Branch: "main", Duration: 90}))
+	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run2", WorkflowID: "wf-build", Status: "SUCCESS", Branch: "main", Duration: 600}))
 
 	// Tasks for run1.
 	mustAdd(r.AddWorkflowTask(ctx, model.WorkflowTask{WorkflowRunID: "run1", Order: 0, Name: "lint", Status: "SUCCESS", Duration: 30}))
@@ -215,6 +215,7 @@ func TestCollect_WorkflowRunDurationHistogram(t *testing.T) {
 		if labels["team_name"] == "alpha" {
 			is.Equal(labels["component_name"], "svc-a")
 			is.Equal(labels["workflow_name"], "Build")
+			is.Equal(labels["branch"], "main")
 			is.Equal(labels["status"], "SUCCESS")
 			is.Equal(m.GetHistogram().GetSampleCount(), uint64(2))
 			is.Equal(m.GetHistogram().GetSampleSum(), float64(90+600))

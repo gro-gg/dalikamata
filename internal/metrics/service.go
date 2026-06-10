@@ -77,7 +77,7 @@ var workflowRunBuckets = []float64{60, 300, 900, 1800, 3600, 7200, 21600}
 // workflowTaskBuckets covers individual stage durations (30s–1h).
 var workflowTaskBuckets = []float64{30, 60, 120, 300, 600, 1800, 3600}
 
-// workflowRunQuery aggregates run durations by team → component → workflow_id → workflow_name → status.
+// workflowRunQuery aggregates run durations by team → component → workflow_id → workflow_name → branch → status.
 var workflowRunQuery = query.Query{
 	Entity: query.EntityWorkflowRun,
 	Size:   -1,
@@ -98,14 +98,20 @@ var workflowRunQuery = query.Query{
 									Op:    query.AggTerms,
 									Field: query.RunWorkflowName,
 									Aggs: map[string]query.Aggregation{
-										"by_status": {
+										"by_branch": {
 											Op:    query.AggTerms,
-											Field: query.RunStatus,
+											Field: query.RunBranch,
 											Aggs: map[string]query.Aggregation{
-												"duration": {
-													Op:      query.AggHistogram,
-													Field:   query.RunDuration,
-													Buckets: workflowRunBuckets,
+												"by_status": {
+													Op:    query.AggTerms,
+													Field: query.RunStatus,
+													Aggs: map[string]query.Aggregation{
+														"duration": {
+															Op:      query.AggHistogram,
+															Field:   query.RunDuration,
+															Buckets: workflowRunBuckets,
+														},
+													},
 												},
 											},
 										},
@@ -231,7 +237,7 @@ func NewMetricsService(aggregator QueryAggregator, logger *slog.Logger, metricsA
 		wfRunDesc: prometheus.NewDesc(
 			"workflow_run_duration_seconds",
 			"Total duration of a workflow run in seconds, grouped by team and component.",
-			[]string{"team_name", "component_name", "workflow_id", "workflow_name", "status"},
+			[]string{"team_name", "component_name", "workflow_id", "workflow_name", "branch", "status"},
 			nil,
 		),
 		wfTaskDesc: prometheus.NewDesc(
@@ -490,7 +496,7 @@ func intKey(key any, label string) (int, error) {
 	}
 }
 
-// emitWorkflowRunTree walks team→component→workflow_id→workflow_name→status→duration
+// emitWorkflowRunTree walks team→component→workflow_id→workflow_name→branch→status→duration
 // and emits one workflow_run_duration_seconds histogram per leaf.
 func (s *MetricsService) emitWorkflowRunTree(ch chan<- prometheus.Metric, result map[string]query.AggregationResult) error {
 	byTeam, ok := result["by_team"]
@@ -517,26 +523,32 @@ func (s *MetricsService) emitWorkflowRunTree(ch chan<- prometheus.Metric, result
 					if err != nil {
 						return err
 					}
-					for _, statusB := range wfNameB.Aggs["by_status"].Buckets {
-						status, err := strKey(statusB.Key, "by_status")
+					for _, branchB := range wfNameB.Aggs["by_branch"].Buckets {
+						branch, err := strKey(branchB.Key, "by_branch")
 						if err != nil {
 							return err
 						}
-						durAgg, ok := statusB.Aggs["duration"]
-						if !ok {
-							continue
+						for _, statusB := range branchB.Aggs["by_status"].Buckets {
+							status, err := strKey(statusB.Key, "by_status")
+							if err != nil {
+								return err
+							}
+							durAgg, ok := statusB.Aggs["duration"]
+							if !ok {
+								continue
+							}
+							bm, err := extractBucketMap(durAgg)
+							if err != nil {
+								return err
+							}
+							ch <- prometheus.MustNewConstHistogram(
+								s.wfRunDesc,
+								durAgg.DocCount,
+								durAgg.Sum,
+								bm,
+								team, comp, wfID, wfName, branch, status,
+							)
 						}
-						bm, err := extractBucketMap(durAgg)
-						if err != nil {
-							return err
-						}
-						ch <- prometheus.MustNewConstHistogram(
-							s.wfRunDesc,
-							durAgg.DocCount,
-							durAgg.Sum,
-							bm,
-							team, comp, wfID, wfName, status,
-						)
 					}
 				}
 			}
