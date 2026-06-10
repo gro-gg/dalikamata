@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -264,26 +265,12 @@ func deterministicSHA(jobIdx, buildIdx int) string {
 	return string(b)
 }
 
-// stagesForBuild computes stage data for a given job and build number.
+// stagesForBuild computes stage data for a named job and the given build.
 // Stage durations are proportional to the total build duration; the final
 // stage of a FAILURE or ABORTED build carries the matching status.
-func stagesForBuild(jobName string, buildNum int) []apiStage {
+func stagesForBuild(jobName string, b apiBuild) []apiStage {
 	cfg, ok := jobConfigs[jobName]
 	if !ok {
-		return nil
-	}
-	builds, ok := fakeBuilds[jobName]
-	if !ok {
-		return nil
-	}
-	var b *apiBuild
-	for i := range builds {
-		if builds[i].Number == buildNum {
-			b = &builds[i]
-			break
-		}
-	}
-	if b == nil {
 		return nil
 	}
 	stages := make([]apiStage, len(cfg.stages))
@@ -310,18 +297,56 @@ func stagesForBuild(jobName string, buildNum int) []apiStage {
 	return stages
 }
 
-// Server is a fake Jenkins HTTP server.
+// lastCompletedNumber returns the highest completed (non-in-progress, non-empty
+// result) build number from the list, or (0, false) if none exist.
+func lastCompletedNumber(builds []apiBuild) (int, bool) {
+	max := 0
+	found := false
+	for _, b := range builds {
+		if !b.InProgress && b.Result != "" && b.Number > max {
+			max = b.Number
+			found = true
+		}
+	}
+	return max, found
+}
+
+// apiLastCompletedProbeResponse is the JSON shape for the lastCompletedBuild probe.
+type apiLastCompletedProbeResponse struct {
+	LastCompletedBuild *struct {
+		Number int `json:"number"`
+	} `json:"lastCompletedBuild"`
+}
+
+// Server is a fake Jenkins HTTP server. Each Server instance owns a mutable
+// copy of the build fixtures so that AddBuild does not affect other instances.
 type Server struct {
 	httpServer *http.Server
 	logger     *slog.Logger
+	mu         sync.RWMutex
+	builds     map[string][]apiBuild // mutable per-instance, most-recent-first
 }
 
 // New creates a new fake Jenkins Server listening on addr.
 func New(addr string, logger *slog.Logger) *Server {
+	// Copy the global fixture maps into per-instance mutable maps.
+	builds := make(map[string][]apiBuild, len(fakeBuilds)+len(multibranchBuilds))
+	for k, v := range fakeBuilds {
+		cp := make([]apiBuild, len(v))
+		copy(cp, v)
+		builds[k] = cp
+	}
+	for k, v := range multibranchBuilds {
+		cp := make([]apiBuild, len(v))
+		copy(cp, v)
+		builds[k] = cp
+	}
+
 	mux := http.NewServeMux()
 	s := &Server{
 		httpServer: &http.Server{Addr: addr, Handler: mux},
 		logger:     logger,
+		builds:     builds,
 	}
 	mux.HandleFunc("GET /api/json", s.handleRootJobs)
 	mux.HandleFunc("GET /job/{name}/api/json", s.handleJobAPI)
@@ -329,6 +354,26 @@ func New(addr string, logger *slog.Logger) *Server {
 	mux.HandleFunc("GET /job/{pipeline}/job/{branch}/api/json", s.handleBranchJobAPI)
 	mux.HandleFunc("GET /job/{pipeline}/job/{branch}/{buildnum}/wfapi/describe", s.handleBranchStages)
 	return s
+}
+
+// AddBuild prepends b to jobPath's build list so it becomes the newest build
+// returned by subsequent API requests. Safe to call concurrently with
+// in-flight HTTP requests.
+func (s *Server) AddBuild(jobPath string, b apiBuild) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.builds[jobPath] = append([]apiBuild{b}, s.builds[jobPath]...)
+}
+
+// NewBuild is a convenience helper that builds an apiBuild with the given
+// number and result, a timestamp of now, and a 60-second duration.
+func NewBuild(number int, result string) apiBuild {
+	return apiBuild{
+		Number:    number,
+		Result:    result,
+		Timestamp: time.Now().UnixMilli(),
+		Duration:  60_000,
+	}
 }
 
 // Start runs the HTTP server and blocks until ctx is cancelled.
@@ -363,8 +408,24 @@ func (s *Server) handleJobAPI(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	tree := r.URL.Query().Get("tree")
 	s.logger.Info("fake: job api", "name", name)
+
+	s.mu.RLock()
+	builds := s.builds[name]
+	s.mu.RUnlock()
+
+	if strings.HasPrefix(tree, "lastCompletedBuild") {
+		n, ok := lastCompletedNumber(builds)
+		resp := apiLastCompletedProbeResponse{}
+		if ok {
+			resp.LastCompletedBuild = &struct {
+				Number int `json:"number"`
+			}{Number: n}
+		}
+		writeJSON(w, resp)
+		return
+	}
 	if strings.HasPrefix(tree, "builds") {
-		writeJSON(w, apiBuildList{Builds: fakeBuilds[name]})
+		writeJSON(w, apiBuildList{Builds: builds})
 		return
 	}
 	// Return branch jobs when this is a known multibranch pipeline.
@@ -383,8 +444,25 @@ func (s *Server) handleBranchJobAPI(w http.ResponseWriter, r *http.Request) {
 	pipeline := r.PathValue("pipeline")
 	branch := r.PathValue("branch")
 	jobPath := pipeline + "/" + branch
+	tree := r.URL.Query().Get("tree")
 	s.logger.Info("fake: branch job api", "pipeline", pipeline, "branch", branch)
-	writeJSON(w, apiBuildList{Builds: multibranchBuilds[jobPath]})
+
+	s.mu.RLock()
+	builds := s.builds[jobPath]
+	s.mu.RUnlock()
+
+	if strings.HasPrefix(tree, "lastCompletedBuild") {
+		n, ok := lastCompletedNumber(builds)
+		resp := apiLastCompletedProbeResponse{}
+		if ok {
+			resp.LastCompletedBuild = &struct {
+				Number int `json:"number"`
+			}{Number: n}
+		}
+		writeJSON(w, resp)
+		return
+	}
+	writeJSON(w, apiBuildList{Builds: builds})
 }
 
 func (s *Server) handleBranchStages(w http.ResponseWriter, r *http.Request) {
@@ -397,7 +475,23 @@ func (s *Server) handleStages(w http.ResponseWriter, r *http.Request) {
 	buildNumStr := r.PathValue("buildnum")
 	buildNum, _ := strconv.Atoi(buildNumStr)
 	s.logger.Info("fake: stages", "name", name, "build", buildNumStr)
-	writeJSON(w, apiWFDescribe{Stages: stagesForBuild(name, buildNum)})
+
+	s.mu.RLock()
+	var b *apiBuild
+	for i := range s.builds[name] {
+		if s.builds[name][i].Number == buildNum {
+			cp := s.builds[name][i]
+			b = &cp
+			break
+		}
+	}
+	s.mu.RUnlock()
+
+	if b == nil {
+		writeJSON(w, apiWFDescribe{Stages: nil})
+		return
+	}
+	writeJSON(w, apiWFDescribe{Stages: stagesForBuild(name, *b)})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
