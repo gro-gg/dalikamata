@@ -912,3 +912,96 @@ func TestCrawl_MultibranchPerBranchCursors(t *testing.T) {
 		t.Errorf("crawl 2: runs = %d, want 0", len(pub2.workflowRuns))
 	}
 }
+
+// ---- branchForJob -----------------------------------------------------------
+
+func TestBranchForJob_MultibranchUsesJobPath(t *testing.T) {
+	// BuildData reports "master" — the detached-HEAD artifact common in
+	// Multi-branch pipelines. Branch must come from the job path, not BuildData.
+	b := apiBuild{
+		Actions: []apiBuildAction{{
+			Class:             classGitBuildData,
+			LastBuiltRevision: &apiRevision{Branch: []apiBranch{{Name: "origin/master"}}},
+		}},
+	}
+	got := branchForJob("payments/feature-foo", "payments", b)
+	if got != "feature-foo" {
+		t.Errorf("branchForJob = %q, want %q", got, "feature-foo")
+	}
+}
+
+func TestBranchForJob_NestedMultibranchUsesJobPath(t *testing.T) {
+	b := apiBuild{
+		Actions: []apiBuildAction{{
+			Class:             classGitBuildData,
+			LastBuiltRevision: &apiRevision{Branch: []apiBranch{{Name: "origin/master"}}},
+		}},
+	}
+	got := branchForJob("team/shared-lib/main", "team/shared-lib", b)
+	if got != "main" {
+		t.Errorf("branchForJob = %q, want %q", got, "main")
+	}
+}
+
+func TestBranchForJob_RegularJobUsesBuildData(t *testing.T) {
+	b := apiBuild{
+		Actions: []apiBuildAction{{
+			Class:             classGitBuildData,
+			LastBuiltRevision: &apiRevision{Branch: []apiBranch{{Name: "origin/main"}}},
+		}},
+	}
+	got := branchForJob("build-backend", "build-backend", b)
+	if got != "main" {
+		t.Errorf("branchForJob = %q, want %q", got, "main")
+	}
+}
+
+// ---- branch field on WorkflowRun for multibranch pipelines ------------------
+
+func TestCrawl_MultibranchBranchFromJobPath(t *testing.T) {
+	// BuildData for both branch jobs incorrectly reports "origin/master" — the
+	// detached-HEAD artifact. Each WorkflowRun.Branch must be taken from the job
+	// path, not from BuildData.
+	staleBuildData := apiBuildAction{
+		Class:             classGitBuildData,
+		LastBuiltRevision: &apiRevision{Branch: []apiBranch{{Name: "origin/master"}}},
+	}
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"": {{Class: classMultibranchPipeline, Name: "payments"}},
+			"payments": {
+				{Class: classWorkflowJob, Name: "main"},
+				{Class: classWorkflowJob, Name: "feature-foo"},
+			},
+		},
+		builds: map[string][]apiBuild{
+			"payments/main": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 60_000,
+					Actions: []apiBuildAction{staleBuildData}},
+			},
+			"payments/feature-foo": {
+				{Number: 1, Result: "SUCCESS", Timestamp: 2_000_000, Duration: 30_000,
+					Actions: []apiBuildAction{staleBuildData}},
+			},
+		},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	if err := NewCrawler(client, pub, newFakeCursors(), nil, discardLogger()).Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+
+	if len(pub.workflowRuns) != 2 {
+		t.Fatalf("workflow runs = %d, want 2", len(pub.workflowRuns))
+	}
+	branches := map[string]string{}
+	for _, r := range pub.workflowRuns {
+		branches[r.ID] = r.Branch
+	}
+	if branches["payments/main/1"] != "main" {
+		t.Errorf("payments/main/1 branch = %q, want %q", branches["payments/main/1"], "main")
+	}
+	if branches["payments/feature-foo/1"] != "feature-foo" {
+		t.Errorf("payments/feature-foo/1 branch = %q, want %q", branches["payments/feature-foo/1"], "feature-foo")
+	}
+}

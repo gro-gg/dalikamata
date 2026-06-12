@@ -307,7 +307,7 @@ func (c *Crawler) crawlJob(ctx context.Context, jobPath, workflowID string, buil
 			WorkflowID: workflowID,
 			Number:     b.Number,
 			Status:     b.Result,
-			Branch:     extractBranch(b),
+			Branch:     branchForJob(jobPath, workflowID, b),
 			CommitSHA:  extractCommitSHA(b),
 			StartedAt:  time.UnixMilli(b.Timestamp),
 			Duration:   float64(b.Duration) / 1000.0,
@@ -338,6 +338,18 @@ func (c *Crawler) crawlJob(ctx context.Context, jobPath, workflowID string, buil
 		}
 	}
 	return nil
+}
+
+// branchForJob returns the branch name for a build. For Multi-branch pipeline
+// branch jobs the Git plugin reports all branches that contain the commit
+// (commonly "master") rather than the branch being built, so the branch is
+// derived from the job path instead. For regular pipeline jobs the Git plugin
+// BuildData is authoritative.
+func branchForJob(jobPath, workflowID string, b apiBuild) string {
+	if path.Dir(jobPath) == workflowID {
+		return path.Base(jobPath)
+	}
+	return extractBranch(b)
 }
 
 func extractBranch(b apiBuild) string {
