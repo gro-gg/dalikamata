@@ -124,6 +124,16 @@ var jobConfigs = map[string]jobConfig{
 			1_850_000, 2_300_000, 2_900_000, 3_700_000, 4_800_000,
 		},
 	},
+	// shared-lib/main: library CI — build + test, typically 1–2 min.
+	"shared-lib/main": {
+		stages:    []stageSpec{{"Checkout", 0.05}, {"Build", 0.45}, {"Test", 0.50}},
+		durations: []int64{55_000, 70_000, 90_000},
+	},
+	// shared-lib/hotfix: same pipeline on the hotfix branch — slightly faster.
+	"shared-lib/hotfix": {
+		stages:    []stageSpec{{"Checkout", 0.05}, {"Build", 0.45}, {"Test", 0.50}},
+		durations: []int64{48_000, 62_000, 85_000},
+	},
 }
 
 // jobRemoteURL maps each fixture job to its Bitbucket Server remote URL.
@@ -222,7 +232,7 @@ func init() {
 		fakeBuilds[name] = builds
 	}
 
-	// Generate 3 builds per branch for each multibranch pipeline.
+	// Generate builds per branch for each multibranch pipeline using config durations.
 	multibranchBuilds = make(map[string][]apiBuild)
 	mbResults := [3]string{"SUCCESS", "FAILURE", "SUCCESS"}
 	mbBranches := [3]string{"origin/main", "origin/main", "origin/hotfix"}
@@ -230,19 +240,28 @@ func init() {
 	for _, pipeline := range multibranchOrder {
 		for branchIdx, branch := range multibranchPipelines[pipeline] {
 			jobPath := pipeline + "/" + branch
-			builds := make([]apiBuild, 3)
+			cfg := jobConfigs[jobPath]
+			n := len(cfg.durations)
+			if n == 0 {
+				n = 3
+			}
+			builds := make([]apiBuild, n)
 			for i := range builds {
-				buildTime := epoch.Add(-mbSpan + time.Duration(i)*(mbSpan/2))
+				dur := int64(60_000)
+				if i < len(cfg.durations) {
+					dur = cfg.durations[i]
+				}
+				buildTime := epoch.Add(-mbSpan + time.Duration(i)*(mbSpan/time.Duration(n)))
 				builds[i] = apiBuild{
 					Number:    i + 1,
-					Result:    mbResults[i],
+					Result:    mbResults[i%len(mbResults)],
 					Timestamp: ms(buildTime),
-					Duration:  60_000,
+					Duration:  dur,
 					Actions: []apiBuildAction{{
 						Class: classGitBuildData,
 						LastBuiltRevision: &apiRevision{
 							SHA1:   deterministicSHA(100+branchIdx, i),
-							Branch: []apiBranch{{Name: mbBranches[i]}},
+							Branch: []apiBranch{{Name: mbBranches[i%len(mbBranches)]}},
 						},
 						RemoteUrls: []string{jobRemoteURL[jobPath]},
 					}},
@@ -466,8 +485,29 @@ func (s *Server) handleBranchJobAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBranchStages(w http.ResponseWriter, r *http.Request) {
-	s.logger.Info("fake: branch stages (none)", "pipeline", r.PathValue("pipeline"), "branch", r.PathValue("branch"))
-	writeJSON(w, apiWFDescribe{Stages: nil})
+	pipeline := r.PathValue("pipeline")
+	branch := r.PathValue("branch")
+	jobPath := pipeline + "/" + branch
+	buildNumStr := r.PathValue("buildnum")
+	buildNum, _ := strconv.Atoi(buildNumStr)
+	s.logger.Info("fake: branch stages", "pipeline", pipeline, "branch", branch, "build", buildNumStr)
+
+	s.mu.RLock()
+	var b *apiBuild
+	for i := range s.builds[jobPath] {
+		if s.builds[jobPath][i].Number == buildNum {
+			cp := s.builds[jobPath][i]
+			b = &cp
+			break
+		}
+	}
+	s.mu.RUnlock()
+
+	if b == nil {
+		writeJSON(w, apiWFDescribe{Stages: nil})
+		return
+	}
+	writeJSON(w, apiWFDescribe{Stages: stagesForBuild(jobPath, *b)})
 }
 
 func (s *Server) handleStages(w http.ResponseWriter, r *http.Request) {
