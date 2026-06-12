@@ -431,7 +431,7 @@
         "label": "Team",
         "multi": false,
         "name": "team",
-                "query": {
+        "query": {
           "infinityQuery": {
             "columns": [],
             "filters": [],

@@ -159,16 +159,6 @@
     "list": [
       {
         "current": {},
-        "includeAll": false,
-        "label": "Datasource",
-        "name": "datasource",
-        "options": [],
-        "query": "prometheus",
-        "refresh": 1,
-        "type": "datasource"
-      },
-      {
-        "current": {},
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
@@ -215,14 +205,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\"}, branch)",
+        "definition": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"}, branch)",
         "includeAll": true,
         "label": "Branch",
         "multi": true,
         "name": "branch",
         "options": [],
         "query": {
-          "query": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\"}, branch)",
+          "query": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"}, branch)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,

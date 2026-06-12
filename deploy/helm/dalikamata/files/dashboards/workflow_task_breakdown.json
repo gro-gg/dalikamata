@@ -91,7 +91,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum by(task_name, task_order)(workflow_task_duration_seconds_sum{team_name=~\"$team\",workflow_name=~\"$workflow\"}) / sum by(task_name, task_order)(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"})",
+          "expr": "sum by(task_name, task_order)(workflow_task_duration_seconds_sum{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\"}) / sum by(task_name, task_order)(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\"})",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -159,16 +159,6 @@
     "list": [
       {
         "current": {},
-        "includeAll": false,
-        "label": "Datasource",
-        "name": "datasource",
-        "options": [],
-        "query": "prometheus",
-        "refresh": 1,
-        "type": "datasource"
-      },
-      {
-        "current": {},
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
@@ -201,6 +191,28 @@
         "options": [],
         "query": {
           "query": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\"}, workflow_name)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "regexApplyTo": "value",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"}, branch)",
+        "includeAll": true,
+        "label": "Branch",
+        "multi": true,
+        "name": "branch",
+        "options": [],
+        "query": {
+          "query": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"}, branch)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
