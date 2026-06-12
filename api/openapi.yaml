@@ -1180,6 +1180,9 @@ components:
         team_name:
           type: string
           description: Enriched at query time — owning team name
+        branch:
+          type: string
+          description: Enriched at query time — git branch from parent WorkflowRun
 
     Team:
       type: object

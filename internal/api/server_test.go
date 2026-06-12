@@ -251,6 +251,46 @@ func TestHandler_GET_WorkflowRuns_200(t *testing.T) {
 	}
 }
 
+func TestHandler_GET_WorkflowRuns_BranchInResponse(t *testing.T) {
+	fake := &fakeQueryFetcher{
+		workflowRuns: []model.WorkflowRun{
+			{ID: "run-1", Status: "SUCCESS", Branch: "main"},
+			{ID: "run-2", Status: "FAILURE", Branch: "feature/x"},
+		},
+	}
+	srv := newTestServer(fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workflowRuns", nil)
+	w := httptest.NewRecorder()
+	srv.newMux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %v, want 200", w.Code)
+	}
+
+	// Decode hits as raw maps so we can inspect every serialised field.
+	var resp struct {
+		Hits []map[string]any `json:"hits"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Hits) != 2 {
+		t.Fatalf("hits len = %d, want 2", len(resp.Hits))
+	}
+	for _, hit := range resp.Hits {
+		if _, ok := hit["branch"]; !ok {
+			t.Errorf("hit %v: branch field absent from API response", hit["id"])
+		}
+	}
+	if resp.Hits[0]["branch"] != "main" {
+		t.Errorf("run-1 branch = %v, want main", resp.Hits[0]["branch"])
+	}
+	if resp.Hits[1]["branch"] != "feature/x" {
+		t.Errorf("run-2 branch = %v, want feature/x", resp.Hits[1]["branch"])
+	}
+}
+
 func TestHandler_GET_UnknownField_400(t *testing.T) {
 	srv := newTestServer(&fakeQueryFetcher{})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workflowRuns?filter.bogus_field=x", nil)
