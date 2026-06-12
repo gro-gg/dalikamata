@@ -46,4 +46,5 @@ type WorkflowTask struct {
 	WorkflowName  string `json:"workflow_name,omitempty"`
 	ComponentName string `json:"component_name,omitempty"`
 	TeamName      string `json:"team_name,omitempty"`
+	Branch        string `json:"branch,omitempty"`
 }

@@ -239,6 +239,7 @@ func (r *MemoryRepository) QueryWorkflowTasks(ctx context.Context, q query.Query
 	}, func(t model.WorkflowTask) error {
 		if run, ok := snapRuns[t.WorkflowRunID]; ok {
 			t.WorkflowID = run.WorkflowID
+			t.Branch = run.Branch
 		}
 		t.WorkflowName = lkp.workflowName(t.WorkflowID)
 		t.ComponentName, t.TeamName = lkp.ownership(t.WorkflowID)
