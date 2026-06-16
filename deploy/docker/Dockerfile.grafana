@@ -1,6 +1,6 @@
 FROM grafana/grafana:latest
 
 USER root
-RUN grafana-cli --pluginsDir /var/lib/grafana/plugins plugins install yesoreyeram-infinity-datasource
+RUN /usr/share/grafana/bin/grafana cli --pluginsDir /var/lib/grafana/plugins plugins install yesoreyeram-infinity-datasource
 COPY --chown=grafana:grafana deploy/docker/grafana_provisioning /etc/grafana/provisioning
 USER grafana
