@@ -59,8 +59,10 @@ spec:
               mountPath: /var/lib/grafana
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
+            {{- if .Values.grafana.dashboards.enabled }}
             - name: dashboards
               mountPath: /etc/grafana/provisioning/dashboards
+            {{- end }}
       volumes:
         - name: grafana-data
           {{- if .Values.grafana.persistence }}
@@ -72,7 +74,9 @@ spec:
         - name: datasources
           configMap:
             name: {{ include "dalikamata.fullname" . }}-grafana-datasources
+        {{- if .Values.grafana.dashboards.enabled }}
         - name: dashboards
           configMap:
             name: {{ include "dalikamata.fullname" . }}-grafana-dashboards
+        {{- end }}
 {{- end }}
