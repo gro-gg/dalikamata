@@ -106,9 +106,8 @@ grafana:
     enabled: true
   image:
     # Custom image with the Infinity datasource plugin pre-installed.
-    # Build with: docker build -f deploy/docker/Dockerfile.grafana -t grafana-dalikamata:latest deploy/docker/
-    # Then push to your registry and set repository/tag accordingly.
-    repository: grafana-dalikamata
+    # Published to GHCR by CI alongside the main image.
+    repository: ghcr.io/gro-gg/dalikamata-grafana
     tag: latest
     pullPolicy: IfNotPresent
   # Optional: name of a pre-existing Secret with key "admin-password".
