@@ -106,9 +106,12 @@ grafana:
     enabled: true
   image:
     # Custom image with the Infinity datasource plugin pre-installed.
-    # Published to GHCR by CI alongside the main image.
+    # Published to GHCR by CI alongside the main image (same versioning).
     repository: ghcr.io/gro-gg/dalikamata-grafana
-    tag: latest
+    # Leave empty to inherit .Values.image.tag — keeps the Grafana image in
+    # lockstep with the main image. Set explicitly to pin a different tag or
+    # when overriding repository to bring your own Grafana image.
+    tag: ""
     pullPolicy: IfNotPresent
   # Optional: name of a pre-existing Secret with key "admin-password".
   # If empty, the chart auto-creates a Secret named <release>-grafana with a random password.

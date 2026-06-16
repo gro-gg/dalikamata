@@ -83,3 +83,13 @@ Name of the ingest-config ConfigMap (existing or chart-managed).
 {{- define "dalikamata.ingestConfigConfigMapName" -}}
 {{- .Values.ingest.config.existingConfigMap | default (printf "%s-ingest-config" (include "dalikamata.fullname" .)) }}
 {{- end }}
+
+{{/*
+Grafana image reference — uses grafana.image.tag when set, otherwise falls
+back to the chart-wide image.tag because the official dalikamata-grafana
+image is published in lockstep with the main image.
+*/}}
+{{- define "dalikamata.grafanaImage" -}}
+{{- $tag := .Values.grafana.image.tag | default .Values.image.tag -}}
+{{- printf "%s:%s" .Values.grafana.image.repository $tag -}}
+{{- end }}
