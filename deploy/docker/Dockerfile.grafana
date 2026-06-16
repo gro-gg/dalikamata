@@ -1,6 +1,24 @@
 FROM grafana/grafana:latest
 
 USER root
-RUN /usr/share/grafana/bin/grafana cli --pluginsDir /var/lib/grafana/plugins plugins install yesoreyeram-infinity-datasource
+
+# Plugins live outside /var/lib/grafana so the Helm PVC/emptyDir mounted at
+# /var/lib/grafana doesn't shadow them. GF_PATHS_PLUGINS makes Grafana load
+# from the bundled path regardless of how the data volume is wired.
+ENV GF_PATHS_PLUGINS=/usr/share/grafana/plugins-bundled
+
+# Air-gapped hardening: stop Grafana from calling out to grafana.com for
+# telemetry, update checks, and signature-key retrieval.
+ENV GF_ANALYTICS_REPORTING_ENABLED=false \
+    GF_ANALYTICS_CHECK_FOR_UPDATES=false \
+    GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false \
+    GF_PLUGINS_PUBLIC_KEY_RETRIEVAL_DISABLED=true \
+    GF_PLUGINS_PREINSTALL_DISABLED=true
+
+RUN mkdir -p "$GF_PATHS_PLUGINS" \
+ && /usr/share/grafana/bin/grafana cli --pluginsDir "$GF_PATHS_PLUGINS" plugins install yesoreyeram-infinity-datasource \
+ && chown -R grafana:root "$GF_PATHS_PLUGINS"
+
 COPY --chown=grafana:grafana deploy/docker/grafana_provisioning /etc/grafana/provisioning
+
 USER grafana
