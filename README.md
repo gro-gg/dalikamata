@@ -99,6 +99,9 @@ Three Grafana dashboards are provisioned automatically when using the `--profile
 | **PR Cycle Time** | PR cycle-time percentiles by repository |
 | **PR Performance Dashboard** | Average cycle time and PR count by repository |
 | **Workflow Performance** | Run p50/p95/mean duration, total runs, slowest tasks by p95, and duration trends — filterable by team, component, and workflow |
+| **Last 10 Workflow Builds** | Status table of the last 10 runs and their task breakdown for a selected team and workflow |
+| **Workflow Task Breakdown** | Mean task duration per pipeline stage for a selected team and workflow |
+| **Team Workflow Overview** | Recent build status timeline per workflow, successful-run and successful-task duration trends, and mean task duration by stage — all scoped to a single team |
 
 ## Query API
 
