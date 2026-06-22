@@ -224,7 +224,7 @@ func TestCollect_WorkflowRunDurationHistogram(t *testing.T) {
 }
 
 // TestCollect_WorkflowTaskDurationHistogram verifies that workflow_task_duration_seconds
-// is emitted per task name, order, run ID, and status.
+// is emitted per task name, order, and status.
 func TestCollect_WorkflowTaskDurationHistogram(t *testing.T) {
 	is := is.New(t)
 	agg := newWorkflowFixtureAggregator(t)
@@ -245,20 +245,19 @@ func TestCollect_WorkflowTaskDurationHistogram(t *testing.T) {
 	}
 	is.True(taskFam != nil)
 
-	// Collect label combos for owned tasks (team=alpha), keyed by task+run+status.
-	type key struct{ task, order, runID, status string }
+	// Collect label combos for owned tasks (team=alpha), keyed by task+order+status.
+	// Runs sharing the same (task, order, status) are merged into one series.
+	type key struct{ task, order, status string }
 	owned := map[key]bool{}
 	for _, m := range taskFam.GetMetric() {
 		labels := labelMap(m)
 		if labels["team_name"] == "alpha" {
-			owned[key{labels["task_name"], labels["task_order"], labels["workflow_run_id"], labels["status"]}] = true
+			owned[key{labels["task_name"], labels["task_order"], labels["status"]}] = true
 		}
 	}
-	// Each run × task × status must be present, with zero-padded order labels.
-	is.True(owned[key{"lint", "00", "run1", "SUCCESS"}])
-	is.True(owned[key{"test", "01", "run1", "SUCCESS"}])
-	is.True(owned[key{"lint", "00", "run2", "SUCCESS"}])
-	is.True(owned[key{"test", "01", "run2", "FAILURE"}])
+	is.True(owned[key{"lint", "00", "SUCCESS"}])
+	is.True(owned[key{"test", "01", "SUCCESS"}])
+	is.True(owned[key{"test", "01", "FAILURE"}])
 }
 
 // TestCollect_WorkflowTaskOrderAfterJSONRoundtrip verifies that task_order
@@ -289,16 +288,16 @@ func TestCollect_WorkflowTaskOrderAfterJSONRoundtrip(t *testing.T) {
 	}
 	is.True(taskFam != nil) // metric must be emitted even after JSON round-trip
 
-	type key struct{ task, order, runID, status string }
+	type key struct{ task, order, status string }
 	owned := map[key]bool{}
 	for _, m := range taskFam.GetMetric() {
 		labels := labelMap(m)
 		if labels["team_name"] == "alpha" {
-			owned[key{labels["task_name"], labels["task_order"], labels["workflow_run_id"], labels["status"]}] = true
+			owned[key{labels["task_name"], labels["task_order"], labels["status"]}] = true
 		}
 	}
-	is.True(owned[key{"lint", "00", "run1", "SUCCESS"}])
-	is.True(owned[key{"test", "01", "run1", "SUCCESS"}])
+	is.True(owned[key{"lint", "00", "SUCCESS"}])
+	is.True(owned[key{"test", "01", "SUCCESS"}])
 }
 
 type jsonRoundtripAggregator struct {
