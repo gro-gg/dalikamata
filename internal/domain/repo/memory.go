@@ -141,6 +141,17 @@ func (r *MemoryRepository) snapshotOwnerLookup() ownerLookup {
 	for k, v := range r.workflows {
 		wfNames[k] = v.Name
 	}
+	return newOwnerLookup(wfc, ct, wfNames)
+}
+
+// newOwnerLookup builds an ownerLookup from three plain maps:
+//   - wfc: workflowID → owning component name
+//   - ct:  component name → team name
+//   - wfNames: workflowID → human-readable workflow name
+//
+// The returned closures only read these maps, so callers must pass copies they
+// own (no shared mutable state) to keep the lookup safe to use without a lock.
+func newOwnerLookup(wfc, ct, wfNames map[string]string) ownerLookup {
 	return ownerLookup{
 		ownership: func(workflowID string) (string, string) {
 			compName, ok := wfc[workflowID]

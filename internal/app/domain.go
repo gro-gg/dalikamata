@@ -16,7 +16,10 @@ import (
 type DomainApp struct {
 	NATSHost string
 	NATSPort int
-	logger   *slog.Logger
+	// DBPath is the SQLite database file for persistent storage. When empty the
+	// domain uses an in-memory repository (data lost on restart).
+	DBPath string
+	logger *slog.Logger
 }
 
 func NewDomainApp(logger *slog.Logger) *DomainApp {
@@ -34,8 +37,26 @@ func (a *DomainApp) Run(ctx context.Context) error {
 	}
 	defer closeConn()
 
-	repository := repo.NewMemory()
-	svc := domain.NewDomainService(repository, repository, a.logger)
+	var store domain.Repository
+	var queryStore domain.QueryRepository
+	if a.DBPath != "" {
+		sqliteRepo, err := repo.NewSQLite(a.DBPath)
+		if err != nil {
+			return fmt.Errorf("opening sqlite repository: %w", err)
+		}
+		defer func() {
+			if cerr := sqliteRepo.Close(); cerr != nil {
+				a.logger.Error("closing sqlite repository", "error", cerr)
+			}
+		}()
+		a.logger.Info("using persistent sqlite repository", "path", a.DBPath)
+		store, queryStore = sqliteRepo, sqliteRepo
+	} else {
+		memoryRepo := repo.NewMemory()
+		a.logger.Info("using in-memory repository (data not persisted)")
+		store, queryStore = memoryRepo, memoryRepo
+	}
+	svc := domain.NewDomainService(store, queryStore, a.logger)
 
 	ingestPort := dalinats.NewPort(a.logger,
 		dalinats.WithGitEventHandler(svc),

@@ -33,6 +33,7 @@ var monoCmd = &cobra.Command{
 		domainApp := app.NewDomainApp(l)
 		domainApp.NATSHost = natsURL
 		domainApp.NATSPort = natsPort
+		domainApp.DBPath = domainDBPath
 
 		metricsApp := app.NewMetricsApp(l)
 		metricsApp.NATSHost = natsURL
@@ -144,6 +145,7 @@ var monoCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(monoCmd)
 	monoCmd.Flags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
+	monoCmd.Flags().StringVar(&domainDBPath, "db-path", "", "SQLite database file for persistent storage (empty = in-memory, data lost on restart)")
 	monoCmd.Flags().StringVar(&bitbucketURL, "bitbucket-url", "", "Bitbucket Server base URL (e.g. https://bitbucket.example.com)")
 	monoCmd.Flags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
 	monoCmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")

@@ -22,6 +22,7 @@ var domainCmd = &cobra.Command{
 		domainApp := app.NewDomainApp(slog.Default())
 		domainApp.NATSHost = natsURL
 		domainApp.NATSPort = natsPort
+		domainApp.DBPath = domainDBPath
 		var wg sync.WaitGroup
 		var runErr error
 
@@ -51,4 +52,5 @@ var domainCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(domainCmd)
+	domainCmd.Flags().StringVar(&domainDBPath, "db-path", "", "SQLite database file for persistent storage (empty = in-memory, data lost on restart)")
 }
