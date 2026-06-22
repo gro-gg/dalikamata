@@ -1,0 +1,33 @@
+# Domain Model ERD
+
+```mermaid
+erDiagram
+    Repo:::vcs
+    Commit:::vcs
+    PullRequest:::vcs
+    Workflow:::ci
+    WorkflowRun:::ci
+    WorkflowTask:::ci
+    Team:::org
+    Component:::org
+    Artifact:::org
+    ComponentRepo:::org
+    ComponentWorkflow:::org
+
+    Repo        ||--o{ Commit            : ""
+    Repo        ||--o{ PullRequest       : ""
+    Repo        ||--o{ Workflow          : ""
+    Workflow    ||--o{ WorkflowRun       : ""
+    WorkflowRun ||--o{ WorkflowTask      : ""
+    Commit      ||--o{ WorkflowRun       : ""
+    Team        ||--o{ Component         : ""
+    Component   ||--o{ ComponentRepo     : ""
+    Component   ||--o{ ComponentWorkflow : ""
+    Component   ||--o{ Artifact          : ""
+    ComponentRepo     }o--|| Repo        : ""
+    ComponentWorkflow }o--|| Workflow    : ""
+
+    classDef vcs fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
+    classDef ci  fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef org fill:#fef9c3,stroke:#d97706,color:#78350f
+```
