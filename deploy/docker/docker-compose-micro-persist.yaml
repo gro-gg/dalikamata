@@ -1,0 +1,16 @@
+# Overlay for local SQLite persistence. Use alongside the base compose file:
+#   docker compose -f docker-compose-micro.yaml -f docker-compose-micro-persist.yaml up
+#
+# Run as the host user (defaults to 1000:1000) so the SQLite files written
+# to the ./data/domain bind mount are owned by you, not root. Override with
+# UID=$(id -u) GID=$(id -g) docker compose ... up if your IDs differ.
+services:
+  dalikamata-domain:
+    user: "${UID:-1000}:${GID:-1000}"
+    command:
+      - "--nats-host=dalikamata-nats"
+      - "--nats-port=24222"
+      - "--db-path=/data/dalikamata.db"
+      - "domain"
+    volumes:
+      - ./data/domain:/data
