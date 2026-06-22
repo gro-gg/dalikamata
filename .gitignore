@@ -29,6 +29,9 @@ go.work.sum
 # test database location
 data/**
 
+# docker compose domain db bind mount
+deploy/docker/data/**
+
 dalifakes
 dalikamata
 !dalifakes/

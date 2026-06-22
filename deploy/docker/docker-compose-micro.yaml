@@ -32,12 +32,19 @@ services:
 
   dalikamata-domain:
     image: dalikamata:latest
+    # Run as the host user (defaults to 1000:1000) so the SQLite files written
+    # to the ./data/domain bind mount are owned by you, not root. Override with
+    # UID=$(id -u) GID=$(id -g) docker compose up if your IDs differ.
+    user: "${UID:-1000}:${GID:-1000}"
     command:
       - "--nats-host=dalikamata-nats"
       - "--nats-port=24222"
+      - "--db-path=/data/dalikamata.db"
       - "domain"
     depends_on:
       - dalikamata-nats
+    volumes:
+      - ./data/domain:/data
 
   dalikamata-metrics:
     image: dalikamata:latest
