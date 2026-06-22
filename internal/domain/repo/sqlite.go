@@ -50,21 +50,23 @@ func WithSQLiteClock(clock func() time.Time) SQLiteRepositoryOpt {
 // the schema. Pass ":memory:" for an ephemeral in-process database. The caller
 // must Close the returned repository.
 func NewSQLite(path string, opts ...SQLiteRepositoryOpt) (*SQLiteRepository, error) {
-	db, err := sql.Open("sqlite", path)
+	// Pragmas are set via the DSN so that every connection in database/sql's
+	// pool inherits them. Applying them with a one-off PRAGMA Exec only
+	// configures whichever pooled connection happened to run it, leaving the
+	// others with the default busy_timeout=0 — which is why concurrent ingest
+	// writes failed immediately with SQLITE_BUSY instead of waiting. WAL gives
+	// concurrent readers alongside a single writer; busy_timeout makes writers
+	// wait rather than fail when the write lock is held.
+	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=journal_mode(WAL)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite database %q: %w", path, err)
 	}
-	// WAL gives concurrent readers alongside a single writer; busy_timeout makes
-	// concurrent writers wait rather than fail with SQLITE_BUSY.
-	for _, pragma := range []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA busy_timeout=5000",
-		"PRAGMA foreign_keys=ON",
-	} {
-		if _, err := db.ExecContext(context.Background(), pragma); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("applying %q: %w", pragma, err)
-		}
+	if path == ":memory:" {
+		// Each new connection to ":memory:" opens a *separate* database, so pin
+		// the pool to a single connection to keep schema and data consistent
+		// across queries.
+		db.SetMaxOpenConns(1)
 	}
 	if _, err := db.ExecContext(context.Background(), schema); err != nil {
 		_ = db.Close()
