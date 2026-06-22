@@ -20,6 +20,10 @@ services:
 
   dalikamata:
     image: dalikamata:latest
+    # Run as the host user (defaults to 1000:1000) so the SQLite files written
+    # to the ./data/domain bind mount are owned by you, not root. Override with
+    # UID=$(id -u) GID=$(id -g) docker compose up if your IDs differ.
+    user: "${UID:-1000}:${GID:-1000}"
     build:
       context: ../../
       dockerfile: deploy/docker/Dockerfile
@@ -29,6 +33,7 @@ services:
       - "--api-addr=0.0.0.0:12113"
       - "mono"
       - "--nats-data=/tmp/nats"
+      - "--db-path=/data/dalikamata.db"
       - "--bitbucket-url=http://dalikamata-fake-bitbucket:17990"
       - "--bitbucket-token=test-token"
       - "--bitbucket-projects=PROJ,INFRA"
@@ -41,6 +46,7 @@ services:
       - "12113:12113"
     volumes:
       - ./components:/components:ro
+      - ./data/domain:/data
 
   dalikamata-ingest-jenkins:
     image: dalikamata:latest
