@@ -292,7 +292,9 @@ func compareAny(a, b any) int {
 	return 0
 }
 
-func cmpOrdered[T interface{ ~int | ~int64 | ~float64 | ~string }](a, b T) int {
+func cmpOrdered[T interface {
+	~int | ~int64 | ~float64 | ~string
+}](a, b T) int {
 	if a < b {
 		return -1
 	}

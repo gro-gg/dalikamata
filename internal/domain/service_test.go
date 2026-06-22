@@ -20,19 +20,19 @@ type stubRepository struct {
 	err error
 }
 
-func (s *stubRepository) AddRepo(_ context.Context, _ model.Repo) error         { return s.err }
-func (s *stubRepository) AddCommit(_ context.Context, _ model.Commit) error     { return s.err }
+func (s *stubRepository) AddRepo(_ context.Context, _ model.Repo) error     { return s.err }
+func (s *stubRepository) AddCommit(_ context.Context, _ model.Commit) error { return s.err }
 func (s *stubRepository) AddPullRequest(_ context.Context, _ model.PullRequest) error {
 	return s.err
 }
-func (s *stubRepository) AddWorkflow(_ context.Context, _ model.Workflow) error     { return s.err }
+func (s *stubRepository) AddWorkflow(_ context.Context, _ model.Workflow) error { return s.err }
 func (s *stubRepository) AddWorkflowRun(_ context.Context, _ model.WorkflowRun) error {
 	return s.err
 }
 func (s *stubRepository) AddWorkflowTask(_ context.Context, _ model.WorkflowTask) error {
 	return s.err
 }
-func (s *stubRepository) AddTeam(_ context.Context, _ model.Team) error         { return s.err }
+func (s *stubRepository) AddTeam(_ context.Context, _ model.Team) error           { return s.err }
 func (s *stubRepository) AddComponent(_ context.Context, _ model.Component) error { return s.err }
 
 func (s *stubRepository) QueryRepos(_ context.Context, _ query.Query, _ func(model.Repo) error) error {

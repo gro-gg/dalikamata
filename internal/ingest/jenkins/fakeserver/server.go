@@ -141,12 +141,12 @@ var jobConfigs = map[string]jobConfig{
 // so that extractRepoID round-trips to the expected "ACME/backend" /
 // "ACME/frontend" / "ACME/shared-lib" composite.
 var jobRemoteURL = map[string]string{
-	"build-backend":    "https://bitbucket.example.com/scm/ACME/backend.git",
-	"test-backend":     "https://bitbucket.example.com/scm/ACME/backend.git",
-	"deploy-backend":   "https://bitbucket.example.com/scm/ACME/backend.git",
-	"build-frontend":   "https://bitbucket.example.com/scm/ACME/frontend.git",
-	"deploy-frontend":  "https://bitbucket.example.com/scm/ACME/frontend.git",
-	"shared-lib/main":  "https://bitbucket.example.com/scm/ACME/shared-lib.git",
+	"build-backend":     "https://bitbucket.example.com/scm/ACME/backend.git",
+	"test-backend":      "https://bitbucket.example.com/scm/ACME/backend.git",
+	"deploy-backend":    "https://bitbucket.example.com/scm/ACME/backend.git",
+	"build-frontend":    "https://bitbucket.example.com/scm/ACME/frontend.git",
+	"deploy-frontend":   "https://bitbucket.example.com/scm/ACME/frontend.git",
+	"shared-lib/main":   "https://bitbucket.example.com/scm/ACME/shared-lib.git",
 	"shared-lib/hotfix": "https://bitbucket.example.com/scm/ACME/shared-lib.git",
 }
 

@@ -12,12 +12,12 @@ import (
 )
 
 type MetricsApp struct {
-	NATSHost        string
-	NATSPort        int
-	MetricsURL      string
-	RefreshInterval time.Duration
+	NATSHost         string
+	NATSPort         int
+	MetricsURL       string
+	RefreshInterval  time.Duration
 	AggregateTimeout time.Duration
-	logger          *slog.Logger
+	logger           *slog.Logger
 }
 
 func NewMetricsApp(logger *slog.Logger) *MetricsApp {

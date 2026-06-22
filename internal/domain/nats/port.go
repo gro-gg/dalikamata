@@ -20,10 +20,10 @@ const (
 )
 
 type NATSPort struct {
-	logger           *slog.Logger
-	gitHandler       domain.GitEventHandler
-	cicdHandler      domain.CicdEventHandler
-	platformHandler  domain.PlatformEventHandler
+	logger          *slog.Logger
+	gitHandler      domain.GitEventHandler
+	cicdHandler     domain.CicdEventHandler
+	platformHandler domain.PlatformEventHandler
 }
 
 type HandlerOpt func(*NATSPort) error

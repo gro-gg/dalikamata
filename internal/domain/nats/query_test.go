@@ -232,7 +232,9 @@ func TestQueryCommits_MalformedRequest(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(msg.Header.Get(dalinats.HeaderQueryStatus), dalinats.StatusError)
 
-	var body struct{ Error string `json:"error"` }
+	var body struct {
+		Error string `json:"error"`
+	}
 	is.NoErr(json.Unmarshal(msg.Data, &body))
 	is.True(body.Error != "")
 }

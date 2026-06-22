@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-
 )
 
 func main() {

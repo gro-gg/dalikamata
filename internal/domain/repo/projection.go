@@ -80,17 +80,17 @@ type ownerLookup struct {
 func projectWorkflowRun(r model.WorkflowRun, lkp ownerLookup) map[string]any {
 	component, team := lkp.ownership(r.WorkflowID)
 	return map[string]any{
-		q.RunID:           r.ID,
-		q.RunWorkflowID:   r.WorkflowID,
-		q.RunNumber:       r.Number,
-		q.RunStatus:       r.Status,
-		q.RunBranch:       r.Branch,
-		q.RunCommitSHA:    r.CommitSHA,
-		q.RunStartedAt:    r.StartedAt,
-		q.RunDuration:     r.Duration,
-		q.RunWorkflowName: lkp.workflowName(r.WorkflowID),
+		q.RunID:            r.ID,
+		q.RunWorkflowID:    r.WorkflowID,
+		q.RunNumber:        r.Number,
+		q.RunStatus:        r.Status,
+		q.RunBranch:        r.Branch,
+		q.RunCommitSHA:     r.CommitSHA,
+		q.RunStartedAt:     r.StartedAt,
+		q.RunDuration:      r.Duration,
+		q.RunWorkflowName:  lkp.workflowName(r.WorkflowID),
 		q.RunComponentName: component,
-		q.RunTeamName:     team,
+		q.RunTeamName:      team,
 	}
 }
 

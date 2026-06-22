@@ -325,8 +325,8 @@ func TestPaginate(t *testing.T) {
 	is.Equal(query.Paginate(items, 0, 3), []int{0, 1, 2})
 	is.Equal(query.Paginate(items, 2, 3), []int{2, 3, 4})
 	is.Equal(query.Paginate(items, 0, 0), []int{0, 1, 2, 3, 4}) // 0 = all
-	is.Equal(len(query.Paginate(items, 10, 5)), 0)               // from out of range
-	is.Equal(query.Paginate(items, 3, 100), []int{3, 4})         // size beyond end
+	is.Equal(len(query.Paginate(items, 10, 5)), 0)              // from out of range
+	is.Equal(query.Paginate(items, 3, 100), []int{3, 4})        // size beyond end
 }
 
 // ---- JSON round-trip -------------------------------------------------------
@@ -368,4 +368,3 @@ func TestJSONRoundTrip(t *testing.T) {
 // ---- helpers ---------------------------------------------------------------
 
 func ptr[T any](v T) *T { return &v }
-

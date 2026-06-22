@@ -19,39 +19,48 @@ import (
 // fakeQueryFetcher records the last query passed to each method and returns
 // pre-configured responses for use in table-driven tests.
 type fakeQueryFetcher struct {
-	lastQuery    query.Query
-	workflowRuns []model.WorkflowRun
+	lastQuery     query.Query
+	workflowRuns  []model.WorkflowRun
 	workflowTasks []model.WorkflowTask
-	aggs         map[string]query.AggregationResult
-	err          error
+	aggs          map[string]query.AggregationResult
+	err           error
 }
 
 func (f *fakeQueryFetcher) QueryReposAll(ctx context.Context, q query.Query) ([]model.Repo, error) {
-	f.lastQuery = q; return nil, f.err
+	f.lastQuery = q
+	return nil, f.err
 }
 func (f *fakeQueryFetcher) QueryCommitsAll(ctx context.Context, q query.Query) ([]model.Commit, error) {
-	f.lastQuery = q; return nil, f.err
+	f.lastQuery = q
+	return nil, f.err
 }
 func (f *fakeQueryFetcher) QueryPullRequestsAll(ctx context.Context, q query.Query) ([]model.PullRequest, error) {
-	f.lastQuery = q; return nil, f.err
+	f.lastQuery = q
+	return nil, f.err
 }
 func (f *fakeQueryFetcher) QueryWorkflowsAll(ctx context.Context, q query.Query) ([]model.Workflow, error) {
-	f.lastQuery = q; return nil, f.err
+	f.lastQuery = q
+	return nil, f.err
 }
 func (f *fakeQueryFetcher) QueryWorkflowRunsAll(ctx context.Context, q query.Query) ([]model.WorkflowRun, error) {
-	f.lastQuery = q; return f.workflowRuns, f.err
+	f.lastQuery = q
+	return f.workflowRuns, f.err
 }
 func (f *fakeQueryFetcher) QueryWorkflowTasksAll(ctx context.Context, q query.Query) ([]model.WorkflowTask, error) {
-	f.lastQuery = q; return f.workflowTasks, f.err
+	f.lastQuery = q
+	return f.workflowTasks, f.err
 }
 func (f *fakeQueryFetcher) QueryTeamsAll(ctx context.Context, q query.Query) ([]model.Team, error) {
-	f.lastQuery = q; return nil, f.err
+	f.lastQuery = q
+	return nil, f.err
 }
 func (f *fakeQueryFetcher) QueryComponentsAll(ctx context.Context, q query.Query) ([]model.Component, error) {
-	f.lastQuery = q; return nil, f.err
+	f.lastQuery = q
+	return nil, f.err
 }
 func (f *fakeQueryFetcher) Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error) {
-	f.lastQuery = q; return f.aggs, f.err
+	f.lastQuery = q
+	return f.aggs, f.err
 }
 
 // --- parseQueryParams unit tests ---
@@ -181,8 +190,8 @@ func TestParseQueryParams_ExistsFilter(t *testing.T) {
 
 func TestParseQueryParams_MultipleFilters_BoolMust(t *testing.T) {
 	params := url.Values{
-		"filter.team_name":  {"platform"},
-		"filter.status":     {"SUCCESS"},
+		"filter.team_name": {"platform"},
+		"filter.status":    {"SUCCESS"},
 	}
 	q, err := parseQueryParams(params, query.EntityWorkflowRun)
 	if err != nil {
