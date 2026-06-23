@@ -25,8 +25,8 @@ func NewQueryPort(logger *slog.Logger, handler domain.QueryHandler) *QueryPort {
 	return &QueryPort{logger: logger, handler: handler}
 }
 
-// Run subscribes to the six query subjects and the aggregate subject, then
-// blocks until ctx is cancelled. Subscriptions are drained before returning.
+// Run subscribes to the eight entity query subjects and the aggregate subject,
+// then blocks until ctx is cancelled. Subscriptions are drained before returning.
 func (p *QueryPort) Run(ctx context.Context, nc *gonats.Conn) error {
 	subs := make([]*gonats.Subscription, 0, 7)
 
