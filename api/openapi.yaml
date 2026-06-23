@@ -476,6 +476,11 @@ paths:
           description: Enriched field — owning team name
           schema:
             type: string
+        - name: filter.branch
+          in: query
+          description: Enriched field — git branch from parent WorkflowRun
+          schema:
+            type: string
       responses:
         "200":
           description: Workflow task results
