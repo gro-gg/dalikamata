@@ -1213,20 +1213,9 @@ components:
         role:
           $ref: "#/components/schemas/DeliveryRole"
 
-    Artifact:
-      type: object
-      required: [name, type, repository]
-      properties:
-        name:
-          type: string
-        type:
-          type: string
-        repository:
-          type: string
-
     Component:
       type: object
-      required: [name, team_name, repos, workflows, artifacts]
+      required: [name, team_name, repos, workflows]
       properties:
         name:
           type: string
@@ -1240,7 +1229,3 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ComponentWorkflow"
-        artifacts:
-          type: array
-          items:
-            $ref: "#/components/schemas/Artifact"

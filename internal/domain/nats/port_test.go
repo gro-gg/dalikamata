@@ -117,7 +117,7 @@ func TestIngestPlatformTeamAndComponent(t *testing.T) {
 	is.NoErr(err)
 
 	// component event
-	compJSON := `{"name":"payment-service","team_name":"payments","repos":[],"workflows":[],"artifacts":[]}`
+	compJSON := `{"name":"payment-service","team_name":"payments","repos":[],"workflows":[]}`
 	_, err = js.Publish(ctx, dalinats.SubjectPlatformComponent, []byte(compJSON))
 	is.NoErr(err)
 

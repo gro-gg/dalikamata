@@ -38,21 +38,11 @@ func ConvertToDomain(f ComponentFile) (model.Team, model.Component, error) {
 		}
 	}
 
-	artifacts := make([]model.Artifact, len(f.Artifacts))
-	for i, a := range f.Artifacts {
-		artifacts[i] = model.Artifact{
-			Name:       a.Name,
-			Type:       a.Type,
-			Repository: a.Repository,
-		}
-	}
-
 	comp := model.Component{
 		Name:      f.Name,
 		TeamName:  f.Team,
 		Repos:     repos,
 		Workflows: workflows,
-		Artifacts: artifacts,
 	}
 	return team, comp, nil
 }

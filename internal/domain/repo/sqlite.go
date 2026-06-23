@@ -17,9 +17,8 @@ import (
 // schema is applied on every open; all statements are idempotent so reopening
 // an existing database is a no-op. Times are stored as RFC3339Nano strings
 // (offset preserved); durations and run numbers as native REAL/INTEGER. The
-// nested Component slices (repos/workflows/artifacts) are stored as JSON because
-// only their top-level scalars and the workflow→component ownership mapping are
-// queried.
+// nested Component slices (repos/workflows) are stored as JSON because only
+// their top-level scalars and the workflow→component ownership mapping are queried.
 //
 //go:embed schema.sql
 var schema string
@@ -169,17 +168,13 @@ func (r *SQLiteRepository) AddComponent(ctx context.Context, c model.Component) 
 	if err != nil {
 		return fmt.Errorf("marshaling component workflows: %w", err)
 	}
-	artifacts, err := json.Marshal(c.Artifacts)
-	if err != nil {
-		return fmt.Errorf("marshaling component artifacts: %w", err)
-	}
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO components (name, team_name, repos, workflows, artifacts)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO components (name, team_name, repos, workflows)
+		VALUES (?, ?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET
 			team_name=excluded.team_name, repos=excluded.repos,
-			workflows=excluded.workflows, artifacts=excluded.artifacts`,
-		c.Name, c.TeamName, string(repos), string(workflows), string(artifacts))
+			workflows=excluded.workflows`,
+		c.Name, c.TeamName, string(repos), string(workflows))
 	return err
 }
 
@@ -334,7 +329,7 @@ func (r *SQLiteRepository) loadTeams(ctx context.Context) ([]model.Team, error) 
 
 func (r *SQLiteRepository) loadComponents(ctx context.Context) ([]model.Component, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT name, team_name, repos, workflows, artifacts FROM components ORDER BY name`)
+		SELECT name, team_name, repos, workflows FROM components ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -342,8 +337,8 @@ func (r *SQLiteRepository) loadComponents(ctx context.Context) ([]model.Componen
 	var out []model.Component
 	for rows.Next() {
 		var v model.Component
-		var repos, workflows, artifacts string
-		if err := rows.Scan(&v.Name, &v.TeamName, &repos, &workflows, &artifacts); err != nil {
+		var repos, workflows string
+		if err := rows.Scan(&v.Name, &v.TeamName, &repos, &workflows); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(repos), &v.Repos); err != nil {
@@ -351,9 +346,6 @@ func (r *SQLiteRepository) loadComponents(ctx context.Context) ([]model.Componen
 		}
 		if err := json.Unmarshal([]byte(workflows), &v.Workflows); err != nil {
 			return nil, fmt.Errorf("unmarshaling component workflows: %w", err)
-		}
-		if err := json.Unmarshal([]byte(artifacts), &v.Artifacts); err != nil {
-			return nil, fmt.Errorf("unmarshaling component artifacts: %w", err)
 		}
 		out = append(out, v)
 	}

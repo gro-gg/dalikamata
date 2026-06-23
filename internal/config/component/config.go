@@ -19,7 +19,6 @@ type ComponentFile struct {
 	Team      string        `yaml:"team"`
 	Repos     []RepoRef     `yaml:"repos"`
 	Workflows []WorkflowRef `yaml:"workflows"`
-	Artifacts []ArtifactRef `yaml:"artifacts"`
 }
 
 type RepoRef struct {
@@ -30,12 +29,6 @@ type RepoRef struct {
 type WorkflowRef struct {
 	ID   string `yaml:"id"`
 	Role string `yaml:"role"`
-}
-
-type ArtifactRef struct {
-	Name       string `yaml:"name"`
-	Type       string `yaml:"type"`
-	Repository string `yaml:"repository"`
 }
 
 // Load reads and validates a single component YAML file.

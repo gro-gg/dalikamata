@@ -54,6 +54,5 @@ CREATE TABLE IF NOT EXISTS components (
 	name      TEXT PRIMARY KEY,
 	team_name TEXT NOT NULL,
 	repos     TEXT NOT NULL,
-	workflows TEXT NOT NULL,
-	artifacts TEXT NOT NULL
+	workflows TEXT NOT NULL
 );

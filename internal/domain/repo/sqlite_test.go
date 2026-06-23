@@ -201,7 +201,6 @@ func TestSQLite_ComponentRoundTrip(t *testing.T) {
 		Name: "svc", TeamName: "team",
 		Repos:     []model.ComponentRepo{{RepoID: "r1", Role: model.DeliveryRoleCI}},
 		Workflows: []model.ComponentWorkflow{{WorkflowID: "wf1", Role: model.DeliveryRoleCD}},
-		Artifacts: []model.Artifact{{Name: "img", Type: "docker", Repository: "reg/img"}},
 	}
 	is.NoErr(r.AddComponent(ctx, want))
 

@@ -22,10 +22,6 @@ workflows:
     role: ci
   - id: payment-service-deploy
     role: cd
-artifacts:
-  - name: payment-api
-    type: docker-image
-    repository: registry.example.com/payment-api
 `
 
 func writeFile(t *testing.T, dir, name, content string) string {
@@ -59,9 +55,6 @@ func TestLoad_Golden(t *testing.T) {
 	}
 	if len(f.Workflows) != 2 {
 		t.Fatalf("workflows len = %d, want 2", len(f.Workflows))
-	}
-	if len(f.Artifacts) != 1 {
-		t.Fatalf("artifacts len = %d, want 1", len(f.Artifacts))
 	}
 }
 
@@ -208,9 +201,6 @@ func TestConvertToDomain(t *testing.T) {
 	}
 	if comp.Workflows[0].Role != model.DeliveryRoleCI {
 		t.Errorf("workflows[0].Role = %q, want CI", comp.Workflows[0].Role)
-	}
-	if len(comp.Artifacts) != 1 {
-		t.Errorf("artifacts len = %d, want 1", len(comp.Artifacts))
 	}
 }
 

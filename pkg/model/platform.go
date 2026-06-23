@@ -20,16 +20,9 @@ type ComponentWorkflow struct {
 	Role       string `json:"role"`
 }
 
-type Artifact struct {
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	Repository string `json:"repository"`
-}
-
 type Component struct {
 	Name      string              `json:"name"`
 	TeamName  string              `json:"team_name"`
 	Repos     []ComponentRepo     `json:"repos"`
 	Workflows []ComponentWorkflow `json:"workflows"`
-	Artifacts []Artifact          `json:"artifacts"`
 }

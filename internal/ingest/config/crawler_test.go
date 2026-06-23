@@ -44,10 +44,6 @@ repos:
 workflows:
   - id: payment-build
     role: ci
-artifacts:
-  - name: payment-api
-    type: docker-image
-    repository: registry/payment-api
 `
 
 const compB = `version: "1"
