@@ -373,6 +373,73 @@ func TestHandler_MethodNotAllowed_405(t *testing.T) {
 	}
 }
 
+func TestHandler_POST_CombinedHitsAndAggregations(t *testing.T) {
+	fake := &fakeQueryFetcher{
+		workflowRuns: []model.WorkflowRun{{ID: "run-1", Status: "SUCCESS"}},
+		aggs:         map[string]query.AggregationResult{"by_status": {DocCount: 1}},
+	}
+	srv := newTestServer(fake)
+
+	body := query.Query{
+		Entity: query.EntityWorkflowRun,
+		Size:   10,
+		Aggs:   map[string]query.Aggregation{"by_status": {Op: query.AggTerms, Field: query.RunStatus}},
+	}
+	b, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workflowRuns", bytes.NewReader(b))
+	w := httptest.NewRecorder()
+	srv.newMux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %v, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp hitsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Aggregations == nil {
+		t.Error("aggregations should be present in combined response")
+	}
+	if resp.Aggregations["by_status"].DocCount != 1 {
+		t.Errorf("by_status doc_count = %v, want 1", resp.Aggregations["by_status"].DocCount)
+	}
+	// Hits must still be present.
+	raw, _ := json.Marshal(resp.Hits)
+	if string(raw) == "null" || string(raw) == "[]" {
+		t.Errorf("hits should be non-empty in combined response, got %s", raw)
+	}
+}
+
+func TestHandler_POST_AggsOnly_NoHits(t *testing.T) {
+	fake := &fakeQueryFetcher{
+		aggs: map[string]query.AggregationResult{"by_status": {DocCount: 5}},
+	}
+	srv := newTestServer(fake)
+
+	body := query.Query{
+		Entity:   query.EntityWorkflowRun,
+		AggsOnly: true,
+		Aggs:     map[string]query.Aggregation{"by_status": {Op: query.AggTerms, Field: query.RunStatus}},
+	}
+	b, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workflowRuns", bytes.NewReader(b))
+	w := httptest.NewRecorder()
+	srv.newMux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %v, want 200", w.Code)
+	}
+	var resp aggregationResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Aggregations["by_status"].DocCount != 5 {
+		t.Errorf("by_status doc_count = %v, want 5", resp.Aggregations["by_status"].DocCount)
+	}
+}
+
 func TestHandler_EmptyResult_ReturnsEmptyArray(t *testing.T) {
 	fake := &fakeQueryFetcher{workflowRuns: nil}
 	srv := newTestServer(fake)

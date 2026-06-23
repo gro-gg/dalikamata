@@ -182,11 +182,13 @@ func (s *Server) newMux() *http.ServeMux {
 }
 
 // hitsResponse is the JSON envelope for entity query results.
+// Aggregations is populated only when the request included Aggs without AggsOnly.
 type hitsResponse struct {
-	Entity string `json:"entity"`
-	Size   int    `json:"size"`
-	From   int    `json:"from"`
-	Hits   any    `json:"hits"`
+	Entity       string                             `json:"entity"`
+	Size         int                                `json:"size"`
+	From         int                                `json:"from"`
+	Hits         any                                `json:"hits"`
+	Aggregations map[string]query.AggregationResult `json:"aggregations,omitempty"`
 }
 
 // aggregationResponse is the JSON envelope for aggregation-only results.
@@ -240,7 +242,16 @@ func (s *Server) entityHandler(entity query.Entity, fetchAll func(context.Contex
 			s.handleQueryError(w, err)
 			return
 		}
-		writeJSON(w, hitsResponse{Entity: string(entity), Size: q.Size, From: q.From, Hits: hits})
+		resp := hitsResponse{Entity: string(entity), Size: q.Size, From: q.From, Hits: hits}
+		if len(q.Aggs) > 0 {
+			aggs, err := s.client.Aggregate(ctx, q)
+			if err != nil {
+				s.handleQueryError(w, err)
+				return
+			}
+			resp.Aggregations = aggs
+		}
+		writeJSON(w, resp)
 	}
 }
 
