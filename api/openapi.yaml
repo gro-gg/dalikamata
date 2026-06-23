@@ -10,10 +10,13 @@ info:
     the POST interface gives access to the complete query DSL including boolean
     filter trees and server-side aggregations.
 
-    ### Aggregation mode
-    POST a body with `"size": -1` to suppress entity hits and receive only
-    aggregation results.  The response shape switches from `HitsResponse` to
-    `AggregationResponse`.
+    ### Aggregation modes
+    Set `"aggs_only": true` in a POST body to suppress entity hits and receive
+    only aggregation results (`AggregationResponse`).
+
+    Omit `aggs_only` (or set it to `false`) and include a non-empty `"aggs"` map
+    to receive both paginated hits **and** aggregations in a single response
+    (`HitsResponse` with the optional `aggregations` field populated).
 
     ### GET filter parameters
     Filters are expressed as query parameters with a `filter.` prefix:
@@ -660,10 +663,10 @@ components:
                 size: 50
                 from: 0
             aggregationOnly:
-              summary: Aggregation-only (size -1)
+              summary: Aggregation-only (aggs_only)
               value:
                 entity: pullRequest
-                size: -1
+                aggs_only: true
                 aggs:
                   by_state:
                     op: terms
@@ -711,12 +714,18 @@ components:
         size:
           type: integer
           default: 100
+          description: Maximum results to return. `0` returns all matches.
+        aggs_only:
+          type: boolean
+          default: false
           description: |
-            Maximum results to return.  `0` returns all matches.
-            `-1` suppresses hits and returns aggregations only.
+            When `true`, suppresses entity hits and returns only the aggregation
+            result tree (`AggregationResponse`).  `size` and `sort` are ignored.
+            When `false` (default) and `aggs` is non-empty, both hits and
+            aggregations are returned in a single `HitsResponse`.
         aggs:
           type: object
-          description: Named aggregation definitions (ignored when `size` ≥ 0)
+          description: Named aggregation definitions
           additionalProperties:
             $ref: "#/components/schemas/Aggregation"
 
@@ -917,6 +926,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Repo"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
 
     CommitsResponse:
       type: object
@@ -932,6 +945,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Commit"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
 
     PullRequestsResponse:
       type: object
@@ -947,6 +964,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PullRequest"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
 
     WorkflowsResponse:
       type: object
@@ -962,6 +983,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Workflow"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
 
     WorkflowRunsResponse:
       type: object
@@ -977,6 +1002,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WorkflowRun"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
 
     WorkflowTasksResponse:
       type: object
@@ -992,6 +1021,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WorkflowTask"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
 
     TeamsResponse:
       type: object
@@ -1007,6 +1040,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Team"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
 
     ComponentsResponse:
       type: object
@@ -1022,6 +1059,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Component"
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AggregationResult"
 
     ErrorResponse:
       type: object
