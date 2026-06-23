@@ -57,8 +57,9 @@ func prCycleTimeSeconds(pr model.PullRequest, now time.Time) float64 {
 // projectWorkflow converts a Workflow to a field map for query evaluation.
 func projectWorkflow(w model.Workflow) map[string]any {
 	return map[string]any{
-		q.WorkflowID:   w.ID,
-		q.WorkflowName: w.Name,
+		q.WorkflowID:     w.ID,
+		q.WorkflowName:   w.Name,
+		q.WorkflowRepoID: w.RepoID,
 	}
 }
 

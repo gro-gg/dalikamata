@@ -37,8 +37,9 @@ const (
 
 // Workflow fields.
 const (
-	WorkflowID   = "id"
-	WorkflowName = "name"
+	WorkflowID     = "id"
+	WorkflowName   = "name"
+	WorkflowRepoID = "repo_id"
 )
 
 // WorkflowRun fields.
