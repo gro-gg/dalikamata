@@ -58,11 +58,14 @@ func (a *DomainApp) Run(ctx context.Context) error {
 	}
 	svc := domain.NewDomainService(store, queryStore, a.logger)
 
-	ingestPort := dalinats.NewPort(a.logger,
+	ingestPort, err := dalinats.NewPort(a.logger,
 		dalinats.WithGitEventHandler(svc),
 		dalinats.WithCicdEventHandler(svc),
 		dalinats.WithPlatformEventHandler(svc),
 	)
+	if err != nil {
+		return fmt.Errorf("creating ingest port: %w", err)
+	}
 	queryPort := dalinats.NewQueryPort(a.logger, svc)
 
 	errCh := make(chan error, 2)

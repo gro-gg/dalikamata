@@ -70,7 +70,8 @@ func TestIngestGitRepo(t *testing.T) {
 
 	memory := repo.NewMemory()
 	svc := domain.NewDomainService(memory, memory, l)
-	sut := dalinats.NewPort(l, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
+	sut, err := dalinats.NewPort(l, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
+	is.NoErr(err)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
@@ -97,11 +98,12 @@ func TestIngestPlatformTeamAndComponent(t *testing.T) {
 
 	memory := repo.NewMemory()
 	svc := domain.NewDomainService(memory, memory, l)
-	sut := dalinats.NewPort(l,
+	sut, err := dalinats.NewPort(l,
 		dalinats.WithGitEventHandler(svc),
 		dalinats.WithCicdEventHandler(svc),
 		dalinats.WithPlatformEventHandler(svc),
 	)
+	is.NoErr(err)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
@@ -113,7 +115,7 @@ func TestIngestPlatformTeamAndComponent(t *testing.T) {
 
 	// team event
 	teamJSON := `{"name":"payments"}`
-	_, err := js.Publish(ctx, dalinats.SubjectPlatformTeam, []byte(teamJSON))
+	_, err = js.Publish(ctx, dalinats.SubjectPlatformTeam, []byte(teamJSON))
 	is.NoErr(err)
 
 	// component event

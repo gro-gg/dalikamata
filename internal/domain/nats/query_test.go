@@ -42,7 +42,8 @@ func startQueryStack(t *testing.T) (*dalinats.QueryClient, func()) {
 	memory := repo.NewMemory()
 	svc := domain.NewDomainService(memory, memory, l)
 
-	ingestPort := dalinats.NewPort(l, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
+	ingestPort, err := dalinats.NewPort(l, dalinats.WithGitEventHandler(svc), dalinats.WithCicdEventHandler(svc))
+	is.NoErr(err)
 	queryPort := dalinats.NewQueryPort(l, svc)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -348,11 +349,12 @@ func startPlatformQueryStack(t *testing.T) (*domain.DomainService, *dalinats.Que
 	memory := repo.NewMemory()
 	svc := domain.NewDomainService(memory, memory, l)
 
-	ingestPort := dalinats.NewPort(l,
+	ingestPort, err := dalinats.NewPort(l,
 		dalinats.WithGitEventHandler(svc),
 		dalinats.WithCicdEventHandler(svc),
 		dalinats.WithPlatformEventHandler(svc),
 	)
+	is.NoErr(err)
 	queryPort := dalinats.NewQueryPort(l, svc)
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -49,17 +49,22 @@ func WithPlatformEventHandler(handler domain.PlatformEventHandler) HandlerOpt {
 	}
 }
 
-func NewPort(logger *slog.Logger, handlers ...HandlerOpt) *NATSPort {
+func NewPort(logger *slog.Logger, handlers ...HandlerOpt) (*NATSPort, error) {
 	port := &NATSPort{
 		logger: logger.With("type", "port", "component", "ingest", "connection", "nats"),
 	}
 	for _, handler := range handlers {
-		err := handler(port)
-		if err != nil {
-			port.logger.Error(err.Error())
+		if err := handler(port); err != nil {
+			return nil, err
 		}
 	}
-	return port
+	if port.gitHandler == nil {
+		return nil, fmt.Errorf("git event handler is required")
+	}
+	if port.cicdHandler == nil {
+		return nil, fmt.Errorf("cicd event handler is required")
+	}
+	return port, nil
 }
 
 func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
