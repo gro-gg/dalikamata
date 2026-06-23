@@ -8,6 +8,9 @@ over the existing NATS query layer. It lets Grafana's
 consume raw domain objects alongside the Prometheus aggregated metrics already
 served by the `metrics` service.
 
+The authoritative API specification is `api/openapi.yaml` (OpenAPI 3.1). The
+`api` command serves it at `/` alongside a Scalar API reference UI.
+
 ```
 Grafana panel  ──(HTTP)──▶  dalikamata api (:2113)
  Infinity ds                internal/api.Server
@@ -83,76 +86,6 @@ Mean-time panels remain on the Prometheus data source — nothing changes there.
 
 ---
 
-## Future work (out of scope for v1)
+## Known gaps (out of scope for v1)
 
-The following improvements are explicitly deferred and should be implemented
-as the API surface evolves.
-
-### 1. Authentication and CORS
-
-The API currently has no authentication and does not set CORS headers. This is
-acceptable while the service runs inside the cluster and Grafana proxies
-requests server-side. Add a middleware layer (e.g. Bearer token validation,
-mTLS, or API-key header) before exposing the port outside cluster boundaries.
-
-CORS headers (`Access-Control-Allow-Origin`, preflight OPTIONS handling) are
-needed if Grafana is ever configured to make browser-side API calls, or if
-another client (e.g. a custom frontend) consumes the API from a different
-origin.
-
-**Suggested path:** a standard `net/http` middleware function that wraps the
-mux returned by `Server.newMux()`, keeping auth logic cleanly separated from
-handler logic. Gate it with a flag or env var so it can be disabled in
-test/dev environments.
-
-### 2. Server-Sent Events (SSE) for large result sets
-
-The API currently buffers all matching entities before writing the response.
-This is fine for dashboard-scale result sets (`size` ≤ a few thousand), but
-will eventually hit memory limits for "give me everything" queries across
-large repositories.
-
-Add a streaming path behind a flag or a separate path prefix
-(`/api/v1/stream/{entity}`) that pipes the `QueryClient` streaming channel
-directly to an SSE response (`Content-Type: text/event-stream`). The
-`QueryClient.QueryXRuns` (streaming) channel API already exists; no domain
-changes are needed.
-
-### 3. Custom Grafana data source plugin
-
-The Infinity data source handles the common cases but requires dashboard authors
-to know the URL param syntax and JSON field names. A custom Grafana plugin could
-provide:
-- A query builder UI for filter, sort, and pagination
-- Autocomplete on team/component/workflow names (fed by the API itself)
-- Native variable support without manual `$runIds` template expressions
-- Typed field metadata for smarter rendering (e.g., duration columns formatted
-  as human-readable times)
-
-**Suggested path:** follow the [Grafana plugin SDK for Go or TypeScript](https://grafana.com/developers/plugin-tools);
-the backend plugin wraps the same HTTP API endpoints the Infinity integration
-already uses.
-
-### 4. SQL-backed storage and Grafana SQL data source
-
-The domain currently uses an in-memory `MemoryRepository` which is rebuilt from
-NATS JetStream replay on startup. A SQL-backed `Repository` (e.g. SQLite or
-PostgreSQL) would allow:
-- Persistent storage across restarts without full event replay
-- Grafana panels driven by SQL data source (ad-hoc SQL, no API layer required)
-- Richer ad-hoc analysis without changing the Go query DSL
-
-**Suggested path:** implement `domain.Repository` and `domain.QueryRepository`
-in `internal/domain/repo/sqlite.go` (or `postgres.go`), swap it in
-`internal/app/domain.go`, and add a migration tool. The domain layer and all
-existing NATS adapters require no changes. See ADR-002 for the port contract.
-
-### 5. Inline-embedded related entities (`?include=tasks`)
-
-Dashboard authors currently need two separate queries to show workflow runs
-with their tasks (Query A → runs, Query B → tasks filtered by `runIds`). An
-`?include=tasks` parameter on `/api/v1/workflowRuns` that embeds task arrays
-inline would simplify single-panel drill-through views.
-
-Add only if dashboards repeatedly need the fan-out; the two-query Grafana
-variable pattern handles the v1 case without any backend change.
+Auth/CORS middleware, SSE streaming for large result sets, a custom Grafana data source plugin, and `?include=tasks` inline embedding are tracked as follow-ups.

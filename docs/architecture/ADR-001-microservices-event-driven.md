@@ -29,7 +29,8 @@ An event-driven microservice architecture directly addresses the extensibility p
 
 ## Consequences
 
-- Each service has a well-defined responsibility and a narrow interface (NATS subjects and JSON payloads).
-- The `mono` command is provided as a convenience to run all core services in a single process for simple deployments, without changing the underlying architecture.
-- Contributors extending dalikamata must publish events using the established subject hierarchy (`ingest.git.*`) and data models (`pkg/model`) to remain compatible with existing consumers.
-- Operational complexity is higher than a monolith; the `docker-compose-micro.yaml` and `docker-compose-mono.yaml` files are provided to lower the barrier to running the full system locally.
+- The `mono` command provides a convenience single-process deployment without changing the underlying architecture.
+- Operational complexity is higher than a monolith; `docker-compose-micro.yaml` and `docker-compose-mono.yaml` are provided to lower the barrier locally.
+- Contributors must publish events using the established subject hierarchy (`ingest.git.*`, `ingest.cicd.*`, `ingest.platform.*`) and `internal/domain/model` types to remain compatible with existing consumers.
+
+> **Updated by** ADR-003 (typed query DSL over NATS), ADR-004 (server-side aggregations), ADR-005 (platform/component events).

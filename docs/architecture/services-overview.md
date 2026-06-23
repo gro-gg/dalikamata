@@ -64,19 +64,15 @@ graph TB
 
 ## Communication protocols
 
-| Channel | Protocol | Direction |
-|---|---|---|
-| Ingest crawlers → NATS | NATS JetStream publish | crawlers push events to the `INGEST` durable stream |
-| NATS → Domain (`NATSPort`) | JetStream durable consumer | domain pulls from the stream at its own pace |
-| Domain (`QueryPort`) ↔ NATS | Core NATS request-reply | QueryPort subscribes to `query.*` and `query.aggregate`; callers use `QueryClient` to send requests and receive streamed replies |
-| Metrics / API → Domain | Core NATS request-reply (via `QueryClient`) | services send a `query.Query` JSON body; domain streams back `data` messages then a `done` sentinel, each with a `Daka-Query-Status` header |
-| Prometheus → Metrics | HTTP scrape `/metrics` | Prometheus polls on its configured interval; responses are served from a pre-computed cache updated every `--metric-refresh-interval` |
-| Grafana → API | HTTP GET / POST `/api/v1/*` | Grafana Infinity datasource drives live queries; supports filter, sort, pagination, and enriched `team_name` / `component_name` labels |
-| Grafana → Prometheus | PromQL | standard Prometheus datasource for histogram dashboards |
+| Channel | Notes |
+|---|---|
+| Prometheus → Metrics | Scrape responses served from a pre-computed cache, updated every `--metric-refresh-interval` (default 30s); scrapes never block on live aggregation queries. |
+| Grafana → API | Grafana Infinity datasource; supports filter, sort, pagination, and enriched `team_name` / `component_name` / `workflow_name` labels on workflow entities. |
+| Query reply wire format | `Daka-Query-Status: data` (one entity per message) → `done` sentinel. Aggregation requests use `query.aggregate` subject and return a single `aggregation` message then `done`. |
 
 ## Extension points
 
-**Custom ingest sources** — any service that publishes to the established subject hierarchy (`ingest.git.*`, `ingest.cicd.*`, `ingest.platform.*`) using the `pkg/model` types is immediately consumed by the domain without any changes to the core codebase (see [ADR-001](ADR-001-microservices-event-driven.md)).
+**Custom ingest sources** — any service that publishes to the established subject hierarchy (`ingest.git.*`, `ingest.cicd.*`, `ingest.platform.*`) using the `internal/domain/model` types is immediately consumed by the domain without any changes to the core codebase (see [ADR-001](ADR-001-microservices-event-driven.md)).
 
 **Custom metrics services** — any service that connects to NATS and issues queries via `QueryClient` can read the accumulated domain state and expose its own Prometheus metrics or HTTP endpoints.
 

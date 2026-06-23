@@ -33,6 +33,12 @@ Key flags (available on all commands via root):
 
 The `nats` and `mono` commands also accept `--nats-data` (default `./data/nats`) to set the JetStream persistence directory.
 
+The `domain` and `mono` commands accept `--db-path` to enable SQLite persistence for domain entities. When omitted, an in-memory repository is used and entity state is lost on restart.
+
+```bash
+dalikamata domain --db-path ./data/dalikamata.db
+```
+
 `dalikamata ingest bitbucket` flags:
 
 | Flag | Default | Description |
@@ -72,6 +78,13 @@ Start all services individually (micro) — each service runs in its own contain
 docker compose -f deploy/docker/docker-compose-micro.yaml up
 ```
 
+Add SQLite persistence for the domain service (entities survive restarts):
+
+```bash
+docker compose -f deploy/docker/docker-compose-micro.yaml \
+               -f deploy/docker/docker-compose-micro-persist.yaml up
+```
+
 Or start NATS, domain, ingest, and metrics together as a single process (mono):
 
 ```bash
@@ -92,7 +105,7 @@ The metrics service (`dalikamata metrics`, port 2112 by default) exposes three P
 
 `team_name` and `component_name` are resolved at query time from the component YAML files ingested by `dalikamata ingest config`. Workflows not claimed by any component file are labelled `team_name="unknown"` / `component_name="unknown"`.
 
-Three Grafana dashboards are provisioned automatically when using the `--profile monitoring` Docker Compose flag:
+Six Grafana dashboards are provisioned automatically when using the `--profile monitoring` Docker Compose flag:
 
 | Dashboard | What it shows |
 |---|---|

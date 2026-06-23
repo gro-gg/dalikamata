@@ -1,119 +1,66 @@
-# Domain Service — Requirements
+# Domain Service — Reference
 
-## Purpose
+The domain service is the central state store. It:
 
-Provide the event streaming backbone for dalikamata. The domain service runs an embedded NATS JetStream server and manages the ingest stream through which all Git events (repositories, commits, pull requests) flow between ingest services and downstream consumers.
+1. Runs an embedded NATS JetStream server (or connects to an external one).
+2. Consumes all `ingest.>` events from the `INGEST` stream via durable consumers.
+3. Persists entities in `MemoryRepository`.
+4. Answers typed queries from consumers (metrics service, API service) over NATS request-reply.
 
-## Architecture
+Architecture decisions: [ADR-001](../architecture/ADR-001-microservices-event-driven.md), [ADR-002](../architecture/ADR-002-onion-architecture.md), [ADR-003](../architecture/ADR-003-domain-query-dsl.md), [ADR-004](../architecture/ADR-004-server-side-aggregations.md), [ADR-005](../architecture/ADR-005-component-config.md).
 
-- Embeds a **NATS JetStream server** that persists events to disk.
-- Owns the **INGEST stream**, which captures all subjects under `ingest.>`.
-- Exposes a **publisher API** (`GITPublisher`) that ingest services use to emit events.
-- Runs **durable consumers** to process inbound events.
+---
 
-## Stream
+## Ingest stream
 
 | Attribute | Value |
-|-----------|-------|
+|---|---|
 | Name | `INGEST` |
 | Subject filter | `ingest.>` |
 | Storage | File (JetStream persistent) |
 
-## Subjects
+### Subjects
 
-| Subject | Payload | Description |
-|---------|---------|-------------|
-| `ingest.git.repo` | `model.Repo` JSON | A repository discovered by an ingestor |
-| `ingest.git.commit` | `model.Commit` JSON | A commit discovered by an ingestor |
-| `ingest.git.pullrequest` | `model.PullRequest` JSON | A pull request discovered by an ingestor |
+| Subject | Payload | Publisher |
+|---|---|---|
+| `ingest.git.repo` | `model.Repo` JSON | `domain.GitPublisher` |
+| `ingest.git.commit` | `model.Commit` JSON | `domain.GitPublisher` |
+| `ingest.git.pullrequest` | `model.PullRequest` JSON | `domain.GitPublisher` |
+| `ingest.cicd.workflow` | `model.Workflow` JSON | `domain.CICDPublisher` |
+| `ingest.cicd.workflowRun` | `model.WorkflowRun` JSON | `domain.CICDPublisher` |
+| `ingest.cicd.workflowTask` | `model.WorkflowTask` JSON | `domain.CICDPublisher` |
+| `ingest.platform.team` | `model.Team` JSON | `domain.PlatformPublisher` |
+| `ingest.platform.component` | `model.Component` JSON | `domain.PlatformPublisher` |
 
-## Consumers
+Publisher interfaces are defined in `internal/domain/ports.go`. NATS implementations are in `internal/domain/nats/publisher.go`.
 
-### `ingest-git-repo`
+### Durable consumers
 
-| Attribute | Value |
-|-----------|-------|
-| Subject | `ingest.git.repo` |
-| Durable | yes |
-| Ack policy | Explicit |
-| Max deliver | 5 |
+One durable consumer per subject. All consumers use explicit ack policy and `MaxDeliver=5`. Messages that fail deserialisation are negatively acknowledged and redelivered; after 5 attempts they are not redelivered further.
 
-On receipt: deserialises the JSON payload into `model.Repo` and acknowledges. If deserialisation fails, the message is negatively acknowledged and redelivered up to `MaxDeliver` times.
-
-## Publisher API
-
-The `GITPublisher` is the interface ingest services use to emit events into the domain. It connects to the NATS server and provides three methods:
-
-| Method | Subject |
-|--------|---------|
-| `PublishRepo(ctx, model.Repo)` | `ingest.git.repo` |
-| `PublishCommit(ctx, model.Commit)` | `ingest.git.commit` |
-| `PublishPullRequest(ctx, model.PullRequest)` | `ingest.git.pullrequest` |
-
-All payloads are serialised to JSON before publishing.
-
-## Data Models
-
-### `model.Repo`
-| Field | Type | Description |
-|-------|------|-------------|
-| `RepoID` | string | Unique repository identifier |
-| `Name` | string | Repository name |
-
-### `model.Commit`
-| Field | Type | Description |
-|-------|------|-------------|
-| `SHA` | string | Commit hash |
-| `RepoID` | string | Repository the commit belongs to |
-| `Author` | string | Commit author |
-| `Timestamp` | time.Time | When the commit was made |
-
-### `model.PullRequest`
-| Field | Type | Description |
-|-------|------|-------------|
-| `ID` | string | Pull request identifier |
-| `RepoID` | string | Repository the PR belongs to |
-| `Name` | string | PR name |
-| `Title` | string | PR title |
-| `Description` | string | PR description |
-| `State` | string | `OPEN`, `MERGED`, or `DECLINED` |
-| `Author` | string | PR author |
-| `CreatedAt` | time.Time | When the PR was opened |
-| `UpdatedAt` | time.Time | When the PR was last updated |
-
-## Configuration
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--nats-host` | `0.0.0.0` | Address the NATS server binds on (persistent root flag) |
-| `--nats-port` | `4222` | Port the NATS server listens on (persistent root flag) |
-| `--nats-data` | `./data/nats` | Directory for JetStream persistence (persistent root flag) |
-| `--nats-server` | `true` | Whether to start the embedded NATS server (persistent root flag) |
-
-## Error Handling
-
-- A NATS server that fails to start within the startup timeout aborts the process.
-- A failed NATS client connection aborts startup.
-- Messages that fail deserialisation are negatively acknowledged and redelivered; after `MaxDeliver` (5) attempts they are not redelivered further.
+---
 
 ## Query API
 
-The domain service exposes a typed query interface over core NATS request-reply. Any service (metrics generators, dashboards, etc.) can query domain entities without subscribing to the full event stream.
+Consumers issue typed queries over **core NATS request-reply** (not JetStream). The domain's `QueryPort` subscribes to all `query.*` subjects and responds on the request's per-request inbox.
 
 ### Query subjects
 
-| Subject | Entity | Description |
-|---|---|---|
-| `query.git.repo` | `model.Repo` | Query stored repositories |
-| `query.git.commit` | `model.Commit` | Query stored commits |
-| `query.git.pullrequest` | `model.PullRequest` | Query stored pull requests |
-| `query.cicd.workflow` | `model.Workflow` | Query stored workflows |
-| `query.cicd.workflowRun` | `model.WorkflowRun` | Query stored workflow runs |
-| `query.cicd.workflowTask` | `model.WorkflowTask` | Query stored workflow tasks |
+| Subject | Entity |
+|---|---|
+| `query.git.repo` | `model.Repo` |
+| `query.git.commit` | `model.Commit` |
+| `query.git.pullrequest` | `model.PullRequest` |
+| `query.cicd.workflow` | `model.Workflow` |
+| `query.cicd.workflowRun` | `model.WorkflowRun` |
+| `query.cicd.workflowTask` | `model.WorkflowTask` |
+| `query.platform.team` | `model.Team` |
+| `query.platform.component` | `model.Component` |
+| `query.aggregate` | aggregation results (any entity) |
 
 ### Request format
 
-Each request body is a JSON-encoded `query.Query`:
+Send a JSON-encoded `query.Query` as the request body. See `internal/domain/query/` for the full DSL.
 
 ```json
 {
@@ -137,31 +84,64 @@ Supported filter operators: `bool` (must/must_not/should), `term`, `terms`, `ran
 
 ### Reply protocol
 
-The server publishes N reply messages to the request's per-request inbox. Each message carries a `Daka-Query-Status` header:
+| `Daka-Query-Status` header | Body |
+|---|---|
+| `data` | One JSON-encoded entity |
+| `done` | Empty — stream terminated cleanly |
+| `error` | `{"error": "..."}` — query failed |
+| `aggregation` | JSON `map[string]AggregationResult` (aggregation requests only) |
 
-| Header value | Body | Meaning |
-|---|---|---|
-| `data` | One JSON-encoded entity | A single matching result |
-| `done` | Empty | Stream terminated cleanly |
-| `error` | `{"error": "..."}` | Query failed; no further messages |
-
-A client reads messages until it sees `done` or `error`. The `QueryClient` in `internal/domain/nats/query_client.go` implements this protocol and exposes per-entity streaming and collecting helpers.
+A `query.aggregate` request receives one `aggregation` message then `done`.
 
 ### Go client
 
 ```go
 client := dalinats.NewQueryClient(nc, logger)
 
-// Streaming (non-blocking, good for large result sets):
-out, errs := client.QueryCommits(ctx, query.Query{
-    Entity: query.EntityCommit,
-    Filter: &query.Filter{Op: query.OpTerm, Field: query.CommitRepoID, Value: &v},
-})
+// Streaming (good for large result sets):
+out, errs := client.QueryCommits(ctx, query.Query{Entity: query.EntityCommit, ...})
 for commit := range out { ... }
 if err := <-errs; err != nil { ... }
 
-// Collecting (convenience, loads all results):
+// Collecting (loads all results into a slice):
 commits, err := client.QueryCommitsAll(ctx, q)
+
+// Aggregation:
+result, err := client.Aggregate(ctx, q)
 ```
 
-## Future Work
+---
+
+## Storage
+
+By default the domain uses `MemoryRepository` — all entity state is held in memory and lost on restart. Pass `--db-path` to activate `SQLiteRepository`, a file-backed persistent store using a pure-Go SQLite driver (no CGo). Both implementations satisfy `domain.Repository` and `domain.QueryRepository` and are interchangeable without any changes to the domain layer.
+
+```bash
+dalikamata domain --db-path ./data/dalikamata.db
+```
+
+The `docker-compose-micro-persist.yaml` overlay adds `--db-path` and a bind mount for the micro deployment:
+
+```bash
+docker compose -f deploy/docker/docker-compose-micro.yaml \
+               -f deploy/docker/docker-compose-micro-persist.yaml up
+```
+
+## Configuration
+
+| Flag | Default | Description |
+|---|---|---|
+| `--nats-host` | `0.0.0.0` | NATS server bind address (nats/mono commands) |
+| `--nats-port` | `4222` | NATS server port |
+| `--nats-data` | `./data/nats` | JetStream persistence directory (nats/mono commands) |
+| `--nats-url` | `localhost` | NATS server host to connect to (domain/metrics/api/ingest commands) |
+| `--db-path` | _(empty)_ | SQLite database file for persistent entity storage; empty = in-memory (domain/mono commands) |
+
+---
+
+## Error handling
+
+- NATS server startup failure → process aborts.
+- NATS client connection failure → process aborts.
+- Message deserialisation failure → negative ack; redelivered up to `MaxDeliver` (5) times.
+- Unsupported query operator → `error` reply; the server never silently drops results.

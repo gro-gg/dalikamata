@@ -14,7 +14,7 @@ Dalikamata ingests *observed* events (commits, PRs, workflow runs) from source s
 
 ## Decision
 
-Introduce per-component YAML configuration files. Each file declares a Component with a name, an owning Team, a list of Repos (tagged CI/CD/CICD), a list of Workflows (tagged CI/CD/CICD), and a list of Artifacts deployed together in the CD step.
+Introduce per-component YAML configuration files. Each file declares a Component with a name, an owning Team, a list of Repos (tagged CI/CD/CICD), and a list of Workflows (tagged CI/CD/CICD).
 
 **Ingest path** — files are read by a new one-shot crawler (`dalikamata ingest config --dir <path>`) that publishes `ingest.platform.team` and `ingest.platform.component` events to the existing `INGEST` JetStream stream. The domain service persists them through the same event/query bus as every other entity (ADR-001 conformant).
 

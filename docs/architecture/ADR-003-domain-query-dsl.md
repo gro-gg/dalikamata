@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Updated by** ADR-004 (server-side aggregations, adds `query.aggregate` subject and `Aggs` field to `Query`), ADR-005 (platform entities, adds `query.platform.team` and `query.platform.component` subjects).
+
 ## Context
 
 The domain service has always been write-only from a consumer's perspective. Ingestors publish events into `ingest.>`, the `DomainService` persists them to `MemoryRepository`, and downstream services such as the metrics service re-derive their state by subscribing to the live event stream. This works for a single, simple metric (PR cycle time) but does not generalise:
@@ -30,7 +32,7 @@ type Query struct {
 }
 ```
 
-Supported filter operators in v1: `bool` (must/must_not/should), `term`, `terms`, `range`, `exists`. Aggregations are **explicitly out of scope** for v1; the `"aggs"` JSON key is reserved by convention and adding it later is a wire-compatible additive change.
+Supported filter operators in v1: `bool` (must/must_not/should), `term`, `terms`, `range`, `exists`. Aggregations are **explicitly out of scope** for v1; the `"aggs"` JSON key is reserved by convention and adding it later is a wire-compatible additive change. (Aggregations were added in ADR-004.)
 
 ### 2. Filter tree uses a discriminator rather than ES positional polymorphism
 
@@ -69,6 +71,9 @@ Subjects mirror the ingest hierarchy under a `query.` prefix:
 | `query.cicd.workflow` | `model.Workflow` |
 | `query.cicd.workflowRun` | `model.WorkflowRun` |
 | `query.cicd.workflowTask` | `model.WorkflowTask` |
+| `query.platform.team` | `model.Team` (added in ADR-005) |
+| `query.platform.component` | `model.Component` (added in ADR-005) |
+| `query.aggregate` | aggregation requests (added in ADR-004) |
 
 Each request body is a JSON-encoded `query.Query`. The server publishes N reply messages to the request's per-request inbox (`msg.Reply`), each with a `Daka-Query-Status` header:
 
@@ -82,12 +87,7 @@ The client (`QueryClient`) creates a `SubscribeSync` inbox *before* publishing t
 
 ### 5. Why Elasticsearch flavor
 
-The DSL is modelled on Elasticsearch's Query DSL for two reasons:
-
-1. **Aggregation roadmap.** Upcoming metrics (p95/p99 cycle-time per repo, deployment frequency per workflow, MTTR per branch) require percentile aggregations and date histograms. The ES `aggs` framework (terms, stats, percentiles, date_histogram) is the de facto industry standard for these operations and will map cleanly to SQL window functions or DuckDB analytics when a real storage engine is introduced.
-2. **Familiarity.** The ES vocabulary (`bool`/`must`/`should`, `term`, `range`, `terms`) is widely known. Metric generator authors can write queries without reading internal docs.
-
-Aggregations ship in a future PR; the `"aggs"` key is reserved today so the wire format and the Go type will not need a breaking change.
+The DSL uses ES vocabulary (`bool`/`must`/`should`, `term`, `range`, `terms`, `aggs`) because the aggregation primitives (terms, date_histogram, percentiles) map cleanly to future SQL/analytics backends and the vocabulary is widely known. The `"aggs"` key was reserved at v1 so that ADR-004's aggregation extension required no breaking wire change.
 
 ## Consequences
 
@@ -96,7 +96,7 @@ Aggregations ship in a future PR; the `"aggs"` key is reserved today so the wire
 - The existing PR cycle-time metric service is **not affected** — it remains event-driven and does not use the query API. Porting it is a follow-up task.
 - Per-request inbox semantics offer no backpressure. If a client is slow to consume replies, the server's outbound NATS buffer will fill and `PublishMsg` will return `ErrSlowConsumer`, aborting the query. Clients should consume results promptly.
 - Aggregations (`aggs`) are not supported in v1. The server ignores the reserved `"aggs"` key if present.
-- The SQLite/Postgres migration is the natural next step: implement `QueryRepository` in a new adapter and swap it in `DomainApp.Run` without touching any domain code.
+- A SQLite adapter (`internal/domain/repo/sqlite.go`) implements `Repository` and `QueryRepository` and is activated with `--db-path`. A PostgreSQL adapter would follow the same pattern.
 
 ## Code locations
 

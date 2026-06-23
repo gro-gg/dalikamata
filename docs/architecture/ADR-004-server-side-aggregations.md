@@ -131,19 +131,9 @@ The `aggregation` message is always a single reply (aggregation results are smal
 
 ---
 
-## Layer changes
+## Implementation
 
-| Layer | Change |
-|-------|--------|
-| `internal/domain/query/` | New `aggregation.go`, `result.go`, `aggregator.go`; extend `query.go`, `fields.go` |
-| `internal/domain/repo/projection.go` | `projectPullRequest(pr, now)` adds `cycle_time_seconds`; clock seam on `MemoryRepository` |
-| `internal/domain/repo/memory.go` | `Aggregate` method; `WithClock` option |
-| `internal/domain/ports.go` | `Aggregate` added to `QueryRepository` |
-| `internal/domain/service.go` | `Aggregate` added to `QueryHandler`; forwarded by `DomainService` |
-| `internal/domain/nats/subjects.go` | `SubjectQueryAggregate`, `StatusAggregation` |
-| `internal/domain/nats/query_port.go` | `handleAggregate`, subscribe to new subject |
-| `internal/domain/nats/query_client.go` | `Aggregate` method |
-| `internal/metrics/service.go` | `PullRequestAggregator` port; rewrote `Collect` as tree walk |
+Core logic lives in `internal/domain/query/` (DSL types + aggregator), with port additions in `internal/domain/ports.go` and NATS wiring in `internal/domain/nats/`. See `git log` for the per-file diff.
 
 ---
 
