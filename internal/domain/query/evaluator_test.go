@@ -29,7 +29,7 @@ func fields(kvs ...any) map[string]any {
 func TestMatchTerm(t *testing.T) {
 	is := is.New(t)
 
-	f := query.Filter{Op: query.OpTerm, Field: "state", Value: ptr(query.StringValue("OPEN"))}
+	f := query.Filter{Op: query.OpTerm, Field: "state", Value: query.Ptr(query.StringValue("OPEN"))}
 
 	ok, err := query.Match(&f, fields("state", "OPEN"))
 	is.NoErr(err)
@@ -47,7 +47,7 @@ func TestMatchTerm(t *testing.T) {
 
 func TestMatchTermTypeMismatch(t *testing.T) {
 	is := is.New(t)
-	f := query.Filter{Op: query.OpTerm, Field: "count", Value: ptr(query.StringValue("5"))}
+	f := query.Filter{Op: query.OpTerm, Field: "count", Value: query.Ptr(query.StringValue("5"))}
 	// count is an int in the projection
 	_, err := query.Match(&f, fields("count", 5))
 	is.True(err != nil)
@@ -88,8 +88,8 @@ func TestMatchRangeInt(t *testing.T) {
 		Op:    query.OpRange,
 		Field: "number",
 		Range: &query.Range{
-			GTE: ptr(query.IntValue(10)),
-			LTE: ptr(query.IntValue(20)),
+			GTE: query.Ptr(query.IntValue(10)),
+			LTE: query.Ptr(query.IntValue(20)),
 		},
 	}
 
@@ -115,8 +115,8 @@ func TestMatchRangeGtLt(t *testing.T) {
 		Op:    query.OpRange,
 		Field: "duration",
 		Range: &query.Range{
-			GT: ptr(query.FloatValue(0.0)),
-			LT: ptr(query.FloatValue(60.0)),
+			GT: query.Ptr(query.FloatValue(0.0)),
+			LT: query.Ptr(query.FloatValue(60.0)),
 		},
 	}
 
@@ -141,8 +141,8 @@ func TestMatchRangeTime(t *testing.T) {
 		Op:    query.OpRange,
 		Field: "timestamp",
 		Range: &query.Range{
-			GTE: ptr(query.TimeValue(t0)),
-			LTE: ptr(query.TimeValue(t2)),
+			GTE: query.Ptr(query.TimeValue(t0)),
+			LTE: query.Ptr(query.TimeValue(t2)),
 		},
 	}
 
@@ -181,8 +181,8 @@ func TestMatchBoolMust(t *testing.T) {
 	f := query.Filter{
 		Op: query.OpBool,
 		Must: []query.Filter{
-			{Op: query.OpTerm, Field: "repo_id", Value: ptr(query.StringValue("PROJ/repo"))},
-			{Op: query.OpTerm, Field: "state", Value: ptr(query.StringValue("MERGED"))},
+			{Op: query.OpTerm, Field: "repo_id", Value: query.Ptr(query.StringValue("PROJ/repo"))},
+			{Op: query.OpTerm, Field: "state", Value: query.Ptr(query.StringValue("MERGED"))},
 		},
 	}
 
@@ -200,7 +200,7 @@ func TestMatchBoolMustNot(t *testing.T) {
 	f := query.Filter{
 		Op: query.OpBool,
 		MustNot: []query.Filter{
-			{Op: query.OpTerm, Field: "state", Value: ptr(query.StringValue("OPEN"))},
+			{Op: query.OpTerm, Field: "state", Value: query.Ptr(query.StringValue("OPEN"))},
 		},
 	}
 
@@ -218,8 +218,8 @@ func TestMatchBoolShouldOnly(t *testing.T) {
 	f := query.Filter{
 		Op: query.OpBool,
 		Should: []query.Filter{
-			{Op: query.OpTerm, Field: "state", Value: ptr(query.StringValue("MERGED"))},
-			{Op: query.OpTerm, Field: "state", Value: ptr(query.StringValue("DECLINED"))},
+			{Op: query.OpTerm, Field: "state", Value: query.Ptr(query.StringValue("MERGED"))},
+			{Op: query.OpTerm, Field: "state", Value: query.Ptr(query.StringValue("DECLINED"))},
 		},
 	}
 
@@ -238,10 +238,10 @@ func TestMatchBoolMustAndShouldIgnoresShould(t *testing.T) {
 	f := query.Filter{
 		Op: query.OpBool,
 		Must: []query.Filter{
-			{Op: query.OpTerm, Field: "repo_id", Value: ptr(query.StringValue("A/repo"))},
+			{Op: query.OpTerm, Field: "repo_id", Value: query.Ptr(query.StringValue("A/repo"))},
 		},
 		Should: []query.Filter{
-			{Op: query.OpTerm, Field: "state", Value: ptr(query.StringValue("MERGED"))},
+			{Op: query.OpTerm, Field: "state", Value: query.Ptr(query.StringValue("MERGED"))},
 		},
 	}
 
@@ -257,11 +257,11 @@ func TestMatchBoolNested(t *testing.T) {
 	f := query.Filter{
 		Op: query.OpBool,
 		Must: []query.Filter{
-			{Op: query.OpTerm, Field: "state", Value: ptr(query.StringValue("MERGED"))},
+			{Op: query.OpTerm, Field: "state", Value: query.Ptr(query.StringValue("MERGED"))},
 		},
 		MustNot: []query.Filter{
 			{Op: query.OpBool, Must: []query.Filter{
-				{Op: query.OpTerm, Field: "author", Value: ptr(query.StringValue("bot"))},
+				{Op: query.OpTerm, Field: "author", Value: query.Ptr(query.StringValue("bot"))},
 			}},
 		},
 	}
@@ -338,10 +338,10 @@ func TestJSONRoundTrip(t *testing.T) {
 		Filter: &query.Filter{
 			Op: query.OpBool,
 			Must: []query.Filter{
-				{Op: query.OpTerm, Field: query.CommitRepoID, Value: ptr(query.StringValue("PROJ/repo"))},
+				{Op: query.OpTerm, Field: query.CommitRepoID, Value: query.Ptr(query.StringValue("PROJ/repo"))},
 				{Op: query.OpRange, Field: query.CommitTimestamp, Range: &query.Range{
-					GTE: ptr(query.TimeValue(t0)),
-					LT:  ptr(query.TimeValue(t2)),
+					GTE: query.Ptr(query.TimeValue(t0)),
+					LT:  query.Ptr(query.TimeValue(t2)),
 				}},
 			},
 		},
@@ -365,6 +365,3 @@ func TestJSONRoundTrip(t *testing.T) {
 	is.Equal(decoded.Filter.Must[1].Op, query.OpRange)
 }
 
-// ---- helpers ---------------------------------------------------------------
-
-func ptr[T any](v T) *T { return &v }

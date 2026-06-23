@@ -81,11 +81,7 @@ func TestQueryCommits_TermFilter(t *testing.T) {
 
 	q := query.Query{
 		Entity: query.EntityCommit,
-		Filter: &query.Filter{
-			Op:    query.OpTerm,
-			Field: query.CommitRepoID,
-			Value: ptrQ(query.StringValue("X/repo")),
-		},
+		Filter: query.Ptr(query.TermFilter(query.CommitRepoID, query.StringValue("X/repo"))),
 	}
 
 	got, err := client.QueryCommitsAll(context.Background(), q)
@@ -107,14 +103,10 @@ func TestQueryCommits_RangeFilter(t *testing.T) {
 
 	q := query.Query{
 		Entity: query.EntityCommit,
-		Filter: &query.Filter{
-			Op:    query.OpRange,
-			Field: query.CommitTimestamp,
-			Range: &query.Range{
-				GTE: ptrQ(query.TimeValue(t0)),
-				LTE: ptrQ(query.TimeValue(t2)),
-			},
-		},
+		Filter: query.Ptr(query.RangeFilter(query.CommitTimestamp, query.Range{
+			GTE: query.Ptr(query.TimeValue(t0)),
+			LTE: query.Ptr(query.TimeValue(t2)),
+		})),
 	}
 
 	got, err := client.QueryCommitsAll(context.Background(), q)
@@ -161,13 +153,7 @@ func TestQueryPullRequests_TermsFilter(t *testing.T) {
 
 	q := query.Query{
 		Entity: query.EntityPullRequest,
-		Filter: &query.Filter{
-			Op:    query.OpTerms,
-			Field: query.PRState,
-			Values: []query.Value{
-				query.StringValue(model.PullRequestStateMerged),
-			},
-		},
+		Filter: query.Ptr(query.TermsFilter(query.PRState, query.StringValue(model.PullRequestStateMerged))),
 	}
 
 	got, err := client.QueryPullRequestsAll(context.Background(), q)
@@ -184,11 +170,7 @@ func TestQueryCommits_ZeroMatch(t *testing.T) {
 
 	q := query.Query{
 		Entity: query.EntityCommit,
-		Filter: &query.Filter{
-			Op:    query.OpTerm,
-			Field: query.CommitRepoID,
-			Value: ptrQ(query.StringValue("DOES/NOT/EXIST")),
-		},
+		Filter: query.Ptr(query.TermFilter(query.CommitRepoID, query.StringValue("DOES/NOT/EXIST"))),
 	}
 
 	out, errs := client.QueryCommits(context.Background(), q)
@@ -328,8 +310,6 @@ func TestAggregate_EmptyAggs(t *testing.T) {
 	is.True(result == nil)
 }
 
-func ptrQ[T any](v T) *T { return &v }
-
 // startPlatformQueryStack is like startQueryStack but also returns the service
 // so callers can seed platform entities (Team, Component) directly.
 func startPlatformQueryStack(t *testing.T) (*domain.DomainService, *dalinats.QueryClient, func()) {
@@ -379,11 +359,7 @@ func TestQueryTeams_RoundTrip(t *testing.T) {
 
 	teams, err := client.QueryTeamsAll(context.Background(), query.Query{
 		Entity: query.EntityTeam,
-		Filter: &query.Filter{
-			Op:    query.OpTerm,
-			Field: query.TeamName,
-			Value: ptrQ(query.StringValue("alpha")),
-		},
+		Filter: query.Ptr(query.TermFilter(query.TeamName, query.StringValue("alpha"))),
 	})
 	is.NoErr(err)
 	is.Equal(len(teams), 1)
@@ -402,11 +378,7 @@ func TestQueryComponents_RoundTrip(t *testing.T) {
 
 	comps, err := client.QueryComponentsAll(context.Background(), query.Query{
 		Entity: query.EntityComponent,
-		Filter: &query.Filter{
-			Op:    query.OpTerm,
-			Field: query.ComponentTeamName,
-			Value: ptrQ(query.StringValue("payments")),
-		},
+		Filter: query.Ptr(query.TermFilter(query.ComponentTeamName, query.StringValue("payments"))),
 	})
 	is.NoErr(err)
 	is.Equal(len(comps), 1)
