@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS workflow_tasks (
 	status          TEXT NOT NULL,
 	started_at      TEXT NOT NULL,
 	duration        REAL NOT NULL,
-	PRIMARY KEY (workflow_run_id, name)
+	PRIMARY KEY (workflow_run_id, task_order)
 );
 CREATE TABLE IF NOT EXISTS teams (
 	name TEXT PRIMARY KEY

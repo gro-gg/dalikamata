@@ -145,8 +145,8 @@ func (r *SQLiteRepository) AddWorkflowTask(ctx context.Context, t model.Workflow
 		INSERT INTO workflow_tasks
 			(workflow_run_id, task_order, name, status, started_at, duration)
 		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(workflow_run_id, name) DO UPDATE SET
-			task_order=excluded.task_order, status=excluded.status,
+		ON CONFLICT(workflow_run_id, task_order) DO UPDATE SET
+			name=excluded.name, status=excluded.status,
 			started_at=excluded.started_at, duration=excluded.duration`,
 		t.WorkflowRunID, t.Order, t.Name, t.Status, formatTime(t.StartedAt), t.Duration)
 	return err
