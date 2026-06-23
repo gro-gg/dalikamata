@@ -225,25 +225,30 @@ q := query.Query{
 }
 ```
 
-`Size: 0` (the zero value) returns all matches. `Size: -1` is reserved for
-aggregation-only requests (see below).
+`Size: 0` (the zero value) returns all matches.
 
 ---
 
 ## Aggregations
 
-Aggregations run server-side and return a result tree rather than individual entity
-records. Send the query to `client.Aggregate` and set `Size: -1` so no entity
-records are streamed alongside the aggregation.
+Aggregations run server-side and return a result tree. There are three modes,
+controlled by `AggsOnly` and whether `Aggs` is set:
 
-### Flat terms aggregation
+| `AggsOnly` | `Aggs` | Result |
+|---|---|---|
+| `false` | empty | hits only (default) |
+| `false` | non-empty | hits + aggregations in one response |
+| `true` | non-empty | aggregations only, no entity hits |
 
-Count PRs grouped by state:
+### Aggregations only
+
+Use `AggsOnly: true` when you only need the summary and don't want entity records.
+Call `client.Aggregate` — it routes to the dedicated aggregate subject:
 
 ```go
 result, err := client.Aggregate(ctx, query.Query{
-    Entity: query.EntityPullRequest,
-    Size:   -1,
+    Entity:   query.EntityPullRequest,
+    AggsOnly: true,
     Aggs: map[string]query.Aggregation{
         "by_state": {Op: query.AggTerms, Field: query.PRState},
     },
@@ -254,14 +259,42 @@ for _, bucket := range result["by_state"].Buckets {
 }
 ```
 
+### Hits and aggregations together
+
+Omit `AggsOnly` (or set it to `false`) and include a non-empty `Aggs` map. Call the
+entity's `QueryXxxAll` method — the aggregation is computed over the full matching set
+regardless of `Size`/`From`, and is returned alongside the paginated hits:
+
+```go
+prs, err := client.QueryPullRequestsAll(ctx, query.Query{
+    Entity: query.EntityPullRequest,
+    Filter: query.Ptr(query.TermFilter(query.PRRepoID, query.StringValue("MYPROJ/repo"))),
+    Sort:   []query.SortField{{Field: query.PRCreatedAt, Order: query.SortDesc}},
+    Size:   20,
+    Aggs: map[string]query.Aggregation{
+        "by_state": {Op: query.AggTerms, Field: query.PRState},
+    },
+})
+// prs contains the first 20 matching pull requests.
+// To get the aggregation alongside hits, use the HTTP POST API or extend
+// the domain service to return both — the QueryClient's streaming methods
+// return entity records only.
+```
+
+> **Note:** the Go `QueryClient` methods return entity records only. The combined
+> hits + aggregation response is available via the HTTP API (POST to any entity
+> endpoint with `"aggs_only": false` and a non-empty `"aggs"` map). If you need
+> both in Go without going through HTTP, call `QueryXxxAll` and `Aggregate`
+> sequentially.
+
 ### Date histogram
 
 PRs grouped by the month they were created:
 
 ```go
 result, err := client.Aggregate(ctx, query.Query{
-    Entity: query.EntityPullRequest,
-    Size:   -1,
+    Entity:   query.EntityPullRequest,
+    AggsOnly: true,
     Aggs: map[string]query.Aggregation{
         "by_month": {
             Op:       query.AggDateHistogram,
@@ -279,8 +312,8 @@ PR cycle times bucketed into Prometheus-style cumulative bins:
 
 ```go
 result, err := client.Aggregate(ctx, query.Query{
-    Entity: query.EntityPullRequest,
-    Size:   -1,
+    Entity:   query.EntityPullRequest,
+    AggsOnly: true,
     Aggs: map[string]query.Aggregation{
         "cycle_time": {
             Op:      query.AggHistogram,
@@ -304,8 +337,8 @@ compute Prometheus histograms per team/component/workflow/branch:
 
 ```go
 result, err := client.Aggregate(ctx, query.Query{
-    Entity: query.EntityWorkflowRun,
-    Size:   -1,
+    Entity:   query.EntityWorkflowRun,
+    AggsOnly: true,
     Aggs: map[string]query.Aggregation{
         "by_team": {
             Op:    query.AggTerms,
@@ -344,9 +377,9 @@ Filters narrow the entity set before aggregation:
 
 ```go
 result, err := client.Aggregate(ctx, query.Query{
-    Entity: query.EntityPullRequest,
-    Filter: query.Ptr(query.TermFilter(query.PRState, query.StringValue("MERGED"))),
-    Size:   -1,
+    Entity:   query.EntityPullRequest,
+    AggsOnly: true,
+    Filter:   query.Ptr(query.TermFilter(query.PRState, query.StringValue("MERGED"))),
     Aggs: map[string]query.Aggregation{
         "by_repo": {Op: query.AggTerms, Field: query.PRRepoID},
     },
