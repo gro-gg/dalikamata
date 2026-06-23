@@ -279,6 +279,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: filter.repo_id
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: Workflow results
