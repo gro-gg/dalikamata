@@ -14,21 +14,14 @@ const schemaVersion = "1"
 // ComponentFile is the raw deserialized form of a component YAML file.
 // It maps 1:1 to the on-disk schema; no domain semantics.
 type ComponentFile struct {
-	Version   string        `yaml:"version"`
-	Name      string        `yaml:"name"`
-	Team      string        `yaml:"team"`
-	Repos     []RepoRef     `yaml:"repos"`
-	Workflows []WorkflowRef `yaml:"workflows"`
+	Version string    `yaml:"version"`
+	Name    string    `yaml:"name"`
+	Team    string    `yaml:"team"`
+	Repos   []RepoRef `yaml:"repos"`
 }
 
 type RepoRef struct {
-	ID   string `yaml:"id"`
-	Role string `yaml:"role"`
-}
-
-type WorkflowRef struct {
-	ID   string `yaml:"id"`
-	Role string `yaml:"role"`
+	ID string `yaml:"id"`
 }
 
 // Load reads and validates a single component YAML file.
@@ -76,12 +69,6 @@ func LoadDir(dir string) ([]ComponentFile, error) {
 	return files, nil
 }
 
-var validRoles = map[string]bool{
-	"ci":   true,
-	"cd":   true,
-	"cicd": true,
-}
-
 // Validate checks schema rules. Returns the first error found.
 func (f ComponentFile) Validate() error {
 	if f.Version != schemaVersion {
@@ -101,29 +88,10 @@ func (f ComponentFile) Validate() error {
 		if strings.TrimSpace(r.ID) == "" {
 			return fmt.Errorf("repos[%d].id is required", i)
 		}
-		if !validRoles[strings.ToLower(r.Role)] {
-			return fmt.Errorf("repos[%d].role %q must be one of: ci, cd, cicd", i, r.Role)
-		}
 		if seenRepo[r.ID] {
 			return fmt.Errorf("repos[%d].id %q is duplicated", i, r.ID)
 		}
 		seenRepo[r.ID] = true
-	}
-	if len(f.Workflows) == 0 {
-		return fmt.Errorf("workflows must not be empty")
-	}
-	seenWf := make(map[string]bool)
-	for i, w := range f.Workflows {
-		if strings.TrimSpace(w.ID) == "" {
-			return fmt.Errorf("workflows[%d].id is required", i)
-		}
-		if !validRoles[strings.ToLower(w.Role)] {
-			return fmt.Errorf("workflows[%d].role %q must be one of: ci, cd, cicd", i, w.Role)
-		}
-		if seenWf[w.ID] {
-			return fmt.Errorf("workflows[%d].id %q is duplicated", i, w.ID)
-		}
-		seenWf[w.ID] = true
 	}
 	return nil
 }

@@ -156,13 +156,13 @@ func TestSQLite_OwnershipEnrichment(t *testing.T) {
 	ctx := context.Background()
 	r := newSQLite(t)
 
-	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf1", Name: "Build Pipeline"}))
-	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf2", Name: "Deploy"}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf1", Name: "Build Pipeline", RepoID: "r1"}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf2", Name: "Deploy", RepoID: "r2"}))
 	is.NoErr(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run1", WorkflowID: "wf1", Status: "SUCCESS"}))
 	is.NoErr(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run2", WorkflowID: "wf2", Status: "SUCCESS"}))
 	is.NoErr(r.AddComponent(ctx, model.Component{
 		Name: "svc-a", TeamName: "team-alpha",
-		Workflows: []model.ComponentWorkflow{{WorkflowID: "wf1"}, {WorkflowID: "wf2"}},
+		RepoIDs: []string{"r1", "r2"},
 	}))
 
 	enriched := map[string]model.WorkflowRun{}
@@ -175,10 +175,10 @@ func TestSQLite_OwnershipEnrichment(t *testing.T) {
 	is.Equal(enriched["run1"].WorkflowName, "Build Pipeline")
 	is.Equal(enriched["run2"].TeamName, "team-alpha")
 
-	// Re-ingest the component with a shrunk workflow list: wf2 is now orphaned.
+	// Re-ingest the component with a shrunk repo list: wf2 (via r2) is now orphaned.
 	is.NoErr(r.AddComponent(ctx, model.Component{
 		Name: "svc-a", TeamName: "team-alpha",
-		Workflows: []model.ComponentWorkflow{{WorkflowID: "wf1"}},
+		RepoIDs: []string{"r1"},
 	}))
 	enriched = map[string]model.WorkflowRun{}
 	is.NoErr(r.QueryWorkflowRuns(ctx, query.Query{Entity: query.EntityWorkflowRun}, func(run model.WorkflowRun) error {
@@ -198,9 +198,9 @@ func TestSQLite_ComponentRoundTrip(t *testing.T) {
 	r := newSQLite(t)
 
 	want := model.Component{
-		Name: "svc", TeamName: "team",
-		Repos:     []model.ComponentRepo{{RepoID: "r1", Role: model.DeliveryRoleCI}},
-		Workflows: []model.ComponentWorkflow{{WorkflowID: "wf1", Role: model.DeliveryRoleCD}},
+		Name:     "svc",
+		TeamName: "team",
+		RepoIDs:  []string{"r1", "r2"},
 	}
 	is.NoErr(r.AddComponent(ctx, want))
 

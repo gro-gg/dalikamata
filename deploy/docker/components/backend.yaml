@@ -3,11 +3,3 @@ name: backend
 team: platform
 repos:
   - id: PROJ/backend-api
-    role: cicd
-workflows:
-  - id: build-backend
-    role: ci
-  - id: test-backend
-    role: ci
-  - id: deploy-backend
-    role: cd

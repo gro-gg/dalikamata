@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"codeberg.org/aeforged/dalikamata/internal/config/component"
-	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 )
 
 const goldenYAML = `version: "1"
@@ -14,14 +13,7 @@ name: payment-service
 team: payments
 repos:
   - id: PLAT/payment-service
-    role: cicd
   - id: PLAT/payment-infra
-    role: cd
-workflows:
-  - id: payment-service-build
-    role: ci
-  - id: payment-service-deploy
-    role: cd
 `
 
 func writeFile(t *testing.T, dir, name, content string) string {
@@ -50,11 +42,8 @@ func TestLoad_Golden(t *testing.T) {
 	if len(f.Repos) != 2 {
 		t.Fatalf("repos len = %d, want 2", len(f.Repos))
 	}
-	if f.Repos[0].ID != "PLAT/payment-service" || f.Repos[0].Role != "cicd" {
+	if f.Repos[0].ID != "PLAT/payment-service" {
 		t.Errorf("repos[0] = %+v", f.Repos[0])
-	}
-	if len(f.Workflows) != 2 {
-		t.Fatalf("workflows len = %d, want 2", len(f.Workflows))
 	}
 }
 
@@ -66,48 +55,28 @@ func TestLoad_ValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "unknown version",
-			yaml:    "version: \"2\"\nname: x\nteam: t\nrepos:\n  - id: r\n    role: ci\nworkflows:\n  - id: w\n    role: ci\n",
+			yaml:    "version: \"2\"\nname: x\nteam: t\nrepos:\n  - id: r\n",
 			wantErr: "unsupported version",
 		},
 		{
 			name:    "missing name",
-			yaml:    "version: \"1\"\nname: \"\"\nteam: t\nrepos:\n  - id: r\n    role: ci\nworkflows:\n  - id: w\n    role: ci\n",
+			yaml:    "version: \"1\"\nname: \"\"\nteam: t\nrepos:\n  - id: r\n",
 			wantErr: "name is required",
 		},
 		{
 			name:    "missing team",
-			yaml:    "version: \"1\"\nname: x\nteam: \"\"\nrepos:\n  - id: r\n    role: ci\nworkflows:\n  - id: w\n    role: ci\n",
+			yaml:    "version: \"1\"\nname: x\nteam: \"\"\nrepos:\n  - id: r\n",
 			wantErr: "team is required",
 		},
 		{
 			name:    "empty repos",
-			yaml:    "version: \"1\"\nname: x\nteam: t\nrepos: []\nworkflows:\n  - id: w\n    role: ci\n",
+			yaml:    "version: \"1\"\nname: x\nteam: t\nrepos: []\n",
 			wantErr: "repos must not be empty",
 		},
 		{
-			name:    "unknown repo role",
-			yaml:    "version: \"1\"\nname: x\nteam: t\nrepos:\n  - id: r\n    role: both\nworkflows:\n  - id: w\n    role: ci\n",
-			wantErr: `repos[0].role "both"`,
-		},
-		{
 			name:    "duplicate repo id",
-			yaml:    "version: \"1\"\nname: x\nteam: t\nrepos:\n  - id: r\n    role: ci\n  - id: r\n    role: cd\nworkflows:\n  - id: w\n    role: ci\n",
+			yaml:    "version: \"1\"\nname: x\nteam: t\nrepos:\n  - id: r\n  - id: r\n",
 			wantErr: `repos[1].id "r" is duplicated`,
-		},
-		{
-			name:    "empty workflows",
-			yaml:    "version: \"1\"\nname: x\nteam: t\nrepos:\n  - id: r\n    role: ci\nworkflows: []\n",
-			wantErr: "workflows must not be empty",
-		},
-		{
-			name:    "unknown workflow role",
-			yaml:    "version: \"1\"\nname: x\nteam: t\nrepos:\n  - id: r\n    role: ci\nworkflows:\n  - id: w\n    role: both\n",
-			wantErr: `workflows[0].role "both"`,
-		},
-		{
-			name:    "duplicate workflow id",
-			yaml:    "version: \"1\"\nname: x\nteam: t\nrepos:\n  - id: r\n    role: ci\nworkflows:\n  - id: w\n    role: ci\n  - id: w\n    role: cd\n",
-			wantErr: `workflows[1].id "w" is duplicated`,
 		},
 	}
 
@@ -146,10 +115,6 @@ name: checkout-api
 team: payments
 repos:
   - id: PLAT/checkout-api
-    role: cicd
-workflows:
-  - id: checkout-build
-    role: ci
 `
 	dir := t.TempDir()
 	writeFile(t, dir, "payment-service.yaml", goldenYAML)
@@ -187,37 +152,27 @@ func TestConvertToDomain(t *testing.T) {
 	if comp.TeamName != "payments" {
 		t.Errorf("comp.TeamName = %q, want payments", comp.TeamName)
 	}
-	if len(comp.Repos) != 2 {
-		t.Fatalf("repos len = %d, want 2", len(comp.Repos))
+	if len(comp.RepoIDs) != 2 {
+		t.Fatalf("repo_ids len = %d, want 2", len(comp.RepoIDs))
 	}
-	if comp.Repos[0].Role != model.DeliveryRoleCICD {
-		t.Errorf("repos[0].Role = %q, want CICD", comp.Repos[0].Role)
+	if comp.RepoIDs[0] != "PLAT/payment-service" {
+		t.Errorf("repo_ids[0] = %q, want PLAT/payment-service", comp.RepoIDs[0])
 	}
-	if comp.Repos[1].Role != model.DeliveryRoleCD {
-		t.Errorf("repos[1].Role = %q, want CD", comp.Repos[1].Role)
-	}
-	if len(comp.Workflows) != 2 {
-		t.Fatalf("workflows len = %d, want 2", len(comp.Workflows))
-	}
-	if comp.Workflows[0].Role != model.DeliveryRoleCI {
-		t.Errorf("workflows[0].Role = %q, want CI", comp.Workflows[0].Role)
+	if comp.RepoIDs[1] != "PLAT/payment-infra" {
+		t.Errorf("repo_ids[1] = %q, want PLAT/payment-infra", comp.RepoIDs[1])
 	}
 }
 
-func TestConvertToDomain_RoleCaseNormalization(t *testing.T) {
-	// roles in YAML may be uppercase or mixed-case; convert normalises them
-	const mixedCaseYAML = `version: "1"
+func TestConvertToDomain_MultipleRepos(t *testing.T) {
+	const multiRepoYAML = `version: "1"
 name: svc
 team: team-a
 repos:
-  - id: r
-    role: CICD
-workflows:
-  - id: w
-    role: CI
+  - id: r1
+  - id: r2
 `
 	dir := t.TempDir()
-	p := writeFile(t, dir, "svc.yaml", mixedCaseYAML)
+	p := writeFile(t, dir, "svc.yaml", multiRepoYAML)
 	f, err := component.Load(p)
 	if err != nil {
 		t.Fatalf("load: %v", err)
@@ -226,8 +181,8 @@ workflows:
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	if comp.Repos[0].Role != model.DeliveryRoleCICD {
-		t.Errorf("role = %q, want CICD", comp.Repos[0].Role)
+	if len(comp.RepoIDs) != 2 || comp.RepoIDs[0] != "r1" || comp.RepoIDs[1] != "r2" {
+		t.Errorf("repo_ids = %v, want [r1 r2]", comp.RepoIDs)
 	}
 }
 

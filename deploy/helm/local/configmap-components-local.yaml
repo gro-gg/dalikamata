@@ -11,19 +11,13 @@
 # Each key in data is treated as a separate component YAML file mounted
 # under /components inside the ingest-config container.
 #
-# IMPORTANT — workflow ID format:
-#   The workflows[].id values must exactly match the WorkflowID that the
-#   Jenkins crawler publishes, which is the full Jenkins job path
-#   (e.g. "team-a/build-frontend", not just "build-frontend").
-#   For a multibranch pipeline at folder/pipeline, the ID is "folder/pipeline".
-#   For a top-level job, the ID is the job name itself.
+# IMPORTANT — repo ID format:
+#   The repos[].id values must exactly match the RepoID that the Bitbucket
+#   crawler publishes (e.g. "PROJ/frontend-app"). Workflows are discovered
+#   automatically from their owning repo — no explicit workflow list is needed.
 #
-#   Mismatch means ownership().workflowToComponent lookup fails, causing
-#   every metric series to carry team_name="unknown" and component_name="unknown",
-#   which makes team/component filtering in Grafana return no data.
-#
-#   To discover the actual IDs in a running deployment:
-#     curl http://localhost:2113/api/v1/workflows | jq '.hits[].id'
+#   To discover the actual repo IDs in a running deployment:
+#     curl http://localhost:2113/api/v1/repos | jq '.hits[].repo_id'
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -35,13 +29,6 @@ data:
     team: platform
     repos:
       - id: PROJ/frontend-app
-        role: cicd
-    workflows:
-      # Use the full Jenkins job path, e.g. "platform/build-frontend"
-      - id: build-frontend
-        role: ci
-      - id: deploy-frontend
-        role: cd
 
   backend.yaml: |
     version: "1"
@@ -49,12 +36,3 @@ data:
     team: platform
     repos:
       - id: PROJ/backend-api
-        role: cicd
-    workflows:
-      # Use the full Jenkins job path, e.g. "platform/build-backend"
-      - id: build-backend
-        role: ci
-      - id: test-backend
-        role: ci
-      - id: deploy-backend
-        role: cd

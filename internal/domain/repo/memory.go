@@ -31,24 +31,24 @@ type MemoryRepository struct {
 	components    map[string]model.Component
 	// Reverse indexes maintained by AddComponent so that WorkflowRun/Task
 	// projections can surface team_name and component_name without a join.
-	workflowToComponent map[string]string // workflowID → component name
-	componentToTeam     map[string]string // component name → team name
-	clock               func() time.Time
+	repoToComponent map[string]string // repoID → component name
+	componentToTeam map[string]string // component name → team name
+	clock           func() time.Time
 }
 
 func NewMemory(opts ...MemoryRepositoryOpt) *MemoryRepository {
 	r := &MemoryRepository{
-		repos:               make(map[string]model.Repo),
-		commits:             make(map[string]model.Commit),
-		pullRequests:        make(map[string]model.PullRequest),
-		workflows:           make(map[string]model.Workflow),
-		workflowRuns:        make(map[string]model.WorkflowRun),
-		workflowTasks:       make(map[string]model.WorkflowTask),
-		teams:               make(map[string]model.Team),
-		components:          make(map[string]model.Component),
-		workflowToComponent: make(map[string]string),
-		componentToTeam:     make(map[string]string),
-		clock:               time.Now,
+		repos:           make(map[string]model.Repo),
+		commits:         make(map[string]model.Commit),
+		pullRequests:    make(map[string]model.PullRequest),
+		workflows:       make(map[string]model.Workflow),
+		workflowRuns:    make(map[string]model.WorkflowRun),
+		workflowTasks:   make(map[string]model.WorkflowTask),
+		teams:           make(map[string]model.Team),
+		components:      make(map[string]model.Component),
+		repoToComponent: make(map[string]string),
+		componentToTeam: make(map[string]string),
+		clock:           time.Now,
 	}
 	for _, o := range opts {
 		o(r)
@@ -108,19 +108,19 @@ func (r *MemoryRepository) AddTeam(_ context.Context, team model.Team) error {
 func (r *MemoryRepository) AddComponent(_ context.Context, comp model.Component) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	// Remove stale workflow→component entries from the previous version of
-	// this component (handles re-ingests where the workflow list shrinks).
+	// Remove stale repo→component entries from the previous version of
+	// this component (handles re-ingests where the repo list shrinks).
 	if prev, ok := r.components[comp.Name]; ok {
-		for _, cw := range prev.Workflows {
-			if r.workflowToComponent[cw.WorkflowID] == prev.Name {
-				delete(r.workflowToComponent, cw.WorkflowID)
+		for _, repoID := range prev.RepoIDs {
+			if r.repoToComponent[repoID] == prev.Name {
+				delete(r.repoToComponent, repoID)
 			}
 		}
 	}
 	r.components[comp.Name] = comp
 	r.componentToTeam[comp.Name] = comp.TeamName
-	for _, cw := range comp.Workflows {
-		r.workflowToComponent[cw.WorkflowID] = comp.Name
+	for _, repoID := range comp.RepoIDs {
+		r.repoToComponent[repoID] = comp.Name
 	}
 	return nil
 }
@@ -129,33 +129,38 @@ func (r *MemoryRepository) AddComponent(_ context.Context, comp model.Component)
 // names under a read lock and returns an ownerLookup whose closures operate on
 // the snapshot — safe to call after the lock is released.
 func (r *MemoryRepository) snapshotOwnerLookup() ownerLookup {
-	wfc := make(map[string]string, len(r.workflowToComponent))
-	for k, v := range r.workflowToComponent {
-		wfc[k] = v
+	rtc := make(map[string]string, len(r.repoToComponent))
+	for k, v := range r.repoToComponent {
+		rtc[k] = v
 	}
 	ct := make(map[string]string, len(r.componentToTeam))
 	for k, v := range r.componentToTeam {
 		ct[k] = v
 	}
+	wtr := make(map[string]string, len(r.workflows))
 	wfNames := make(map[string]string, len(r.workflows))
 	for k, v := range r.workflows {
+		wtr[k] = v.RepoID
 		wfNames[k] = v.Name
 	}
-	return newOwnerLookup(wfc, ct, wfNames)
+	return newOwnerLookup(rtc, wtr, ct, wfNames)
 }
 
-// newOwnerLookup builds an ownerLookup from three plain maps:
-//   - wfc: workflowID → owning component name
-//   - ct:  component name → team name
+// newOwnerLookup builds an ownerLookup from four plain maps:
+//   - rtc:     repoID → owning component name
+//   - wtr:     workflowID → repoID
+//   - ct:      component name → team name
 //   - wfNames: workflowID → human-readable workflow name
 //
+// Ownership is derived as: workflowID → repoID → componentName → teamName.
 // The returned closures only read these maps, so callers must pass copies they
 // own (no shared mutable state) to keep the lookup safe to use without a lock.
-func newOwnerLookup(wfc, ct, wfNames map[string]string) ownerLookup {
+func newOwnerLookup(rtc, wtr, ct, wfNames map[string]string) ownerLookup {
 	return ownerLookup{
 		ownership: func(workflowID string) (string, string) {
-			compName, ok := wfc[workflowID]
-			if !ok {
+			repoID := wtr[workflowID]
+			compName := rtc[repoID]
+			if compName == "" {
 				return "unknown", "unknown"
 			}
 			teamName, ok := ct[compName]

@@ -156,12 +156,9 @@ func newWorkflowFixtureAggregator(t *testing.T) *stubAggregator {
 	mustAdd(r.AddComponent(ctx, model.Component{
 		Name:     "svc-a",
 		TeamName: "alpha",
-		Repos:    []model.ComponentRepo{{RepoID: "r1", Role: "ci"}},
-		Workflows: []model.ComponentWorkflow{
-			{WorkflowID: "wf-build", Role: "ci"},
-		},
+		RepoIDs:  []string{"r1"},
 	}))
-	mustAdd(r.AddWorkflow(ctx, model.Workflow{ID: "wf-build", Name: "Build"}))
+	mustAdd(r.AddWorkflow(ctx, model.Workflow{ID: "wf-build", Name: "Build", RepoID: "r1"}))
 
 	// Two runs: 90s success, 600s success.
 	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run1", WorkflowID: "wf-build", Status: "SUCCESS", Branch: "main", Duration: 90}))

@@ -72,12 +72,9 @@ func TestOwnershipIndex_ComponentBeforeWorkflows(t *testing.T) {
 	addComponent(t, r, model.Component{
 		Name:     "svc-a",
 		TeamName: "team-alpha",
-		Repos:    []model.ComponentRepo{{RepoID: "r1", Role: "ci"}},
-		Workflows: []model.ComponentWorkflow{
-			{WorkflowID: "wf1", Role: "ci"},
-		},
+		RepoIDs:  []string{"r1"},
 	})
-	addWorkflow(t, r, model.Workflow{ID: "wf1", Name: "Build Pipeline"})
+	addWorkflow(t, r, model.Workflow{ID: "wf1", Name: "Build Pipeline", RepoID: "r1"})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run1", WorkflowID: "wf1", Status: "SUCCESS", Duration: 120})
 
 	teams := runAggregateField(t, r, query.EntityWorkflowRun, query.RunTeamName)
@@ -100,7 +97,7 @@ func TestOwnershipIndex_WorkflowsBeforeComponent(t *testing.T) {
 	is := is.New(t)
 	r := newRepo()
 
-	addWorkflow(t, r, model.Workflow{ID: "wf2", Name: "Deploy"})
+	addWorkflow(t, r, model.Workflow{ID: "wf2", Name: "Deploy", RepoID: "r2"})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run2", WorkflowID: "wf2", Status: "SUCCESS", Duration: 60})
 
 	// Before the component is registered the team should be unknown.
@@ -111,10 +108,7 @@ func TestOwnershipIndex_WorkflowsBeforeComponent(t *testing.T) {
 	addComponent(t, r, model.Component{
 		Name:     "svc-b",
 		TeamName: "team-beta",
-		Repos:    []model.ComponentRepo{{RepoID: "r2", Role: "ci"}},
-		Workflows: []model.ComponentWorkflow{
-			{WorkflowID: "wf2", Role: "cd"},
-		},
+		RepoIDs:  []string{"r2"},
 	})
 
 	teams = runAggregateField(t, r, query.EntityWorkflowRun, query.RunTeamName)
@@ -129,30 +123,23 @@ func TestOwnershipIndex_ComponentOverwriteShrinksList(t *testing.T) {
 	is := is.New(t)
 	r := newRepo()
 
-	addWorkflow(t, r, model.Workflow{ID: "wf3", Name: "Old Pipeline"})
-	addWorkflow(t, r, model.Workflow{ID: "wf4", Name: "New Pipeline"})
+	addWorkflow(t, r, model.Workflow{ID: "wf3", Name: "Old Pipeline", RepoID: "r3a"})
+	addWorkflow(t, r, model.Workflow{ID: "wf4", Name: "New Pipeline", RepoID: "r3b"})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run3", WorkflowID: "wf3", Status: "SUCCESS", Duration: 30})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run4", WorkflowID: "wf4", Status: "SUCCESS", Duration: 45})
 
-	// Initial registration: both workflows owned by "svc-c".
+	// Initial registration: both repos owned by "svc-c".
 	addComponent(t, r, model.Component{
 		Name:     "svc-c",
 		TeamName: "team-gamma",
-		Repos:    []model.ComponentRepo{{RepoID: "r3", Role: "ci"}},
-		Workflows: []model.ComponentWorkflow{
-			{WorkflowID: "wf3", Role: "ci"},
-			{WorkflowID: "wf4", Role: "cd"},
-		},
+		RepoIDs:  []string{"r3a", "r3b"},
 	})
 
-	// Re-ingest with only wf4 remaining.
+	// Re-ingest with only r3b remaining: wf3 (via r3a) becomes orphaned.
 	addComponent(t, r, model.Component{
 		Name:     "svc-c",
 		TeamName: "team-gamma",
-		Repos:    []model.ComponentRepo{{RepoID: "r3", Role: "ci"}},
-		Workflows: []model.ComponentWorkflow{
-			{WorkflowID: "wf4", Role: "cd"},
-		},
+		RepoIDs:  []string{"r3b"},
 	})
 
 	teams := runAggregateField(t, r, query.EntityWorkflowRun, query.RunTeamName)
@@ -170,12 +157,9 @@ func TestOwnershipIndex_TaskEnrichment(t *testing.T) {
 	addComponent(t, r, model.Component{
 		Name:     "svc-d",
 		TeamName: "team-delta",
-		Repos:    []model.ComponentRepo{{RepoID: "r4", Role: "ci"}},
-		Workflows: []model.ComponentWorkflow{
-			{WorkflowID: "wf5", Role: "ci"},
-		},
+		RepoIDs:  []string{"r4"},
 	})
-	addWorkflow(t, r, model.Workflow{ID: "wf5", Name: "Test Suite"})
+	addWorkflow(t, r, model.Workflow{ID: "wf5", Name: "Test Suite", RepoID: "r4"})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run5", WorkflowID: "wf5", Status: "SUCCESS", Duration: 200})
 	addWorkflowTask(t, r, model.WorkflowTask{WorkflowRunID: "run5", Name: "unit-tests", Status: "SUCCESS", Duration: 90})
 	addWorkflowTask(t, r, model.WorkflowTask{WorkflowRunID: "run5", Name: "lint", Status: "SUCCESS", Duration: 30})

@@ -17,8 +17,7 @@ import (
 // schema is applied on every open; all statements are idempotent so reopening
 // an existing database is a no-op. Times are stored as RFC3339Nano strings
 // (offset preserved); durations and run numbers as native REAL/INTEGER. The
-// nested Component slices (repos/workflows) are stored as JSON because only
-// their top-level scalars and the workflow→component ownership mapping are queried.
+// Component repo_ids list is stored as a JSON array.
 //
 //go:embed schema.sql
 var schema string
@@ -160,21 +159,16 @@ func (r *SQLiteRepository) AddTeam(ctx context.Context, team model.Team) error {
 }
 
 func (r *SQLiteRepository) AddComponent(ctx context.Context, c model.Component) error {
-	repos, err := json.Marshal(c.Repos)
+	repoIDs, err := json.Marshal(c.RepoIDs)
 	if err != nil {
-		return fmt.Errorf("marshaling component repos: %w", err)
-	}
-	workflows, err := json.Marshal(c.Workflows)
-	if err != nil {
-		return fmt.Errorf("marshaling component workflows: %w", err)
+		return fmt.Errorf("marshaling component repo_ids: %w", err)
 	}
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO components (name, team_name, repos, workflows)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO components (name, team_name, repo_ids)
+		VALUES (?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET
-			team_name=excluded.team_name, repos=excluded.repos,
-			workflows=excluded.workflows`,
-		c.Name, c.TeamName, string(repos), string(workflows))
+			team_name=excluded.team_name, repo_ids=excluded.repo_ids`,
+		c.Name, c.TeamName, string(repoIDs))
 	return err
 }
 
@@ -328,8 +322,7 @@ func (r *SQLiteRepository) loadTeams(ctx context.Context) ([]model.Team, error) 
 }
 
 func (r *SQLiteRepository) loadComponents(ctx context.Context) ([]model.Component, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT name, team_name, repos, workflows FROM components ORDER BY name`)
+	rows, err := r.db.QueryContext(ctx, `SELECT name, team_name, repo_ids FROM components ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -337,25 +330,22 @@ func (r *SQLiteRepository) loadComponents(ctx context.Context) ([]model.Componen
 	var out []model.Component
 	for rows.Next() {
 		var v model.Component
-		var repos, workflows string
-		if err := rows.Scan(&v.Name, &v.TeamName, &repos, &workflows); err != nil {
+		var repoIDs string
+		if err := rows.Scan(&v.Name, &v.TeamName, &repoIDs); err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal([]byte(repos), &v.Repos); err != nil {
-			return nil, fmt.Errorf("unmarshaling component repos: %w", err)
-		}
-		if err := json.Unmarshal([]byte(workflows), &v.Workflows); err != nil {
-			return nil, fmt.Errorf("unmarshaling component workflows: %w", err)
+		if err := json.Unmarshal([]byte(repoIDs), &v.RepoIDs); err != nil {
+			return nil, fmt.Errorf("unmarshaling component repo_ids: %w", err)
 		}
 		out = append(out, v)
 	}
 	return out, rows.Err()
 }
 
-// ownerLookupFromDB rebuilds the workflow→component→team ownership lookup from
-// the components and workflows tables. Unlike MemoryRepository it holds no
+// ownerLookupFromDB rebuilds the workflow→repo→component→team ownership lookup
+// from the components and workflows tables. Unlike MemoryRepository it holds no
 // incremental index; the mapping is reconstructed per query from current state,
-// which naturally reflects component re-ingests that shrink the workflow list.
+// which naturally reflects component re-ingests that shrink the repo list.
 func (r *SQLiteRepository) ownerLookupFromDB(ctx context.Context) (ownerLookup, error) {
 	components, err := r.loadComponents(ctx)
 	if err != nil {
@@ -365,19 +355,21 @@ func (r *SQLiteRepository) ownerLookupFromDB(ctx context.Context) (ownerLookup, 
 	if err != nil {
 		return ownerLookup{}, err
 	}
-	wfc := make(map[string]string)
-	ct := make(map[string]string)
+	rtc := make(map[string]string) // repoID → componentName
+	ct := make(map[string]string)  // componentName → teamName
 	for _, c := range components {
 		ct[c.Name] = c.TeamName
-		for _, cw := range c.Workflows {
-			wfc[cw.WorkflowID] = c.Name
+		for _, repoID := range c.RepoIDs {
+			rtc[repoID] = c.Name
 		}
 	}
-	wfNames := make(map[string]string, len(workflows))
+	wtr := make(map[string]string, len(workflows))     // workflowID → repoID
+	wfNames := make(map[string]string, len(workflows)) // workflowID → name
 	for _, w := range workflows {
+		wtr[w.ID] = w.RepoID
 		wfNames[w.ID] = w.Name
 	}
-	return newOwnerLookup(wfc, ct, wfNames), nil
+	return newOwnerLookup(rtc, wtr, ct, wfNames), nil
 }
 
 // ---- queries (delegate to the shared query engine) -------------------------

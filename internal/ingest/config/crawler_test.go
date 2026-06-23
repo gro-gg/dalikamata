@@ -40,10 +40,6 @@ name: payment-service
 team: payments
 repos:
   - id: PLAT/payment-service
-    role: cicd
-workflows:
-  - id: payment-build
-    role: ci
 `
 
 const compB = `version: "1"
@@ -51,10 +47,6 @@ name: checkout-api
 team: payments
 repos:
   - id: PLAT/checkout-api
-    role: cicd
-workflows:
-  - id: checkout-build
-    role: ci
 `
 
 const compC = `version: "1"
@@ -62,10 +54,6 @@ name: inventory-sync
 team: platform
 repos:
   - id: PLAT/inventory-sync
-    role: cd
-workflows:
-  - id: inventory-deploy
-    role: cd
 `
 
 func TestCrawler_PublishesAllEntities(t *testing.T) {
@@ -122,19 +110,16 @@ func TestCrawler_EmptyDir(t *testing.T) {
 	}
 }
 
-func TestCrawler_RoleNormalization(t *testing.T) {
-	const mixedCase = `version: "1"
+func TestCrawler_RepoIDsPreserved(t *testing.T) {
+	const yaml = `version: "1"
 name: svc
 team: alpha
 repos:
-  - id: r
-    role: CICD
-workflows:
-  - id: w
-    role: CI
+  - id: PROJ/svc-api
+  - id: PROJ/svc-worker
 `
 	dir := t.TempDir()
-	writeYAML(t, dir, "svc.yaml", mixedCase)
+	writeYAML(t, dir, "svc.yaml", yaml)
 
 	pub := &fakePublisher{}
 	l := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -146,14 +131,17 @@ workflows:
 	if len(pub.components) != 1 {
 		t.Fatalf("components = %d, want 1", len(pub.components))
 	}
-	if pub.components[0].Repos[0].Role != model.DeliveryRoleCICD {
-		t.Errorf("role = %q, want CICD", pub.components[0].Repos[0].Role)
+	if len(pub.components[0].RepoIDs) != 2 {
+		t.Fatalf("repo_ids len = %d, want 2", len(pub.components[0].RepoIDs))
+	}
+	if pub.components[0].RepoIDs[0] != "PROJ/svc-api" {
+		t.Errorf("repo_ids[0] = %q, want PROJ/svc-api", pub.components[0].RepoIDs[0])
 	}
 }
 
 func TestCrawler_InvalidFileReturnsError(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "bad.yaml", "version: \"2\"\nname: x\nteam: t\nrepos: []\nworkflows: []\n")
+	writeYAML(t, dir, "bad.yaml", "version: \"2\"\nname: x\nteam: t\nrepos: []\n")
 
 	pub := &fakePublisher{}
 	l := slog.New(slog.NewTextHandler(io.Discard, nil))
