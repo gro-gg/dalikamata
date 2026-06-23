@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"codeberg.org/aeforged/dalikamata/internal/ingest/config"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 // fakePublisher records the teams and components it receives.

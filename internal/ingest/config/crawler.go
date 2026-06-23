@@ -7,7 +7,7 @@ import (
 
 	"codeberg.org/aeforged/dalikamata/internal/config/component"
 	"codeberg.org/aeforged/dalikamata/internal/domain"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 )
 
 // Crawler reads component YAML files from a directory and publishes the

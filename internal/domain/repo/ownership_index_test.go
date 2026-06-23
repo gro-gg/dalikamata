@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"github.com/matryer/is"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 // addComponent is a helper that panics on error — keeps table-driven tests terse.

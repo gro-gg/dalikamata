@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"codeberg.org/aeforged/dalikamata/pkg/model"
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 )
 
 func discardLogger() *slog.Logger {
@@ -191,9 +191,12 @@ func TestExtractCommitSHA_NoActions(t *testing.T) {
 // fakeCursors is a map-backed Cursors for unit tests. It records every Save
 // and Clear call so tests can assert correct cursor wiring.
 type fakeCursors struct {
-	mu     sync.Mutex
-	data   map[string]int
-	saves  []struct{ jobPath string; number int }
+	mu    sync.Mutex
+	data  map[string]int
+	saves []struct {
+		jobPath string
+		number  int
+	}
 	clears []string
 }
 
@@ -215,7 +218,10 @@ func (f *fakeCursors) Save(_ context.Context, jobPath string, number int) error 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.data[jobPath] = number
-	f.saves = append(f.saves, struct{ jobPath string; number int }{jobPath, number})
+	f.saves = append(f.saves, struct {
+		jobPath string
+		number  int
+	}{jobPath, number})
 	return nil
 }
 

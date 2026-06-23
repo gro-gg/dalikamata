@@ -3,7 +3,7 @@ package component
 import (
 	"strings"
 
-	"codeberg.org/aeforged/dalikamata/pkg/model"
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 )
 
 var roleMap = map[string]string{

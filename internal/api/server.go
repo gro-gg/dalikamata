@@ -11,8 +11,8 @@ import (
 	"time"
 
 	dalapi "codeberg.org/aeforged/dalikamata/api"
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 const (

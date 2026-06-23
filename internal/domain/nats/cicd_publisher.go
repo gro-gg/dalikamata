@@ -8,12 +8,12 @@ import (
 	"log/slog"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	gonats "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/internal/nats"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 type PipelinePublisher struct {

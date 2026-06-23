@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"github.com/matryer/is"
 	"github.com/nats-io/nats.go/jetstream"
 
@@ -21,7 +22,6 @@ import (
 	"codeberg.org/aeforged/dalikamata/internal/ingest/bitbucket/fakeserver"
 	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/testhelper"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 func TestIngestBitbucketIntegration(t *testing.T) {

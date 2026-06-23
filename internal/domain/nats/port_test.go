@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	testis "github.com/matryer/is"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -16,7 +17,6 @@ import (
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 func collectTeams(t *testing.T, r *repo.MemoryRepository) []model.Team {

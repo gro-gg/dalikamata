@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"github.com/matryer/is"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 func newSQLite(t *testing.T, opts ...repo.SQLiteRepositoryOpt) *repo.SQLiteRepository {

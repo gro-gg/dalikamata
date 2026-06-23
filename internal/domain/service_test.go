@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 var errRepo = errors.New("repository error")

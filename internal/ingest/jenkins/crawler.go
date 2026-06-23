@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 )
 
 const (

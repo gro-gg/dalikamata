@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	testis "github.com/matryer/is"
 	gonats "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -18,7 +19,6 @@ import (
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/testhelper"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 // startQueryStack spins up an embedded NATS server, connects, wires up the

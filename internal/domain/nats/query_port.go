@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	gonats "github.com/nats-io/nats.go"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 // QueryPort subscribes to core NATS query subjects and streams entity results

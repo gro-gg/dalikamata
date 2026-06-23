@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"codeberg.org/aeforged/dalikamata/internal/config/component"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 )
 
 const goldenYAML = `version: "1"

@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	gonats "github.com/nats-io/nats.go"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 const defaultQueryTimeout = 30 * time.Second

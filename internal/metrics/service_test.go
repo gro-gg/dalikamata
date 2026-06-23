@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"github.com/matryer/is"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -17,7 +18,6 @@ import (
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 	"codeberg.org/aeforged/dalikamata/internal/domain/repo"
 	"codeberg.org/aeforged/dalikamata/internal/metrics"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 func discardLogger() *slog.Logger {

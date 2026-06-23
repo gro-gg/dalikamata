@@ -3,8 +3,8 @@ package repo
 import (
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	q "codeberg.org/aeforged/dalikamata/internal/domain/query"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 // projectRepo converts a Repo to a field map for query evaluation.

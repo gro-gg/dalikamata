@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"github.com/matryer/is"
 	"github.com/nats-io/nats.go/jetstream"
 
@@ -22,7 +23,6 @@ import (
 	jenkinsfake "codeberg.org/aeforged/dalikamata/internal/ingest/jenkins/fakeserver"
 	internalnats "codeberg.org/aeforged/dalikamata/internal/nats"
 	"codeberg.org/aeforged/dalikamata/internal/testhelper"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 func TestIngestJenkinsIntegration(t *testing.T) {

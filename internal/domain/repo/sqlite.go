@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no CGo), registers "sqlite"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 // schema is applied on every open; all statements are idempotent so reopening

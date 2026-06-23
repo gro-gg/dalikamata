@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 // GitEventHandler is the primary (driving) port the NATS adapter calls into.

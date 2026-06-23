@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain"
-	"codeberg.org/aeforged/dalikamata/pkg/model"
 )
 
 const (
