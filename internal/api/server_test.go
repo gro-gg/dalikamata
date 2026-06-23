@@ -316,12 +316,8 @@ func TestHandler_POST_QueryBodyPassthrough(t *testing.T) {
 
 	body := query.Query{
 		Entity: query.EntityWorkflowRun,
-		Filter: &query.Filter{
-			Op:    query.OpTerm,
-			Field: query.RunTeamName,
-			Value: ptr(query.StringValue("alpha")),
-		},
-		Size: 3,
+		Filter: query.Ptr(query.TermFilter(query.RunTeamName, query.StringValue("alpha"))),
+		Size:   3,
 	}
 	b, _ := json.Marshal(body)
 
@@ -337,7 +333,7 @@ func TestHandler_POST_QueryBodyPassthrough(t *testing.T) {
 	}
 }
 
-func TestHandler_POST_AggregationOnly_202_ReturnsAggShape(t *testing.T) {
+func TestHandler_POST_AggregationOnly_ReturnsAggShape(t *testing.T) {
 	fake := &fakeQueryFetcher{
 		aggs: map[string]query.AggregationResult{
 			"by_team": {DocCount: 10},
@@ -399,4 +395,3 @@ func TestHandler_EmptyResult_ReturnsEmptyArray(t *testing.T) {
 	}
 }
 
-func ptr[T any](v T) *T { return &v }
