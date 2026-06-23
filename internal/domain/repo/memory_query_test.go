@@ -458,7 +458,7 @@ func TestAggregate_Team(t *testing.T) {
 
 	q := query.Query{
 		Entity: query.EntityTeam,
-		Size:   -1,
+		AggsOnly: true,
 		Aggs: map[string]query.Aggregation{
 			"by_name": {Op: query.AggTerms, Field: query.TeamName},
 		},

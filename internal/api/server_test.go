@@ -341,7 +341,7 @@ func TestHandler_POST_AggregationOnly_ReturnsAggShape(t *testing.T) {
 	}
 	srv := newTestServer(fake)
 
-	body := query.Query{Entity: query.EntityWorkflowRun, Size: -1}
+	body := query.Query{Entity: query.EntityWorkflowRun, AggsOnly: true}
 	b, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workflowRuns", bytes.NewReader(b))

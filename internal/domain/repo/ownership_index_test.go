@@ -46,7 +46,7 @@ func runAggregateField(t *testing.T, r *repo.MemoryRepository, entity query.Enti
 	t.Helper()
 	result, err := r.Aggregate(context.Background(), query.Query{
 		Entity: entity,
-		Size:   -1,
+		AggsOnly: true,
 		Aggs: map[string]query.Aggregation{
 			"by_field": {Op: query.AggTerms, Field: field},
 		},

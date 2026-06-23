@@ -225,7 +225,7 @@ func (s *Server) entityHandler(entity query.Entity, fetchAll func(context.Contex
 		ctx, cancel := context.WithTimeout(r.Context(), s.queryTimeout)
 		defer cancel()
 
-		if q.Size == -1 {
+		if q.AggsOnly {
 			aggs, err := s.client.Aggregate(ctx, q)
 			if err != nil {
 				s.handleQueryError(w, err)

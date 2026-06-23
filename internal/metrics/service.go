@@ -80,7 +80,7 @@ var workflowTaskBuckets = []float64{30, 60, 120, 300, 600, 1800, 3600}
 // workflowRunQuery aggregates run durations by team → component → workflow_id → workflow_name → branch → status.
 var workflowRunQuery = query.Query{
 	Entity: query.EntityWorkflowRun,
-	Size:   -1,
+	AggsOnly: true,
 	Aggs: map[string]query.Aggregation{
 		"by_team": {
 			Op:    query.AggTerms,
@@ -129,7 +129,7 @@ var workflowRunQuery = query.Query{
 // workflowTaskQuery aggregates task durations by team → component → workflow_id → workflow_name → branch → task_name → task_order → status.
 var workflowTaskQuery = query.Query{
 	Entity: query.EntityWorkflowTask,
-	Size:   -1,
+	AggsOnly: true,
 	Aggs: map[string]query.Aggregation{
 		"by_team": {
 			Op:    query.AggTerms,
@@ -191,7 +191,7 @@ var workflowTaskQuery = query.Query{
 // terms(repo_id) → date_histogram(created_at, month) → terms(state) → histogram(cycle_time_seconds)
 var prCycleQuery = query.Query{
 	Entity: query.EntityPullRequest,
-	Size:   -1,
+	AggsOnly: true,
 	Aggs: map[string]query.Aggregation{
 		"by_repo": {
 			Op:    query.AggTerms,

@@ -19,13 +19,15 @@ const (
 // optional filter tree, sorts results, paginates with from/size semantics, and
 // optionally requests server-side aggregations.
 //
-// Size -1 signals "aggregations only, no hits" — send to SubjectQueryAggregate
-// to obtain only the aggregation result tree without streaming entity hits.
+// When AggsOnly is true, entity hits are suppressed and only the aggregation
+// result tree is returned (Size and Sort are ignored). When AggsOnly is false
+// and Aggs is non-empty, both hits and aggregations are returned together.
 type Query struct {
-	Entity Entity                 `json:"entity"`
-	Filter *Filter                `json:"filter,omitempty"`
-	Sort   []SortField            `json:"sort,omitempty"`
-	From   int                    `json:"from,omitempty"`
-	Size   int                    `json:"size,omitempty"` // 0 = all matches; -1 = aggregations only
-	Aggs   map[string]Aggregation `json:"aggs,omitempty"`
+	Entity   Entity                 `json:"entity"`
+	Filter   *Filter                `json:"filter,omitempty"`
+	Sort     []SortField            `json:"sort,omitempty"`
+	From     int                    `json:"from,omitempty"`
+	Size     int                    `json:"size,omitempty"` // 0 = all matches
+	AggsOnly bool                   `json:"aggs_only,omitempty"`
+	Aggs     map[string]Aggregation `json:"aggs,omitempty"`
 }
