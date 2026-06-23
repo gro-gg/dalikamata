@@ -8,39 +8,6 @@ import (
 	"codeberg.org/aeforged/dalikamata/internal/domain/query"
 )
 
-// GitEventHandler is the primary (driving) port the NATS adapter calls into.
-type GitEventHandler interface {
-	HandleRepo(context.Context, model.Repo) error
-	HandleCommit(context.Context, model.Commit) error
-	HandlePullRequest(context.Context, model.PullRequest) error
-}
-
-// CicdEventHandler is the primary (driving) port the NATS adapter calls into.
-type CicdEventHandler interface {
-	HandleWorkflow(context.Context, model.Workflow) error
-	HandleWorkflowRun(context.Context, model.WorkflowRun) error
-	HandleWorkflowTask(context.Context, model.WorkflowTask) error
-}
-
-// PlatformEventHandler is the primary (driving) port for platform config events.
-type PlatformEventHandler interface {
-	HandleTeam(context.Context, model.Team) error
-	HandleComponent(context.Context, model.Component) error
-}
-
-// QueryHandler is the primary (driving) port the NATS query adapter calls into.
-type QueryHandler interface {
-	QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error
-	QueryCommits(ctx context.Context, q query.Query, emit func(model.Commit) error) error
-	QueryPullRequests(ctx context.Context, q query.Query, emit func(model.PullRequest) error) error
-	QueryWorkflows(ctx context.Context, q query.Query, emit func(model.Workflow) error) error
-	QueryWorkflowRuns(ctx context.Context, q query.Query, emit func(model.WorkflowRun) error) error
-	QueryWorkflowTasks(ctx context.Context, q query.Query, emit func(model.WorkflowTask) error) error
-	QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error
-	QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error
-	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
-}
-
 type DomainService struct {
 	repo      Repository
 	queryRepo QueryRepository
