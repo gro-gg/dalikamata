@@ -200,22 +200,22 @@ paths:
           in: query
           schema:
             type: string
-        - name: filter.createdAt.gte
+        - name: filter.created_at.gte
           in: query
           schema:
             type: string
             format: date-time
-        - name: filter.createdAt.lte
+        - name: filter.created_at.lte
           in: query
           schema:
             type: string
             format: date-time
-        - name: filter.updatedAt.gte
+        - name: filter.updated_at.gte
           in: query
           schema:
             type: string
             format: date-time
-        - name: filter.updatedAt.lte
+        - name: filter.updated_at.lte
           in: query
           schema:
             type: string
@@ -1072,7 +1072,7 @@ components:
 
     PullRequest:
       type: object
-      required: [id, repo_id, name, title, description, state, author, createdAt, updatedAt]
+      required: [id, repo_id, name, title, description, state, author, created_at, updated_at]
       properties:
         id:
           type: string
@@ -1094,10 +1094,10 @@ components:
         author:
           type: string
           example: "alice"
-        createdAt:
+        created_at:
           type: string
           format: date-time
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
 

@@ -39,6 +39,6 @@ type PullRequest struct {
 	Description string    `json:"description"`
 	State       string    `json:"state"`
 	Author      string    `json:"author"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
