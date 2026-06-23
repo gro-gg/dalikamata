@@ -100,8 +100,8 @@ The metrics service (`dalikamata metrics`, port 2112 by default) exposes three P
 | Metric | Labels | Description |
 |---|---|---|
 | `pr_cycle_time_seconds` | `repo_id`, `created_month`, `state` | Time from PR creation to current or final state |
-| `workflow_run_duration_seconds` | `team_name`, `component_name`, `workflow_id`, `workflow_name`, `status` | Total duration of a Jenkins pipeline run |
-| `workflow_task_duration_seconds` | `team_name`, `component_name`, `workflow_id`, `workflow_name`, `task_name`, `status` | Duration of an individual pipeline stage |
+| `workflow_run_duration_seconds` | `team_name`, `component_name`, `workflow_id`, `workflow_name`, `branch`, `status` | Total duration of a Jenkins pipeline run |
+| `workflow_task_duration_seconds` | `team_name`, `component_name`, `workflow_id`, `workflow_name`, `branch`, `task_name`, `task_order`, `status` | Duration of an individual pipeline stage |
 
 `team_name` and `component_name` are resolved at query time from the component YAML files ingested by `dalikamata ingest config`. Workflows not claimed by any component file are labelled `team_name="unknown"` / `component_name="unknown"`.
 
