@@ -19,6 +19,6 @@ RUN mkdir -p "$GF_PATHS_PLUGINS" \
  && /usr/share/grafana/bin/grafana cli --pluginsDir "$GF_PATHS_PLUGINS" plugins install yesoreyeram-infinity-datasource \
  && chown -R grafana:root "$GF_PATHS_PLUGINS"
 
-COPY --chown=grafana:grafana deploy/docker/grafana_provisioning /etc/grafana/provisioning
+COPY --chown=grafana:root deploy/docker/grafana_provisioning /etc/grafana/provisioning
 
 USER grafana
