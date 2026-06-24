@@ -393,7 +393,15 @@ func TestQueryTeams_All(t *testing.T) {
 		got = append(got, t)
 		return nil
 	}))
-	is.Equal(len(got), 2)
+	// "unknown" is always injected as a synthetic team.
+	is.Equal(len(got), 3)
+	names := make(map[string]bool, len(got))
+	for _, t := range got {
+		names[t.Name] = true
+	}
+	is.True(names["alpha"])
+	is.True(names["beta"])
+	is.True(names["unknown"])
 }
 
 // ---- QueryComponents -------------------------------------------------------
@@ -467,5 +475,6 @@ func TestAggregate_Team(t *testing.T) {
 	is.NoErr(err)
 	byName, ok := result["by_name"]
 	is.True(ok)
-	is.Equal(len(byName.Buckets), 2)
+	// "unknown" is always injected, so 2 explicitly added teams + 1 synthetic.
+	is.Equal(len(byName.Buckets), 3)
 }

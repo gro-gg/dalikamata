@@ -212,3 +212,33 @@ func TestSQLite_ComponentRoundTrip(t *testing.T) {
 	is.Equal(len(got), 1)
 	is.Equal(got[0], want)
 }
+
+// TestSQLite_OwnershipDiagnostics verifies that SQLiteRepository.OwnershipDiagnostics
+// returns the correct Reason for each failure mode of the resolution chain.
+func TestSQLite_OwnershipDiagnostics(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newSQLite(t)
+
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "svc-ok", TeamName: "team-ok", RepoIDs: []string{"repo-ok"}}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-ok", RepoID: "repo-ok"}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-no-repo", RepoID: ""}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-no-comp", RepoID: "repo-unowned"}))
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "svc-noteam", TeamName: "", RepoIDs: []string{"repo-noteam"}}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-noteam", RepoID: "repo-noteam"}))
+
+	diags, err := r.OwnershipDiagnostics(ctx)
+	is.NoErr(err)
+
+	byWF := make(map[string]model.OwnershipDiagnostics, len(diags))
+	for _, d := range diags {
+		byWF[d.WorkflowID] = d
+	}
+
+	is.Equal(byWF["wf-ok"].Reason, "ok")
+	is.Equal(byWF["wf-ok"].TeamName, "team-ok")
+
+	is.Equal(byWF["wf-no-repo"].Reason, "missing_repo_id")
+	is.Equal(byWF["wf-no-comp"].Reason, "no_component_for_repo")
+	is.Equal(byWF["wf-noteam"].Reason, "no_team_for_component")
+}

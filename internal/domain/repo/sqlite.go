@@ -461,7 +461,7 @@ func (r *SQLiteRepository) QueryTeams(ctx context.Context, q query.Query, emit f
 	if err != nil {
 		return err
 	}
-	return queryEntities(ctx, snapshot, q, projectTeam, emit)
+	return queryEntities(ctx, ensureUnknownTeam(snapshot), q, projectTeam, emit)
 }
 
 func (r *SQLiteRepository) QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error {
@@ -470,6 +470,22 @@ func (r *SQLiteRepository) QueryComponents(ctx context.Context, q query.Query, e
 		return err
 	}
 	return queryEntities(ctx, snapshot, q, projectComponent, emit)
+}
+
+func (r *SQLiteRepository) OwnershipDiagnostics(ctx context.Context) ([]model.OwnershipDiagnostics, error) {
+	workflows, err := r.loadWorkflows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lkp, err := r.ownerLookupFromDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.OwnershipDiagnostics, len(workflows))
+	for i, w := range workflows {
+		out[i] = lkp.diagnose(w.ID)
+	}
+	return out, nil
 }
 
 // Aggregate loads, filters and projects the target entity, then evaluates the
@@ -552,7 +568,7 @@ func (r *SQLiteRepository) snapshotProject(ctx context.Context, entity query.Ent
 		if err != nil {
 			return nil, err
 		}
-		return filterProject(ctx, snap, filter, func(v model.Team) map[string]any { return projectTeam(v) })
+		return filterProject(ctx, ensureUnknownTeam(snap), filter, func(v model.Team) map[string]any { return projectTeam(v) })
 
 	case query.EntityComponent:
 		snap, err := r.loadComponents(ctx)

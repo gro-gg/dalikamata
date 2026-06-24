@@ -192,7 +192,7 @@ func TestIngestJenkinsIncremental(t *testing.T) {
 	is.NoErr(err)
 	jkURL := fmt.Sprintf("http://127.0.0.1:%d", jkPort)
 	client := jenkins.NewClient(jkURL, "test", "test-token", httpCl, l)
-	crawler := jenkins.NewCrawler(client, publisher, cursors, nil, l)
+	crawler := jenkins.NewCrawler(client, publisher, cursors, nil, nil, l)
 
 	// 1. First crawl: all fixture builds published.
 	is.NoErr(crawler.Crawl(ctx))

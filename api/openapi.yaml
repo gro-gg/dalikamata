@@ -609,6 +609,28 @@ paths:
         "504":
           $ref: "#/components/responses/GatewayTimeout"
 
+  /api/v1/ownership:
+    get:
+      operationId: ownershipDiagnostics
+      summary: Ownership resolution report
+      description: >
+        Returns one entry per known Workflow showing how it resolves (or fails
+        to resolve) via the chain Workflow.RepoID → Component.RepoIDs →
+        Component.TeamName. Use this to diagnose why a workflow shows
+        team_name="unknown" in metrics or query results.
+      tags: [platform]
+      responses:
+        "200":
+          description: Ownership resolution report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OwnershipDiagnostics"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
 # ── Reusable components ───────────────────────────────────────────────────────
 
 components:
@@ -1241,41 +1263,39 @@ components:
         name:
           type: string
 
-    DeliveryRole:
-      type: string
-      enum: [CI, CD, CICD]
-
-    ComponentRepo:
-      type: object
-      required: [repo_id, role]
-      properties:
-        repo_id:
-          type: string
-        role:
-          $ref: "#/components/schemas/DeliveryRole"
-
-    ComponentWorkflow:
-      type: object
-      required: [workflow_id, role]
-      properties:
-        workflow_id:
-          type: string
-        role:
-          $ref: "#/components/schemas/DeliveryRole"
-
     Component:
       type: object
-      required: [name, team_name, repos, workflows]
+      required: [name, team_name, repo_ids]
       properties:
         name:
           type: string
         team_name:
           type: string
-        repos:
+        repo_ids:
           type: array
           items:
-            $ref: "#/components/schemas/ComponentRepo"
-        workflows:
-          type: array
-          items:
-            $ref: "#/components/schemas/ComponentWorkflow"
+            type: string
+
+    OwnershipDiagnostics:
+      type: object
+      required: [workflow_id, repo_id, component_name, team_name, reason]
+      properties:
+        workflow_id:
+          type: string
+        repo_id:
+          type: string
+          description: Empty if the workflow has no RepoID set (extraction failed at ingest).
+        component_name:
+          type: string
+          description: Empty if no component claims the repo.
+        team_name:
+          type: string
+          description: Empty if the component has no team mapping.
+        reason:
+          type: string
+          enum: [ok, missing_repo_id, no_component_for_repo, no_team_for_component]
+          description: >
+            ok — chain resolved fully.
+            missing_repo_id — Workflow.RepoID is empty (Jenkins BuildData not populated).
+            no_component_for_repo — no Component lists this RepoID.
+            no_team_for_component — Component found but TeamName is missing.

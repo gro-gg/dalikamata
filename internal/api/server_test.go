@@ -62,6 +62,9 @@ func (f *fakeQueryFetcher) Aggregate(ctx context.Context, q query.Query) (map[st
 	f.lastQuery = q
 	return f.aggs, f.err
 }
+func (f *fakeQueryFetcher) OwnershipDiagnosticsAll(ctx context.Context) ([]model.OwnershipDiagnostics, error) {
+	return nil, f.err
+}
 
 // --- parseQueryParams unit tests ---
 

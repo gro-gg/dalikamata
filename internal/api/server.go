@@ -33,6 +33,7 @@ type QueryFetcher interface {
 	QueryTeamsAll(ctx context.Context, q query.Query) ([]model.Team, error)
 	QueryComponentsAll(ctx context.Context, q query.Query) ([]model.Component, error)
 	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
+	OwnershipDiagnosticsAll(ctx context.Context) ([]model.OwnershipDiagnostics, error)
 }
 
 // Option configures a Server.
@@ -178,7 +179,26 @@ func (s *Server) newMux() *http.ServeMux {
 	for _, e := range entries {
 		mux.HandleFunc("/api/v1/"+e.path, s.entityHandler(e.entity, e.fetch))
 	}
+	mux.HandleFunc("/api/v1/ownership", s.ownershipHandler)
 	return mux
+}
+
+func (s *Server) ownershipHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.queryTimeout)
+	defer cancel()
+	diags, err := s.client.OwnershipDiagnosticsAll(ctx)
+	if err != nil {
+		s.handleQueryError(w, err)
+		return
+	}
+	if diags == nil {
+		diags = []model.OwnershipDiagnostics{}
+	}
+	writeJSON(w, diags)
 }
 
 // hitsResponse is the JSON envelope for entity query results.

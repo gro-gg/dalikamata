@@ -175,6 +175,21 @@ func newOwnerLookup(rtc, wtr, ct, wfNames map[string]string) ownerLookup {
 			}
 			return workflowID
 		},
+		diagnose: func(workflowID string) model.OwnershipDiagnostics {
+			repoID := wtr[workflowID]
+			if repoID == "" {
+				return model.OwnershipDiagnostics{WorkflowID: workflowID, Reason: "missing_repo_id"}
+			}
+			compName := rtc[repoID]
+			if compName == "" {
+				return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoID: repoID, Reason: "no_component_for_repo"}
+			}
+			teamName := ct[compName]
+			if teamName == "" {
+				return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoID: repoID, ComponentName: compName, Reason: "no_team_for_component"}
+			}
+			return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoID: repoID, ComponentName: compName, TeamName: teamName, Reason: "ok"}
+		},
 	}
 }
 
@@ -270,7 +285,7 @@ func (r *MemoryRepository) QueryTeams(ctx context.Context, q query.Query, emit f
 		snapshot = append(snapshot, v)
 	}
 	r.mu.RUnlock()
-	return queryEntities(ctx, snapshot, q, projectTeam, emit)
+	return queryEntities(ctx, ensureUnknownTeam(snapshot), q, projectTeam, emit)
 }
 
 func (r *MemoryRepository) QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error {
@@ -281,6 +296,21 @@ func (r *MemoryRepository) QueryComponents(ctx context.Context, q query.Query, e
 	}
 	r.mu.RUnlock()
 	return queryEntities(ctx, snapshot, q, projectComponent, emit)
+}
+
+func (r *MemoryRepository) OwnershipDiagnostics(_ context.Context) ([]model.OwnershipDiagnostics, error) {
+	r.mu.RLock()
+	ids := make([]string, 0, len(r.workflows))
+	for id := range r.workflows {
+		ids = append(ids, id)
+	}
+	lkp := r.snapshotOwnerLookup()
+	r.mu.RUnlock()
+	out := make([]model.OwnershipDiagnostics, len(ids))
+	for i, id := range ids {
+		out[i] = lkp.diagnose(id)
+	}
+	return out, nil
 }
 
 // Aggregate applies the aggregation tree in q.Aggs to all entities of q.Entity
@@ -369,7 +399,7 @@ func (r *MemoryRepository) snapshotProject(ctx context.Context, entity query.Ent
 			snap = append(snap, v)
 		}
 		r.mu.RUnlock()
-		return filterProject(ctx, snap, filter, func(v model.Team) map[string]any { return projectTeam(v) })
+		return filterProject(ctx, ensureUnknownTeam(snap), filter, func(v model.Team) map[string]any { return projectTeam(v) })
 
 	case query.EntityComponent:
 		r.mu.RLock()

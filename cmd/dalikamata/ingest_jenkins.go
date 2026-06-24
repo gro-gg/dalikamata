@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	jenkinsURL   string
-	jenkinsUser  string
-	jenkinsToken string
-	jenkinsJobs  []string
+	jenkinsURL          string
+	jenkinsUser         string
+	jenkinsToken        string
+	jenkinsJobs         []string
+	jenkinsRepoOverride map[string]string
 )
 
 var jenkinsCmd = &cobra.Command{
@@ -39,6 +40,7 @@ var jenkinsCmd = &cobra.Command{
 		a.JenkinsUser = jenkinsUser
 		a.JenkinsToken = jenkinsToken
 		a.Jobs = jenkinsJobs
+		a.RepoOverrides = jenkinsRepoOverride
 		a.CACertsDir = caCertsDir
 		a.Interval = jenkinsInterval
 
@@ -74,5 +76,6 @@ func init() {
 	jenkinsCmd.Flags().StringVar(&jenkinsUser, "jenkins-user", "", "Jenkins username")
 	jenkinsCmd.Flags().StringVar(&jenkinsToken, "jenkins-token", "", "Jenkins API token")
 	jenkinsCmd.Flags().StringSliceVar(&jenkinsJobs, "jenkins-jobs", nil, "full Jenkins job paths to crawl (comma-separated); crawl all if omitted")
+	jenkinsCmd.Flags().StringToStringVar(&jenkinsRepoOverride, "jenkins-repo-override", nil, "manual pipeline→repoID mapping, e.g. my-pipeline=PROJ/my-repo (comma-separated key=value pairs)")
 	jenkinsCmd.Flags().DurationVar(&jenkinsInterval, "jenkins-interval", 5*time.Minute, "how often to re-crawl Jenkins for new builds")
 }

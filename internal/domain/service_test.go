@@ -62,6 +62,9 @@ func (s *stubRepository) QueryComponents(_ context.Context, _ query.Query, _ fun
 func (s *stubRepository) Aggregate(_ context.Context, _ query.Query) (map[string]query.AggregationResult, error) {
 	return nil, s.err
 }
+func (s *stubRepository) OwnershipDiagnostics(_ context.Context) ([]model.OwnershipDiagnostics, error) {
+	return nil, s.err
+}
 
 func newService(err error) *domain.DomainService {
 	repo := &stubRepository{err: err}

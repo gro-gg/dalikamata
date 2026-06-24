@@ -18,15 +18,16 @@ const (
 )
 
 type IngestJenkinsApp struct {
-	JenkinsURL   string
-	JenkinsUser  string
-	JenkinsToken string
-	NATSHost     string
-	NATSPort     int
-	Jobs         []string
-	CACertsDir   string
-	Interval     time.Duration
-	logger       *slog.Logger
+	JenkinsURL    string
+	JenkinsUser   string
+	JenkinsToken  string
+	NATSHost      string
+	NATSPort      int
+	Jobs          []string
+	RepoOverrides map[string]string
+	CACertsDir    string
+	Interval      time.Duration
+	logger        *slog.Logger
 }
 
 func NewIngestJenkinsApp(logger *slog.Logger) *IngestJenkinsApp {
@@ -65,7 +66,7 @@ func (a *IngestJenkinsApp) Run(ctx context.Context) error {
 	}
 
 	client := jenkins.NewClient(a.JenkinsURL, a.JenkinsUser, a.JenkinsToken, httpCl, a.logger)
-	crawler := jenkins.NewCrawler(client, publisher, cursors, a.Jobs, a.logger)
+	crawler := jenkins.NewCrawler(client, publisher, cursors, a.Jobs, a.RepoOverrides, a.logger)
 
 	svc, err := jenkins.NewIngestJenkinsService(crawler, a.Interval, a.logger)
 	if err != nil {

@@ -278,7 +278,7 @@ func TestCrawl_MultibranchDeduplicatesWorkflow(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, newFakeCursors(), nil, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), nil, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -321,7 +321,7 @@ func TestCrawl_PlainJobNotStripped(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	if err := NewCrawler(client, pub, newFakeCursors(), nil, discardLogger()).Crawl(context.Background()); err != nil {
+	if err := NewCrawler(client, pub, newFakeCursors(), nil, nil, discardLogger()).Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
 	}
 	if len(pub.workflows) != 1 || pub.workflows[0].ID != "build-backend" {
@@ -486,7 +486,7 @@ func TestCrawl_ExplicitBranchJobStripsBranch(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"shared-lib/main"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"shared-lib/main"}, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -530,7 +530,7 @@ func TestCrawl_ExplicitMultipleBranchesSamePipeline(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"shared-lib/main", "shared-lib/hotfix"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"shared-lib/main", "shared-lib/hotfix"}, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -572,7 +572,7 @@ func TestCrawl_ExplicitNestedBranchJobStripsBranch(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"team/shared-lib/main"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"team/shared-lib/main"}, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -597,7 +597,7 @@ func TestCrawl_ExplicitPlainJobNotStripped(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"build-backend"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"build-backend"}, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -621,7 +621,7 @@ func TestCrawl_ExplicitJobParentNotMultibranch(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"team/api"}, discardLogger())
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"team/api"}, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -651,7 +651,7 @@ func TestCrawl_BuildCursorAdvances(t *testing.T) {
 	}
 	store := newFakeCursors()
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+	crawler := NewCrawler(client, pub, store, nil, nil, discardLogger())
 
 	// First crawl: all 3 builds published, cursor saved as 3.
 	if err := crawler.Crawl(context.Background()); err != nil {
@@ -719,7 +719,7 @@ func TestCrawl_CursorHydratedFromStore(t *testing.T) {
 	store.data["build-backend"] = 3 // simulate persisted cursor from prior run
 
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+	crawler := NewCrawler(client, pub, store, nil, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -763,7 +763,7 @@ func TestCrawl_CursorClearedOnReset(t *testing.T) {
 	store.data["build-backend"] = 99 // stale cursor ahead of actual max
 
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+	crawler := NewCrawler(client, pub, store, nil, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -793,7 +793,7 @@ func TestCrawl_NoWorkflowRepublishWhenNoNewBuilds(t *testing.T) {
 	}
 	store := newFakeCursors()
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+	crawler := NewCrawler(client, pub, store, nil, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl 1: %v", err)
@@ -830,7 +830,7 @@ func TestCrawl_InProgressBuildDoesNotAdvanceCursor(t *testing.T) {
 	}
 	store := newFakeCursors()
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, store, nil, discardLogger())
+	crawler := NewCrawler(client, pub, store, nil, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl 1: %v", err)
@@ -885,7 +885,7 @@ func TestCrawl_MultibranchPerBranchCursors(t *testing.T) {
 	}
 	store := newFakeCursors()
 	pub := &fakeCICDPublisher{}
-	crawler := NewCrawler(client, pub, store, []string{"shared-lib/main", "shared-lib/hotfix"}, discardLogger())
+	crawler := NewCrawler(client, pub, store, []string{"shared-lib/main", "shared-lib/hotfix"}, nil, discardLogger())
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
@@ -993,7 +993,7 @@ func TestCrawl_MultibranchBranchFromJobPath(t *testing.T) {
 		stages: map[string][]apiStage{},
 	}
 	pub := &fakeCICDPublisher{}
-	if err := NewCrawler(client, pub, newFakeCursors(), nil, discardLogger()).Crawl(context.Background()); err != nil {
+	if err := NewCrawler(client, pub, newFakeCursors(), nil, nil, discardLogger()).Crawl(context.Background()); err != nil {
 		t.Fatalf("Crawl: %v", err)
 	}
 
@@ -1009,5 +1009,61 @@ func TestCrawl_MultibranchBranchFromJobPath(t *testing.T) {
 	}
 	if branches["payments/feature-foo/1"] != "feature-foo" {
 		t.Errorf("payments/feature-foo/1 branch = %q, want %q", branches["payments/feature-foo/1"], "feature-foo")
+	}
+}
+
+// TestPublishWorkflow_EmptyRepoIDPublishesWithWarning verifies that when
+// extractRepoID returns "" (no BuildData action present) and no repo_overrides
+// entry exists, PublishWorkflow is still called (the record is indexed) but
+// with an empty RepoID — the ownership chain will report "missing_repo_id".
+func TestPublishWorkflow_EmptyRepoIDPublishesWithWarning(t *testing.T) {
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"": {{Class: classWorkflowJob, Name: "no-git-info"}},
+		},
+		// Build has no BuildData action — extractRepoID will return "".
+		builds: map[string][]apiBuild{
+			"no-git-info": {{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 10_000}},
+		},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	if err := NewCrawler(client, pub, newFakeCursors(), nil, nil, discardLogger()).Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if len(pub.workflows) != 1 {
+		t.Fatalf("workflows published = %d, want 1", len(pub.workflows))
+	}
+	if pub.workflows[0].RepoID != "" {
+		t.Errorf("workflow RepoID = %q, want empty (no BuildData)", pub.workflows[0].RepoID)
+	}
+	if len(pub.workflowRuns) != 1 {
+		t.Errorf("workflow runs = %d, want 1", len(pub.workflowRuns))
+	}
+}
+
+// TestRepoOverride_PopulatesRepoID verifies that when extractRepoID returns ""
+// but a repo_overrides entry exists for the pipeline, PublishWorkflow IS called
+// with the override repoID.
+func TestRepoOverride_PopulatesRepoID(t *testing.T) {
+	client := &fakeJenkinsClient{
+		jobs: map[string][]apiJob{
+			"": {{Class: classWorkflowJob, Name: "no-git-info"}},
+		},
+		builds: map[string][]apiBuild{
+			"no-git-info": {{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 10_000}},
+		},
+		stages: map[string][]apiStage{},
+	}
+	pub := &fakeCICDPublisher{}
+	overrides := map[string]string{"no-git-info": "PROJ/my-repo"}
+	if err := NewCrawler(client, pub, newFakeCursors(), nil, overrides, discardLogger()).Crawl(context.Background()); err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if len(pub.workflows) != 1 {
+		t.Fatalf("workflows published = %d, want 1", len(pub.workflows))
+	}
+	if pub.workflows[0].RepoID != "PROJ/my-repo" {
+		t.Errorf("workflow RepoID = %q, want PROJ/my-repo", pub.workflows[0].RepoID)
 	}
 }

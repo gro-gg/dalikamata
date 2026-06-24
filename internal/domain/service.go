@@ -97,3 +97,7 @@ func (s *DomainService) QueryComponents(ctx context.Context, q query.Query, emit
 func (s *DomainService) Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error) {
 	return s.queryRepo.Aggregate(ctx, q)
 }
+
+func (s *DomainService) OwnershipDiagnostics(ctx context.Context) ([]model.OwnershipDiagnostics, error) {
+	return s.queryRepo.OwnershipDiagnostics(ctx)
+}

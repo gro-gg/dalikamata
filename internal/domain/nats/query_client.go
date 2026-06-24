@@ -132,6 +132,15 @@ func (c *QueryClient) QueryComponentsAll(ctx context.Context, q query.Query) ([]
 	return collectAll(out, errs)
 }
 
+// OwnershipDiagnosticsAll retrieves the ownership resolution report for every
+// Workflow known to the domain, indicating at which arm of the
+// Workflow.RepoID → Component.RepoIDs → Component.TeamName chain each workflow
+// succeeds or fails.
+func (c *QueryClient) OwnershipDiagnosticsAll(ctx context.Context) ([]model.OwnershipDiagnostics, error) {
+	out, errs := streamQuery[model.OwnershipDiagnostics](ctx, c, SubjectQueryPlatformOwnership, query.Query{})
+	return collectAll(out, errs)
+}
+
 // --- Aggregation ------------------------------------------------------------
 
 // Aggregate sends q to the server-side aggregation handler and returns the

@@ -58,6 +58,7 @@ The Bitbucket ingestor runs on a repeating ticker loop. The first crawl fires im
 | `--jenkins-user` | _(required)_ | Jenkins username |
 | `--jenkins-token` | _(required)_ | Jenkins API token |
 | `--jenkins-jobs` | _(all jobs)_ | Comma-separated list of full job paths to crawl; discovers all if omitted |
+| `--jenkins-repo-override` | _(none)_ | Comma-separated `pipeline=PROJ/repo` pairs; pin a repo ID when Jenkins BuildData is not populated (see [Team→workflow resolution](#teamworkflow-resolution)) |
 | `--jenkins-interval` | `5m` | How often to re-crawl Jenkins for new builds |
 
 The Jenkins ingestor runs on the same repeating ticker pattern as the Bitbucket ingestor. The first crawl fires immediately on startup; subsequent crawls are spaced by `--jenkins-interval`. Before fetching the full build list for a job, the crawler probes `lastCompletedBuild[number]` (a single-field Jenkins API call) to check whether anything has finished since the last tick — if the probe matches the stored cursor the full fetch is skipped entirely. Each job's highest published build number is persisted in a JetStream KV bucket (`ingest-jenkins-cursors`) so that restarts do not re-ingest already-published builds. Cursors are keyed by full job path (e.g. `shared-lib/main`) so branches of a multibranch pipeline track independent watermarks while still collapsing onto one `Workflow` entity in the domain.
@@ -103,7 +104,13 @@ The metrics service (`dalikamata metrics`, port 2112 by default) exposes three P
 | `workflow_run_duration_seconds` | `team_name`, `component_name`, `workflow_id`, `workflow_name`, `branch`, `status` | Total duration of a Jenkins pipeline run |
 | `workflow_task_duration_seconds` | `team_name`, `component_name`, `workflow_id`, `workflow_name`, `branch`, `task_name`, `task_order`, `status` | Duration of an individual pipeline stage |
 
-`team_name` and `component_name` are resolved at query time from the component YAML files ingested by `dalikamata ingest config`. Workflows not claimed by any component file are labelled `team_name="unknown"` / `component_name="unknown"`.
+`team_name` and `component_name` are resolved at query time from the component YAML files ingested by `dalikamata ingest config`. The resolution chain is:
+
+```
+Workflow.RepoID  →  Component.RepoIDs (contains)  →  Component.TeamName
+```
+
+A workflow that cannot be resolved at any step is labelled `team_name="unknown"` / `component_name="unknown"`. Use the [ownership diagnostics endpoint](#ownership-diagnostics) to find out which arm fails.
 
 Six Grafana dashboards are provisioned automatically when using the `--profile monitoring` Docker Compose flag:
 
@@ -123,7 +130,7 @@ accumulated state as a JSON HTTP API, intended for use with Grafana's
 [Infinity data source](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/)
 to build dashboards showing raw entity data alongside Prometheus metrics.
 
-Eight endpoints — one per entity — support both GET (URL params) and POST
+Eight entity endpoints support both GET (URL params) and POST
 (full `query.Query` JSON body):
 
 ```
@@ -136,6 +143,28 @@ GET/POST /api/v1/workflowTasks
 GET/POST /api/v1/teams
 GET/POST /api/v1/components
 ```
+
+### Ownership diagnostics
+
+```
+GET /api/v1/ownership
+```
+
+Returns a JSON array with one entry per known `Workflow`, reporting how it resolves through the `Workflow.RepoID → Component.RepoIDs → Component.TeamName` chain:
+
+```json
+[
+  { "workflow_id": "payments/build", "repo_id": "PROJ/payments", "component_name": "payments-svc", "team_name": "payments", "reason": "ok" },
+  { "workflow_id": "old-job", "repo_id": "", "component_name": "", "team_name": "", "reason": "missing_repo_id" }
+]
+```
+
+| `reason` | Meaning | Fix |
+|---|---|---|
+| `ok` | Chain resolved fully | — |
+| `missing_repo_id` | `Workflow.RepoID` is empty — Jenkins BuildData not populated | Add `--jenkins-repo-override old-job=PROJ/my-repo` |
+| `no_component_for_repo` | No component YAML lists this `RepoID` | Add the repo ID to the matching component's `repo_ids` list |
+| `no_team_for_component` | Component found but `TeamName` is empty | Set `team:` in the component YAML file |
 
 Common GET parameters:
 

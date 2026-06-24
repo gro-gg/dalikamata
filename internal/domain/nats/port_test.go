@@ -127,8 +127,14 @@ func TestIngestPlatformTeamAndComponent(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	teams := collectTeams(t, memory)
-	is.Equal(len(teams), 1)
-	is.Equal(teams[0].Name, "payments")
+	// QueryTeams always includes the synthetic "unknown" team.
+	is.Equal(len(teams), 2)
+	teamNames := make(map[string]bool, len(teams))
+	for _, tm := range teams {
+		teamNames[tm.Name] = true
+	}
+	is.True(teamNames["payments"])
+	is.True(teamNames["unknown"])
 
 	comps := collectComponents(t, memory)
 	is.Equal(len(comps), 1)

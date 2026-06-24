@@ -194,3 +194,73 @@ func TestOwnershipIndex_UnknownFallback(t *testing.T) {
 	taskTeams := runAggregateField(t, r, query.EntityWorkflowTask, query.TaskTeamName)
 	is.True(taskTeams["unknown"])
 }
+
+// TestOwnershipDiagnostics_AllReasons exercises every Reason value of the
+// OwnershipDiagnostics returned by MemoryRepository.OwnershipDiagnostics.
+func TestOwnershipDiagnostics_AllReasons(t *testing.T) {
+	is := is.New(t)
+	r := newRepo()
+	ctx := context.Background()
+
+	// "ok" — full chain resolves
+	addComponent(t, r, model.Component{Name: "svc-ok", TeamName: "team-ok", RepoIDs: []string{"repo-ok"}})
+	addWorkflow(t, r, model.Workflow{ID: "wf-ok", RepoID: "repo-ok"})
+
+	// "missing_repo_id" — workflow has no RepoID
+	addWorkflow(t, r, model.Workflow{ID: "wf-no-repo", RepoID: ""})
+
+	// "no_component_for_repo" — RepoID set but no component claims it
+	addWorkflow(t, r, model.Workflow{ID: "wf-no-comp", RepoID: "repo-unowned"})
+
+	// "no_team_for_component" — component exists but TeamName is empty
+	addComponent(t, r, model.Component{Name: "svc-noteam", TeamName: "", RepoIDs: []string{"repo-noteam"}})
+	addWorkflow(t, r, model.Workflow{ID: "wf-noteam", RepoID: "repo-noteam"})
+
+	diags, err := r.OwnershipDiagnostics(ctx)
+	is.NoErr(err)
+
+	byWF := make(map[string]model.OwnershipDiagnostics, len(diags))
+	for _, d := range diags {
+		byWF[d.WorkflowID] = d
+	}
+
+	is.Equal(byWF["wf-ok"].Reason, "ok")
+	is.Equal(byWF["wf-ok"].TeamName, "team-ok")
+	is.Equal(byWF["wf-ok"].ComponentName, "svc-ok")
+	is.Equal(byWF["wf-ok"].RepoID, "repo-ok")
+
+	is.Equal(byWF["wf-no-repo"].Reason, "missing_repo_id")
+	is.Equal(byWF["wf-no-repo"].RepoID, "")
+
+	is.Equal(byWF["wf-no-comp"].Reason, "no_component_for_repo")
+	is.Equal(byWF["wf-no-comp"].RepoID, "repo-unowned")
+
+	is.Equal(byWF["wf-noteam"].Reason, "no_team_for_component")
+	is.Equal(byWF["wf-noteam"].ComponentName, "svc-noteam")
+}
+
+// TestQueryWorkflowRuns_ResolvedTeamName verifies the full projection chain:
+// Team → Component(RepoIDs) → Workflow(RepoID) → WorkflowRun carries team_name.
+func TestQueryWorkflowRuns_ResolvedTeamName(t *testing.T) {
+	is := is.New(t)
+	r := newRepo()
+	ctx := context.Background()
+
+	if err := r.AddTeam(ctx, model.Team{Name: "team-alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	addComponent(t, r, model.Component{Name: "svc-alpha", TeamName: "team-alpha", RepoIDs: []string{"PROJ/alpha-api"}})
+	addWorkflow(t, r, model.Workflow{ID: "alpha-build", Name: "Alpha Build", RepoID: "PROJ/alpha-api"})
+	addWorkflowRun(t, r, model.WorkflowRun{ID: "run-alpha-1", WorkflowID: "alpha-build", Status: "SUCCESS", Duration: 90})
+
+	var runs []model.WorkflowRun
+	err := r.QueryWorkflowRuns(ctx, query.Query{Entity: query.EntityWorkflowRun}, func(run model.WorkflowRun) error {
+		runs = append(runs, run)
+		return nil
+	})
+	is.NoErr(err)
+	is.Equal(len(runs), 1)
+	is.Equal(runs[0].TeamName, "team-alpha")
+	is.Equal(runs[0].ComponentName, "svc-alpha")
+	is.Equal(runs[0].WorkflowName, "Alpha Build")
+}

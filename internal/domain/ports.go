@@ -42,6 +42,7 @@ type QueryHandler interface {
 	QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error
 	QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error
 	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
+	OwnershipDiagnostics(ctx context.Context) ([]model.OwnershipDiagnostics, error)
 }
 
 // ---- Outgoing (secondary/driven) ports -------------------------------------
@@ -93,4 +94,5 @@ type QueryRepository interface {
 	QueryTeams(ctx context.Context, q query.Query, emit func(model.Team) error) error
 	QueryComponents(ctx context.Context, q query.Query, emit func(model.Component) error) error
 	Aggregate(ctx context.Context, q query.Query) (map[string]query.AggregationResult, error)
+	OwnershipDiagnostics(ctx context.Context) ([]model.OwnershipDiagnostics, error)
 }

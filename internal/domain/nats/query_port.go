@@ -43,6 +43,7 @@ func (p *QueryPort) Run(ctx context.Context, nc *gonats.Conn) error {
 		{SubjectQueryCicdTask, p.handleQueryWorkflowTasks},
 		{SubjectQueryPlatformTeam, p.handleQueryTeams},
 		{SubjectQueryPlatformComponent, p.handleQueryComponents},
+		{SubjectQueryPlatformOwnership, p.handleOwnershipDiagnostics},
 		{SubjectQueryAggregate, p.handleAggregate},
 	}
 
@@ -131,6 +132,28 @@ func (p *QueryPort) handleQueryComponents(msg *gonats.Msg) {
 			return sendData(msg, c)
 		})
 	})
+}
+
+func (p *QueryPort) handleOwnershipDiagnostics(msg *gonats.Msg) {
+	if msg.Reply == "" {
+		p.logger.Warn("ownership diagnostics request has no reply subject; dropping")
+		return
+	}
+	diags, err := p.handler.OwnershipDiagnostics(context.Background())
+	if err != nil {
+		p.logger.Error("executing ownership diagnostics", "error", err)
+		_ = sendError(msg, err)
+		return
+	}
+	for _, d := range diags {
+		if err := sendData(msg, d); err != nil {
+			p.logger.Error("sending ownership diagnostic", "error", err)
+			return
+		}
+	}
+	if err := sendDone(msg); err != nil {
+		p.logger.Error("sending done", "error", err)
+	}
 }
 
 // handleQuery decodes the request, runs fn, then sends a done or error reply.

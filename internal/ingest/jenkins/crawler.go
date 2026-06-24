@@ -39,25 +39,30 @@ func pipelinePath(e jobEntry) string {
 }
 
 type Crawler struct {
-	client    JenkinsClient
-	publisher domain.CICDPublisher
-	store     Cursors
-	jobs      []string
-	logger    *slog.Logger
+	client        JenkinsClient
+	publisher     domain.CICDPublisher
+	store         Cursors
+	jobs          []string
+	repoOverrides map[string]string // pipelinePath → repoID override when extraction fails
+	logger        *slog.Logger
 
 	mu      sync.Mutex
 	cursors map[string]int // jobPath → highest completed build number published
 	loaded  bool           // true after the first Load from the store
 }
 
-func NewCrawler(client JenkinsClient, publisher domain.CICDPublisher, store Cursors, jobs []string, logger *slog.Logger) *Crawler {
+func NewCrawler(client JenkinsClient, publisher domain.CICDPublisher, store Cursors, jobs []string, repoOverrides map[string]string, logger *slog.Logger) *Crawler {
+	if repoOverrides == nil {
+		repoOverrides = map[string]string{}
+	}
 	return &Crawler{
-		client:    client,
-		publisher: publisher,
-		store:     store,
-		jobs:      jobs,
-		cursors:   map[string]int{},
-		logger:    logger.With("component", "jenkins-crawler"),
+		client:        client,
+		publisher:     publisher,
+		store:         store,
+		jobs:          jobs,
+		repoOverrides: repoOverrides,
+		cursors:       map[string]int{},
+		logger:        logger.With("component", "jenkins-crawler"),
 	}
 }
 
@@ -179,10 +184,25 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 			continue
 		}
 
+		repoID := extractRepoID(allNewBuilds)
+		if repoID == "" {
+			if override, ok := c.repoOverrides[pp]; ok {
+				repoID = override
+			}
+		}
+		if repoID == "" {
+			// Without a RepoID the ownership chain (Workflow → Repo → Component → Team)
+			// cannot be resolved. Publish the record anyway so runs are indexed, but
+			// log a warning so operators know to add a repo_overrides entry or ensure
+			// Jenkins BuildData is populated.
+			c.logger.Warn("publishing workflow with no repo ID: ownership chain will not resolve",
+				"pipeline", pp,
+				"hint", "add a --jenkins-repo-override entry or ensure Jenkins BuildData is populated")
+		}
 		workflow := model.Workflow{
 			ID:     pp,
 			Name:   pp,
-			RepoID: extractRepoID(allNewBuilds),
+			RepoID: repoID,
 		}
 		if err := c.publisher.PublishWorkflow(ctx, workflow); err != nil {
 			c.logger.Error("publishing workflow", "pipeline", pp, "error", err)

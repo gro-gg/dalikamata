@@ -65,7 +65,7 @@ func projectWorkflow(w model.Workflow) map[string]any {
 
 // ownerLookup carries the closures needed to enrich WorkflowRun and
 // WorkflowTask projections with team/component/workflow-name fields.
-// Both closures must be safe to call concurrently and without holding any lock,
+// All closures must be safe to call concurrently and without holding any lock,
 // because they operate on snapshot data captured under the repository's RLock.
 type ownerLookup struct {
 	// ownership returns (componentName, teamName) for the given workflowID,
@@ -74,6 +74,9 @@ type ownerLookup struct {
 	// workflowName returns the human-readable workflow name for the given ID,
 	// falling back to the ID itself when no Workflow record exists.
 	workflowName func(workflowID string) string
+	// diagnose returns the full resolution chain for the given workflowID,
+	// indicating at which arm it succeeded or failed.
+	diagnose func(workflowID string) model.OwnershipDiagnostics
 }
 
 // projectWorkflowRun converts a WorkflowRun to a field map for query evaluation.
@@ -125,6 +128,19 @@ func projectTeam(t model.Team) map[string]any {
 	return map[string]any{
 		q.TeamName: t.Name,
 	}
+}
+
+// ensureUnknownTeam appends a synthetic {Name:"unknown"} team to snap if one
+// is not already present. Team queries always include this entry so that
+// dashboards and filters that reference the fallback ownership label work even
+// when no workflow has resolved owners yet.
+func ensureUnknownTeam(snap []model.Team) []model.Team {
+	for _, t := range snap {
+		if t.Name == "unknown" {
+			return snap
+		}
+	}
+	return append(snap, model.Team{Name: "unknown"})
 }
 
 // projectComponent converts a Component to a field map for query evaluation.
