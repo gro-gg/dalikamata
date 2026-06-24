@@ -403,13 +403,69 @@ func extractCommitSHA(b apiBuild) string {
 	return ""
 }
 
-// extractRepoID derives a "projectKey/slug" repo ID from the first remote URL
-// found in any build's BuildData action. It takes the last two path segments of
-// the URL and strips a trailing ".git" from the slug, e.g.:
-//
-//	https://bitbucket.example.com/scm/ACME/backend.git → "ACME/backend"
-//	git@github.com:org/repo.git                        → "org/repo"
+// extractRepoID returns the repo ID most likely to be the main application repo
+// by counting unique SHAs per remote URL across all builds. Shared libraries are
+// typically pinned (same SHA in every build); the app repo gets a new commit per
+// build, so it accumulates the most unique SHAs. When SHA variation cannot
+// distinguish repos (single build, or all repos on the same commit), it falls
+// back to the last BuildData URL — shared libraries typically appear before the
+// main checkout in the actions list.
 func extractRepoID(builds []apiBuild) string {
+	type entry struct {
+		shas map[string]struct{}
+	}
+	byID := map[string]*entry{}
+	var idOrder []string // insertion order for deterministic tiebreaking
+
+	for _, b := range builds {
+		for _, action := range b.Actions {
+			if !strings.Contains(action.Class, "BuildData") {
+				continue
+			}
+			if action.LastBuiltRevision == nil {
+				continue
+			}
+			sha := action.LastBuiltRevision.SHA1
+			for _, raw := range action.RemoteUrls {
+				id := repoIDFromURL(raw)
+				if id == "" {
+					continue
+				}
+				if _, seen := byID[id]; !seen {
+					byID[id] = &entry{shas: map[string]struct{}{}}
+					idOrder = append(idOrder, id)
+				}
+				if sha != "" {
+					byID[id].shas[sha] = struct{}{}
+				}
+			}
+		}
+	}
+
+	if len(idOrder) == 0 {
+		return ""
+	}
+
+	bestID := idOrder[0]
+	bestCount := len(byID[idOrder[0]].shas)
+	for _, id := range idOrder[1:] {
+		if count := len(byID[id].shas); count > bestCount {
+			bestCount = count
+			bestID = id
+		}
+	}
+
+	if bestCount <= 1 {
+		return lastBuildDataRepoID(builds)
+	}
+	return bestID
+}
+
+// lastBuildDataRepoID returns the repo ID from the last valid BuildData remote
+// URL seen across all builds. Shared libraries typically appear as the first
+// BuildData action, so iterating to the last gives us the main checkout.
+func lastBuildDataRepoID(builds []apiBuild) string {
+	var last string
 	for _, b := range builds {
 		for _, action := range b.Actions {
 			if !strings.Contains(action.Class, "BuildData") {
@@ -417,12 +473,12 @@ func extractRepoID(builds []apiBuild) string {
 			}
 			for _, raw := range action.RemoteUrls {
 				if id := repoIDFromURL(raw); id != "" {
-					return id
+					last = id
 				}
 			}
 		}
 	}
-	return ""
+	return last
 }
 
 func repoIDFromURL(raw string) string {

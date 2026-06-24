@@ -329,6 +329,75 @@ func TestCrawl_PlainJobNotStripped(t *testing.T) {
 	}
 }
 
+// ---- extractRepoID ----------------------------------------------------------
+
+func TestExtractRepoID_PrefersHigherSHAVariety(t *testing.T) {
+	// Shared library appears first but has the same SHA in every build (pinned).
+	// App repo SHA changes each build → extractRepoID must pick the app repo.
+	builds := []apiBuild{
+		{Actions: []apiBuildAction{
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA1"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
+		}},
+		{Actions: []apiBuildAction{
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA2"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
+		}},
+	}
+	got := extractRepoID(builds)
+	if got != "PROJ/backend" {
+		t.Errorf("extractRepoID = %q, want %q", got, "PROJ/backend")
+	}
+}
+
+func TestExtractRepoID_FallsBackToLastBuildDataOnSingleBuild(t *testing.T) {
+	// Single build: SHA variety cannot distinguish repos. Must return the last
+	// BuildData URL, not the first (shared lib appears first in actions).
+	builds := []apiBuild{
+		{Actions: []apiBuildAction{
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
+		}},
+	}
+	got := extractRepoID(builds)
+	if got != "PROJ/backend" {
+		t.Errorf("extractRepoID = %q, want %q", got, "PROJ/backend")
+	}
+}
+
+func TestExtractRepoID_FallsBackToLastBuildDataWhenAllSHAsSame(t *testing.T) {
+	// Multiple builds, but all repos have the same SHA in every build (e.g. a
+	// hotfix pipeline deploying a fixed tag). Cannot distinguish by SHA variety
+	// → fall back to the last BuildData URL.
+	builds := []apiBuild{
+		{Actions: []apiBuildAction{
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
+		}},
+		{Actions: []apiBuildAction{
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
+			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
+		}},
+	}
+	got := extractRepoID(builds)
+	if got != "PROJ/backend" {
+		t.Errorf("extractRepoID = %q, want %q", got, "PROJ/backend")
+	}
+}
+
+func TestExtractRepoID_NoBuildData(t *testing.T) {
+	builds := []apiBuild{{Actions: []apiBuildAction{{Class: "unrelated.Action"}}}}
+	if got := extractRepoID(builds); got != "" {
+		t.Errorf("extractRepoID = %q, want empty", got)
+	}
+}
+
+func TestExtractRepoID_EmptyBuilds(t *testing.T) {
+	if got := extractRepoID(nil); got != "" {
+		t.Errorf("extractRepoID = %q, want empty", got)
+	}
+}
+
 // ---- repoIDFromURL ----------------------------------------------------------
 
 func TestRepoIDFromURL(t *testing.T) {
