@@ -137,17 +137,18 @@ var jobConfigs = map[string]jobConfig{
 }
 
 // jobRemoteURL maps each fixture job to its Bitbucket Server remote URL.
-// Project key and slug match the PROJ fixture in the fake Bitbucket server
-// so that extractRepoID round-trips to "PROJ/backend-api", "PROJ/frontend-app",
-// and "PROJ/shared-lib" — the same IDs referenced in the component YAML files.
+// Bitbucket Server HTTPS clone URLs use a lowercase project key under /scm/
+// even when the canonical project key is uppercase (e.g. PROJ). The Jenkins
+// crawler normalises this back to uppercase, so extractRepoID still produces
+// "PROJ/backend-api" etc. — matching the IDs from the Bitbucket crawler.
 var jobRemoteURL = map[string]string{
-	"build-backend":     "https://bitbucket.example.com/scm/PROJ/backend-api.git",
-	"test-backend":      "https://bitbucket.example.com/scm/PROJ/backend-api.git",
-	"deploy-backend":    "https://bitbucket.example.com/scm/PROJ/backend-api.git",
-	"build-frontend":    "https://bitbucket.example.com/scm/PROJ/frontend-app.git",
-	"deploy-frontend":   "https://bitbucket.example.com/scm/PROJ/frontend-app.git",
-	"shared-lib/main":   "https://bitbucket.example.com/scm/PROJ/shared-lib.git",
-	"shared-lib/hotfix": "https://bitbucket.example.com/scm/PROJ/shared-lib.git",
+	"build-backend":     "https://bitbucket.example.com/scm/proj/backend-api.git",
+	"test-backend":      "https://bitbucket.example.com/scm/proj/backend-api.git",
+	"deploy-backend":    "https://bitbucket.example.com/scm/proj/backend-api.git",
+	"build-frontend":    "https://bitbucket.example.com/scm/proj/frontend-app.git",
+	"deploy-frontend":   "https://bitbucket.example.com/scm/proj/frontend-app.git",
+	"shared-lib/main":   "https://bitbucket.example.com/scm/proj/shared-lib.git",
+	"shared-lib/hotfix": "https://bitbucket.example.com/scm/proj/shared-lib.git",
 }
 
 // jobOrder fixes the iteration order of jobs so the fixture is deterministic.

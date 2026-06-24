@@ -443,5 +443,12 @@ func repoIDFromURL(raw string) string {
 	if project == "" || slug == "" {
 		return ""
 	}
+	// Bitbucket Server HTTPS clone URLs use /scm/<project>/<repo>.git where
+	// <project> may be lowercase even though the canonical project key (as
+	// returned by the Bitbucket REST API and used by the Bitbucket crawler) is
+	// always uppercase.  Normalise here so the ownership chain can match.
+	if len(segments) >= 3 && strings.EqualFold(segments[len(segments)-3], "scm") {
+		project = strings.ToUpper(project)
+	}
 	return project + "/" + slug
 }

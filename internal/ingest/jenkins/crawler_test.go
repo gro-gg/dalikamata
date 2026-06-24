@@ -338,6 +338,7 @@ func TestRepoIDFromURL(t *testing.T) {
 		want string
 	}{
 		{"bitbucket server https", "https://bitbucket.example.com/scm/ACME/backend.git", "ACME/backend"},
+		{"bitbucket server https lowercase project", "https://bitbucket.example.com/scm/acme/backend.git", "ACME/backend"},
 		{"bitbucket server ssh", "ssh://git@bitbucket.example.com/ACME/backend.git", "ACME/backend"},
 		{"github https", "https://github.com/org/repo.git", "org/repo"},
 		{"github no .git suffix", "https://github.com/org/repo", "org/repo"},
