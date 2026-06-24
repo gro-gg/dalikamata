@@ -408,10 +408,12 @@ func TestRepoIDFromURL(t *testing.T) {
 	}{
 		{"bitbucket server https", "https://bitbucket.example.com/scm/ACME/backend.git", "ACME/backend"},
 		{"bitbucket server https lowercase project", "https://bitbucket.example.com/scm/acme/backend.git", "ACME/backend"},
-		{"bitbucket server ssh", "ssh://git@bitbucket.example.com/ACME/backend.git", "ACME/backend"},
-		{"github https", "https://github.com/org/repo.git", "org/repo"},
-		{"github no .git suffix", "https://github.com/org/repo", "org/repo"},
-		{"scp-style git", "git@github.com:org/repo.git", "org/repo"},
+		{"bitbucket server ssh uppercase", "ssh://git@bitbucket.example.com/ACME/backend.git", "ACME/backend"},
+		{"bitbucket server ssh lowercase project", "ssh://git@bitbucket.example.com/acme/backend.git", "ACME/backend"},
+		{"bitbucket server scp lowercase project", "git@bitbucket.example.com:acme/backend.git", "ACME/backend"},
+		{"github https", "https://github.com/org/repo.git", "ORG/repo"},
+		{"github no .git suffix", "https://github.com/org/repo", "ORG/repo"},
+		{"scp-style git", "git@github.com:org/repo.git", "ORG/repo"},
 		{"empty string", "", ""},
 		{"single segment", "https://example.com/repo.git", ""},
 	}
