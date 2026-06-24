@@ -137,17 +137,17 @@ var jobConfigs = map[string]jobConfig{
 }
 
 // jobRemoteURL maps each fixture job to its Bitbucket Server remote URL.
-// The project key and slug match the ACME fixture used in integration tests
-// so that extractRepoID round-trips to the expected "ACME/backend" /
-// "ACME/frontend" / "ACME/shared-lib" composite.
+// Project key and slug match the PROJ fixture in the fake Bitbucket server
+// so that extractRepoID round-trips to "PROJ/backend-api", "PROJ/frontend-app",
+// and "PROJ/shared-lib" — the same IDs referenced in the component YAML files.
 var jobRemoteURL = map[string]string{
-	"build-backend":     "https://bitbucket.example.com/scm/ACME/backend.git",
-	"test-backend":      "https://bitbucket.example.com/scm/ACME/backend.git",
-	"deploy-backend":    "https://bitbucket.example.com/scm/ACME/backend.git",
-	"build-frontend":    "https://bitbucket.example.com/scm/ACME/frontend.git",
-	"deploy-frontend":   "https://bitbucket.example.com/scm/ACME/frontend.git",
-	"shared-lib/main":   "https://bitbucket.example.com/scm/ACME/shared-lib.git",
-	"shared-lib/hotfix": "https://bitbucket.example.com/scm/ACME/shared-lib.git",
+	"build-backend":     "https://bitbucket.example.com/scm/PROJ/backend-api.git",
+	"test-backend":      "https://bitbucket.example.com/scm/PROJ/backend-api.git",
+	"deploy-backend":    "https://bitbucket.example.com/scm/PROJ/backend-api.git",
+	"build-frontend":    "https://bitbucket.example.com/scm/PROJ/frontend-app.git",
+	"deploy-frontend":   "https://bitbucket.example.com/scm/PROJ/frontend-app.git",
+	"shared-lib/main":   "https://bitbucket.example.com/scm/PROJ/shared-lib.git",
+	"shared-lib/hotfix": "https://bitbucket.example.com/scm/PROJ/shared-lib.git",
 }
 
 // jobOrder fixes the iteration order of jobs so the fixture is deterministic.

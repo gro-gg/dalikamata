@@ -364,4 +364,3 @@ func TestJSONRoundTrip(t *testing.T) {
 	is.Equal(decoded.Filter.Must[0].Op, query.OpTerm)
 	is.Equal(decoded.Filter.Must[1].Op, query.OpRange)
 }
-
