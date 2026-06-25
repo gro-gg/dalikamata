@@ -44,7 +44,7 @@ func (p *PlatformPublisher) PublishTeam(ctx context.Context, team model.Team) er
 }
 
 func (p *PlatformPublisher) PublishComponent(ctx context.Context, comp model.Component) error {
-	p.logger.Debug("publishing component", "subject", SubjectPlatformComponent, "name", comp.Name)
+	p.logger.Debug("publishing component", "subject", SubjectPlatformComponent, "name", comp.Name, "team", comp.TeamName)
 	return p.publish(ctx, SubjectPlatformComponent, comp)
 }
 

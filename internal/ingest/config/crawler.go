@@ -59,7 +59,6 @@ func (c *Crawler) Run(ctx context.Context) error {
 }
 
 func (c *Crawler) publishTeam(ctx context.Context, team model.Team) error {
-	c.logger.Debug("publishing team", "name", team.Name)
 	if err := c.publisher.PublishTeam(ctx, team); err != nil {
 		return fmt.Errorf("publishing team %s: %w", team.Name, err)
 	}
@@ -67,7 +66,6 @@ func (c *Crawler) publishTeam(ctx context.Context, team model.Team) error {
 }
 
 func (c *Crawler) publishComponent(ctx context.Context, comp model.Component) error {
-	c.logger.Debug("publishing component", "name", comp.Name, "team", comp.TeamName)
 	if err := c.publisher.PublishComponent(ctx, comp); err != nil {
 		return fmt.Errorf("publishing component %s: %w", comp.Name, err)
 	}
