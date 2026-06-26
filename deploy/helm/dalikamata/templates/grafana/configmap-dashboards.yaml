@@ -18,6 +18,11 @@ data:
         type: file
         options:
           path: /etc/grafana/provisioning/dashboards
+      - name: archive
+        folder: Archive
+        type: file
+        options:
+          path: /etc/grafana/provisioning/dashboards-archive
   # Dashboard JSON files are sourced from files/dashboards/*.json in this chart.
   # range+base produces clean keys (e.g. "pr_cycle_time.json") without path separators,
   # which Kubernetes ConfigMap keys do not allow.

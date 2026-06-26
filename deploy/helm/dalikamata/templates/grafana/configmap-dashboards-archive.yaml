@@ -1,0 +1,15 @@
+{{- if and .Values.grafana.enabled .Values.grafana.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-grafana-dashboards-archive
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+data:
+{{- range $path, $bytes := .Files.Glob "files/dashboards-archive/*.json" }}
+  {{ base $path }}: |
+{{ $bytes | toString | indent 4 }}
+{{- end }}
+{{- end }}

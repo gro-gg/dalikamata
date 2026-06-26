@@ -62,6 +62,8 @@ spec:
             {{- if .Values.grafana.dashboards.enabled }}
             - name: dashboards
               mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards-archive
+              mountPath: /etc/grafana/provisioning/dashboards-archive
             {{- end }}
       volumes:
         - name: grafana-data
@@ -78,5 +80,8 @@ spec:
         - name: dashboards
           configMap:
             name: {{ include "dalikamata.fullname" . }}-grafana-dashboards
+        - name: dashboards-archive
+          configMap:
+            name: {{ include "dalikamata.fullname" . }}-grafana-dashboards-archive
         {{- end }}
 {{- end }}
