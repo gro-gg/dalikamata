@@ -14,6 +14,8 @@ domain:
   # persistence:
   #   size: 1Gi
   #   storageClass: ""
+  # When set, mounts a PVC at /data and passes --db-path=/data/dalikamata.db to the domain service.
+  # Without persistence the domain uses in-memory storage and data is lost on restart.
 
 metrics:
   enabled: true

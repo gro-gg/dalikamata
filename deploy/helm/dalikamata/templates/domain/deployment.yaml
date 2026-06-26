@@ -30,4 +30,18 @@ spec:
             {{- if .Values.domain.debug }}
             - "--debug"
             {{- end }}
+            {{- if .Values.domain.persistence }}
+            - "--db-path=/data/dalikamata.db"
+            {{- end }}
+          {{- if .Values.domain.persistence }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+      {{- if .Values.domain.persistence }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "dalikamata.fullname" . }}-data
+      {{- end }}
 {{- end }}
