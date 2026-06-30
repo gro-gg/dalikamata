@@ -38,9 +38,9 @@
               "tooltip": false,
               "viz": false
             },
-            "lineWidth": 1,
-            "spanNulls": false
+            "lineWidth": 1
           },
+          "displayName": "${__field.labels.workflow_name}/${__field.labels.branch}",
           "mappings": [
             {
               "options": {
@@ -78,68 +78,7 @@
             ]
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "number"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Build #"
-              },
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": true,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "branch"
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": true,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "duration"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Duration"
-              },
-              {
-                "id": "unit",
-                "value": "s"
-              },
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": true,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -149,13 +88,12 @@
       },
       "id": 1,
       "options": {
-        "alignValue": "left",
+        "colWidth": 0.9,
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
-        "mergeValues": false,
         "rowHeight": 0.9,
         "showValue": "never",
         "tooltip": {
@@ -177,30 +115,21 @@
               "type": "string"
             },
             {
-              "selector": "status",
-              "text": "status",
-              "type": "string"
-            },
-            {
-              "selector": "number",
-              "text": "number",
-              "type": "number"
-            },
-            {
               "selector": "branch",
               "text": "branch",
               "type": "string"
             },
             {
-              "selector": "duration",
-              "text": "duration",
-              "type": "number"
+              "selector": "status",
+              "text": "status",
+              "type": "string"
             }
           ],
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
             "uid": "dalikamata-api"
           },
+          "filterExpression": "workflow_name in (${workflow:singlequote})",
           "filters": [],
           "format": "table",
           "parser": "backend",
@@ -215,7 +144,7 @@
           }
         }
       ],
-      "title": "Recent Builds by Workflow — $team",
+      "title": "Recent Builds by Workflow \u2014 $team",
       "transformations": [
         {
           "id": "convertFieldType",
@@ -232,13 +161,14 @@
           "id": "partitionByValues",
           "options": {
             "fields": [
-              "workflow_name"
+              "workflow_name",
+              "branch"
             ],
             "keepFields": false
           }
         }
       ],
-      "type": "state-timeline"
+      "type": "status-history"
     },
     {
       "datasource": {
