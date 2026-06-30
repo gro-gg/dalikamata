@@ -9,6 +9,8 @@ metadata:
     app.kubernetes.io/component: prometheus
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "dalikamata.selectorLabels" . | nindent 6 }}
