@@ -41,10 +41,13 @@ type fakeBitbucketClient struct {
 	repos        map[string][]apiRepo
 	commits      map[string][]apiCommit
 	pullRequests map[string][]apiPullRequest
-	errOnSince   error // returned by GetCommits when sinceSHA != ""
+	rawFiles     map[string][]byte // key: "project/repo/path"
+	rawErr       error             // returned by GetRawFile when set
+	errOnSince   error             // returned by GetCommits when sinceSHA != ""
 
 	mu        sync.Mutex
 	sinceArgs map[string]string // key: "project/repo", value: last sinceSHA arg
+	rawCalls  int               // number of GetRawFile calls
 }
 
 func (f *fakeBitbucketClient) GetRepos(_ context.Context, projectKey string) ([]apiRepo, error) {
@@ -67,6 +70,20 @@ func (f *fakeBitbucketClient) GetCommits(_ context.Context, projectKey, repoSlug
 
 func (f *fakeBitbucketClient) GetPullRequests(_ context.Context, projectKey, repoSlug string) ([]apiPullRequest, error) {
 	return f.pullRequests[projectKey+"/"+repoSlug], nil
+}
+
+func (f *fakeBitbucketClient) GetRawFile(_ context.Context, projectKey, repoSlug, path string) ([]byte, bool, error) {
+	f.mu.Lock()
+	f.rawCalls++
+	f.mu.Unlock()
+	if f.rawErr != nil {
+		return nil, false, f.rawErr
+	}
+	content, ok := f.rawFiles[projectKey+"/"+repoSlug+"/"+path]
+	if !ok {
+		return nil, false, nil
+	}
+	return content, true, nil
 }
 
 // fakeCursors is a map-backed Cursors for unit tests. It records every Save
@@ -389,5 +406,116 @@ func TestCrawl_CursorClearedOnGetCommitsError(t *testing.T) {
 	// Full refetch succeeded: commits published.
 	if len(pub.commits) != 1 || pub.commits[0].SHA != "fresh-sha" {
 		t.Errorf("want 1 commit published after fallback, got commits=%v", pub.commits)
+	}
+}
+
+// ---- Self-onboarding (ADR-007) ---------------------------------------------
+
+// fakeOnboardingPublisher records RepoOnboarding events published by the
+// crawler and counts calls to distinguish "disabled" from "no config found".
+type fakeOnboardingPublisher struct {
+	onboardings []model.RepoOnboarding
+}
+
+func (f *fakeOnboardingPublisher) PublishRepoOnboarding(_ context.Context, o model.RepoOnboarding) error {
+	f.onboardings = append(f.onboardings, o)
+	return nil
+}
+
+func onboardingClient() *fakeBitbucketClient {
+	return &fakeBitbucketClient{
+		repos: map[string][]apiRepo{
+			"PROJ": {{Slug: "onboarded", Name: "Onboarded"}, {Slug: "plain", Name: "Plain"}},
+		},
+		commits: map[string][]apiCommit{
+			"PROJ/onboarded": {}, "PROJ/plain": {},
+		},
+		pullRequests: map[string][]apiPullRequest{
+			"PROJ/onboarded": {}, "PROJ/plain": {},
+		},
+	}
+}
+
+func TestCrawl_SelfOnboard_PublishesEvent(t *testing.T) {
+	client := onboardingClient()
+	client.rawFiles = map[string][]byte{
+		"PROJ/onboarded/.dalikamata.yaml": []byte("version: \"1\"\nteam: platform\ncomponent: backend\n"),
+	}
+	onboard := &fakeOnboardingPublisher{}
+	crawler := NewCrawler(client, &fakePublisher{}, newFakeCursors(), []string{"PROJ"}, newTestLogger(),
+		WithComponentConfig(onboard, ".dalikamata.yaml"))
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Only the repo carrying a config is onboarded; the 404 for "plain" is skipped.
+	if len(onboard.onboardings) != 1 {
+		t.Fatalf("onboardings = %d, want 1 (%v)", len(onboard.onboardings), onboard.onboardings)
+	}
+	got := onboard.onboardings[0]
+	if got.RepoID != model.NewRepoID("PROJ", "onboarded") {
+		t.Errorf("RepoID = %q, want %q", got.RepoID, model.NewRepoID("PROJ", "onboarded"))
+	}
+	if got.Component != "backend" || got.Team != "platform" {
+		t.Errorf("got component=%q team=%q, want backend/platform", got.Component, got.Team)
+	}
+}
+
+func TestCrawl_SelfOnboard_InvalidConfigSkippedAndCrawlContinues(t *testing.T) {
+	client := onboardingClient()
+	client.rawFiles = map[string][]byte{
+		"PROJ/onboarded/.dalikamata.yaml": []byte("version: \"1\"\nteam: platform\n"), // missing component
+	}
+	onboard := &fakeOnboardingPublisher{}
+	pub := &fakePublisher{}
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"PROJ"}, newTestLogger(),
+		WithComponentConfig(onboard, ".dalikamata.yaml"))
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Invalid config: no onboarding event, but repo ingestion still happened.
+	if len(onboard.onboardings) != 0 {
+		t.Errorf("onboardings = %d, want 0", len(onboard.onboardings))
+	}
+	if len(pub.repos) != 2 {
+		t.Errorf("repos = %d, want 2 (crawl must continue)", len(pub.repos))
+	}
+}
+
+func TestCrawl_SelfOnboard_FetchErrorSkippedAndCrawlContinues(t *testing.T) {
+	client := onboardingClient()
+	client.rawErr = errors.New("boom")
+	onboard := &fakeOnboardingPublisher{}
+	pub := &fakePublisher{}
+	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"PROJ"}, newTestLogger(),
+		WithComponentConfig(onboard, ".dalikamata.yaml"))
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(onboard.onboardings) != 0 {
+		t.Errorf("onboardings = %d, want 0", len(onboard.onboardings))
+	}
+	if len(pub.repos) != 2 {
+		t.Errorf("repos = %d, want 2 (crawl must continue)", len(pub.repos))
+	}
+}
+
+func TestCrawl_SelfOnboard_DisabledNeverFetches(t *testing.T) {
+	client := onboardingClient()
+	pub := &fakePublisher{}
+	crawler := newCrawler(client, pub, []string{"PROJ"})
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(pub.repos) != 2 {
+		t.Errorf("repos = %d, want 2", len(pub.repos))
+	}
+	if client.rawCalls != 0 {
+		t.Errorf("GetRawFile called %d times, want 0 when self-onboarding disabled", client.rawCalls)
 	}
 }

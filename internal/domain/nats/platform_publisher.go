@@ -48,6 +48,11 @@ func (p *PlatformPublisher) PublishComponent(ctx context.Context, comp model.Com
 	return p.publish(ctx, SubjectPlatformComponent, comp)
 }
 
+func (p *PlatformPublisher) PublishRepoOnboarding(ctx context.Context, o model.RepoOnboarding) error {
+	p.logger.Debug("publishing repo onboarding", "subject", SubjectPlatformRepo, "repo_id", o.RepoID, "component", o.Component, "team", o.Team)
+	return p.publish(ctx, SubjectPlatformRepo, o)
+}
+
 func (p *PlatformPublisher) publish(ctx context.Context, subject string, payload any) error {
 	b, err := json.Marshal(payload)
 	if err != nil {

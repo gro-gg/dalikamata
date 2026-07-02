@@ -18,7 +18,7 @@ graph TB
     end
 
     subgraph nats["NATS JetStream Server  ·  :4222"]
-        IS[("INGEST stream\n──────────────────────\ningest.git.repo\ningest.git.commit\ningest.git.pullrequest\ningest.cicd.workflow\ningest.cicd.workflowRun\ningest.cicd.workflowTask\ningest.platform.team\ningest.platform.component")]
+        IS[("INGEST stream\n──────────────────────\ningest.git.repo\ningest.git.commit\ningest.git.pullrequest\ningest.cicd.workflow\ningest.cicd.workflowRun\ningest.cicd.workflowTask\ningest.platform.team\ningest.platform.component\ningest.platform.repo")]
         QCH[("Query subjects  ·  request-reply\n──────────────────────────────\nquery.git.*\nquery.cicd.*\nquery.platform.*\nquery.aggregate")]
     end
 

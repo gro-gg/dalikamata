@@ -174,7 +174,7 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	}
 	s.logger.Debug(LogHandlerSettingUp, "subject", SubjectCicdWorkflowTask)
 
-	var platformTeamConsumeCtx, platformComponentConsumeCtx jetstream.ConsumeContext
+	var platformTeamConsumeCtx, platformComponentConsumeCtx, platformRepoConsumeCtx jetstream.ConsumeContext
 	if s.platformHandler != nil {
 		platformTeamConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 			Durable:       "ingest-platform-team",
@@ -207,6 +207,22 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 			return fmt.Errorf("starting %s consumer: %w", SubjectPlatformComponent, err)
 		}
 		s.logger.Debug(LogHandlerSettingUp, "subject", SubjectPlatformComponent)
+
+		platformRepoConsumer, err := ingestStream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+			Durable:       "ingest-platform-repo",
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			FilterSubject: SubjectPlatformRepo,
+			MaxDeliver:    MaxDeliver,
+		})
+		if err != nil {
+			return fmt.Errorf("creating ingest-platform-repo consumer: %w", err)
+		}
+
+		platformRepoConsumeCtx, err = platformRepoConsumer.Consume(s.platformRepoHandler(ctx))
+		if err != nil {
+			return fmt.Errorf("starting %s consumer: %w", SubjectPlatformRepo, err)
+		}
+		s.logger.Debug(LogHandlerSettingUp, "subject", SubjectPlatformRepo)
 	}
 
 	<-ctx.Done()
@@ -222,6 +238,9 @@ func (s *NATSPort) Run(ctx context.Context, js jetstream.JetStream) error {
 	}
 	if platformComponentConsumeCtx != nil {
 		platformComponentConsumeCtx.Drain()
+	}
+	if platformRepoConsumeCtx != nil {
+		platformRepoConsumeCtx.Drain()
 	}
 
 	s.logger.Info("Event Handling Shut Down")
@@ -425,6 +444,32 @@ func (s *NATSPort) platformComponentHandler(ctx context.Context) func(msg jetstr
 		}
 		if err := s.platformHandler.HandleComponent(ctx, comp); err != nil {
 			l.Error("handling component", "name", comp.Name, "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := msg.Ack(); err != nil {
+			l.Error("ack message", "error", err)
+		}
+	}
+}
+
+func (s *NATSPort) platformRepoHandler(ctx context.Context) func(msg jetstream.Msg) {
+	l := s.logger.With("subject", SubjectPlatformRepo)
+
+	return func(msg jetstream.Msg) {
+		l.Debug(LogReceivedMessage)
+		var o model.RepoOnboarding
+		if err := json.Unmarshal(msg.Data(), &o); err != nil {
+			l.Error("unmarshalling message", "message", string(msg.Data()), "error", err)
+			if err := msg.Nak(); err != nil {
+				l.Error("nak message", "error", err)
+			}
+			return
+		}
+		if err := s.platformHandler.HandleRepoOnboarding(ctx, o); err != nil {
+			l.Error("handling repo onboarding", "repo_id", o.RepoID, "component", o.Component, "error", err)
 			if err := msg.Nak(); err != nil {
 				l.Error("nak message", "error", err)
 			}

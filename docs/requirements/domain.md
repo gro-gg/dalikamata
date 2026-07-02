@@ -31,6 +31,7 @@ Architecture decisions: [ADR-001](../architecture/ADR-001-microservices-event-dr
 | `ingest.cicd.workflowTask` | `model.WorkflowTask` JSON | `domain.CICDPublisher` |
 | `ingest.platform.team` | `model.Team` JSON | `domain.PlatformPublisher` |
 | `ingest.platform.component` | `model.Component` JSON | `domain.PlatformPublisher` |
+| `ingest.platform.repo` | `model.RepoOnboarding` JSON | `domain.PlatformPublisher` |
 
 Publisher interfaces are defined in `internal/domain/ports.go`. NATS implementations are in `internal/domain/nats/publisher.go`.
 

@@ -75,6 +75,58 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	is.Equal(len(prs), 9)
 }
 
+// TestIngestBitbucketSelfOnboarding verifies that, with --component-config set,
+// the crawler fetches the in-repo config from each repo and publishes a
+// RepoOnboarding event for the two repos that ship one (backend-api,
+// frontend-app), while the config-less repos are silently skipped.
+func TestIngestBitbucketSelfOnboarding(t *testing.T) {
+	is := is.New(t)
+	l := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	natsURL, natsPort := testhelper.StartNATS(t)
+	js := testhelper.NewJetStream(t, natsURL)
+	testhelper.CreateIngestStream(t, js)
+
+	bbPort := testhelper.FreePort(t)
+	bbSrv := fakeserver.New(fmt.Sprintf("127.0.0.1:%d", bbPort), l.With("service", "fake-bitbucket"))
+	bbCtx, bbCancel := context.WithCancel(t.Context())
+	t.Cleanup(bbCancel)
+	go func() {
+		if err := bbSrv.Start(bbCtx); err != nil {
+			t.Logf("fake bitbucket stopped: %v", err)
+		}
+	}()
+	testhelper.WaitHTTP(t, fmt.Sprintf("http://127.0.0.1:%d/rest/api/1.0/projects/PROJ/repos", bbPort))
+
+	ingestApp := app.NewIngestBitbucketApp(l)
+	ingestApp.NATSHost = "127.0.0.1"
+	ingestApp.NATSPort = natsPort
+	ingestApp.BitbucketURL = fmt.Sprintf("http://127.0.0.1:%d", bbPort)
+	ingestApp.BitbucketToken = "test-token"
+	ingestApp.Projects = []string{"PROJ", "INFRA"}
+	ingestApp.ComponentConfig = ".dalikamata.yaml"
+
+	ingestCtx, ingestCancel := context.WithCancel(t.Context())
+	t.Cleanup(ingestCancel)
+	go func() {
+		if err := ingestApp.Run(ingestCtx); err != nil {
+			t.Logf("ingest app stopped: %v", err)
+		}
+	}()
+
+	onboardings := testhelper.CollectMessages[model.RepoOnboarding](t, js, dalinats.SubjectPlatformRepo, 2, 10*time.Second)
+	is.Equal(len(onboardings), 2)
+
+	byRepo := make(map[string]model.RepoOnboarding, len(onboardings))
+	for _, o := range onboardings {
+		byRepo[o.RepoID] = o
+	}
+	is.Equal(byRepo[model.NewRepoID("PROJ", "backend-api")].Component, "backend")
+	is.Equal(byRepo[model.NewRepoID("PROJ", "backend-api")].Team, "platform")
+	is.Equal(byRepo[model.NewRepoID("PROJ", "frontend-app")].Component, "frontend")
+	is.Equal(byRepo[model.NewRepoID("PROJ", "frontend-app")].Team, "web")
+}
+
 // TestIngestBitbucketIncremental verifies the per-repo commit cursor:
 //  1. First crawl publishes all fixture commits (15).
 //  2. After AddCommit, a second crawl publishes exactly 1 new commit.

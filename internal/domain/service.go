@@ -62,6 +62,11 @@ func (s *DomainService) HandleComponent(ctx context.Context, comp model.Componen
 	return s.repo.AddComponent(ctx, comp)
 }
 
+func (s *DomainService) HandleRepoOnboarding(ctx context.Context, o model.RepoOnboarding) error {
+	s.logger.Info("handling repo onboarding", "repo_id", o.RepoID, "component", o.Component, "team", o.Team)
+	return s.repo.AddRepoOnboarding(ctx, o)
+}
+
 func (s *DomainService) QueryRepos(ctx context.Context, q query.Query, emit func(model.Repo) error) error {
 	return s.queryRepo.QueryRepos(ctx, q, emit)
 }

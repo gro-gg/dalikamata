@@ -28,6 +28,10 @@ func (f *fakePublisher) PublishComponent(_ context.Context, c model.Component) e
 	return nil
 }
 
+func (f *fakePublisher) PublishRepoOnboarding(_ context.Context, _ model.RepoOnboarding) error {
+	return nil
+}
+
 func writeYAML(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {

@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"codeberg.org/aeforged/dalikamata/internal/domain/model"
@@ -170,6 +171,92 @@ func (r *SQLiteRepository) AddComponent(ctx context.Context, c model.Component) 
 			team_name=excluded.team_name, repo_ids=excluded.repo_ids`,
 		c.Name, c.TeamName, string(repoIDs))
 	return err
+}
+
+// AddRepoOnboarding applies a per-repo self-onboarding event (ADR-007) in a
+// single transaction: it upserts the team, removes the repo from any other
+// component that currently lists it, and upserts the target component with the
+// repo added. It is idempotent.
+func (r *SQLiteRepository) AddRepoOnboarding(ctx context.Context, o model.RepoOnboarding) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO teams (name) VALUES (?) ON CONFLICT(name) DO NOTHING`, o.Team); err != nil {
+		return fmt.Errorf("upsert team: %w", err)
+	}
+
+	rows, err := tx.QueryContext(ctx, `SELECT name, team_name, repo_ids FROM components`)
+	if err != nil {
+		return fmt.Errorf("load components: %w", err)
+	}
+	var components []model.Component
+	for rows.Next() {
+		var c model.Component
+		var repoIDs string
+		if err := rows.Scan(&c.Name, &c.TeamName, &repoIDs); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan component: %w", err)
+		}
+		if err := json.Unmarshal([]byte(repoIDs), &c.RepoIDs); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("unmarshaling component repo_ids: %w", err)
+		}
+		components = append(components, c)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("iterate components: %w", err)
+	}
+	_ = rows.Close()
+
+	// A repo belongs to at most one component: strip it from every other one.
+	for _, c := range components {
+		if c.Name == o.Component {
+			continue
+		}
+		if !slices.Contains(c.RepoIDs, o.RepoID) {
+			continue
+		}
+		c.RepoIDs = slices.DeleteFunc(c.RepoIDs, func(id string) bool { return id == o.RepoID })
+		repoIDs, err := json.Marshal(c.RepoIDs)
+		if err != nil {
+			return fmt.Errorf("marshaling component repo_ids: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE components SET repo_ids=? WHERE name=?`, string(repoIDs), c.Name); err != nil {
+			return fmt.Errorf("update component %s: %w", c.Name, err)
+		}
+	}
+
+	// Upsert the target component with the repo present.
+	target := model.Component{Name: o.Component, TeamName: o.Team}
+	for _, c := range components {
+		if c.Name == o.Component {
+			target.RepoIDs = c.RepoIDs
+			break
+		}
+	}
+	if !slices.Contains(target.RepoIDs, o.RepoID) {
+		target.RepoIDs = append(target.RepoIDs, o.RepoID)
+	}
+	repoIDs, err := json.Marshal(target.RepoIDs)
+	if err != nil {
+		return fmt.Errorf("marshaling component repo_ids: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO components (name, team_name, repo_ids)
+		VALUES (?, ?, ?)
+		ON CONFLICT(name) DO UPDATE SET
+			team_name=excluded.team_name, repo_ids=excluded.repo_ids`,
+		target.Name, target.TeamName, string(repoIDs)); err != nil {
+		return fmt.Errorf("upsert component: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 // ---- row loaders -----------------------------------------------------------

@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -122,6 +123,40 @@ func (r *MemoryRepository) AddComponent(_ context.Context, comp model.Component)
 	for _, repoID := range comp.RepoIDs {
 		r.repoToComponent[repoID] = comp.Name
 	}
+	return nil
+}
+
+// AddRepoOnboarding applies a per-repo self-onboarding event (ADR-007). It
+// upserts the team, reassigns the repo to the named component (removing it from
+// any other component it previously belonged to), and updates the ownership
+// indexes. It is idempotent: re-applying the same event is a no-op.
+func (r *MemoryRepository) AddRepoOnboarding(_ context.Context, o model.RepoOnboarding) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Upsert the owning team.
+	r.teams[o.Team] = model.Team{Name: o.Team}
+
+	// A repo belongs to at most one component: remove it from any other
+	// component that currently lists it.
+	if prevName, ok := r.repoToComponent[o.RepoID]; ok && prevName != o.Component {
+		if prev, ok := r.components[prevName]; ok {
+			prev.RepoIDs = slices.DeleteFunc(prev.RepoIDs, func(id string) bool { return id == o.RepoID })
+			r.components[prevName] = prev
+		}
+	}
+
+	// Upsert the target component, set its team, and ensure it lists the repo.
+	comp := r.components[o.Component]
+	comp.Name = o.Component
+	comp.TeamName = o.Team
+	if !slices.Contains(comp.RepoIDs, o.RepoID) {
+		comp.RepoIDs = append(comp.RepoIDs, o.RepoID)
+	}
+	r.components[o.Component] = comp
+
+	r.componentToTeam[o.Component] = o.Team
+	r.repoToComponent[o.RepoID] = o.Component
 	return nil
 }
 

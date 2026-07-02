@@ -29,6 +29,7 @@ type CicdEventHandler interface {
 type PlatformEventHandler interface {
 	HandleTeam(context.Context, model.Team) error
 	HandleComponent(context.Context, model.Component) error
+	HandleRepoOnboarding(context.Context, model.RepoOnboarding) error
 }
 
 // QueryHandler is the primary port the NATS query adapter calls into.
@@ -65,6 +66,7 @@ type CICDPublisher interface {
 type PlatformPublisher interface {
 	PublishTeam(context.Context, model.Team) error
 	PublishComponent(context.Context, model.Component) error
+	PublishRepoOnboarding(context.Context, model.RepoOnboarding) error
 }
 
 // Repository is the secondary (driven) port for persisting entities.
@@ -77,6 +79,7 @@ type Repository interface {
 	AddWorkflowTask(context.Context, model.WorkflowTask) error
 	AddTeam(context.Context, model.Team) error
 	AddComponent(context.Context, model.Component) error
+	AddRepoOnboarding(context.Context, model.RepoOnboarding) error
 }
 
 // QueryRepository is the secondary (driven) port for querying entities.

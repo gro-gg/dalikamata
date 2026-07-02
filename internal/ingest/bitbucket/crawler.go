@@ -7,9 +7,17 @@ import (
 	"sync"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/config/component"
 	"codeberg.org/aeforged/dalikamata/internal/domain"
 	"codeberg.org/aeforged/dalikamata/internal/domain/model"
 )
+
+// RepoOnboardingPublisher is the outgoing port the crawler uses to publish
+// per-repo self-onboarding events (ADR-007). It is optional: when nil, the
+// crawler never fetches in-repo config files and behaves exactly as before.
+type RepoOnboardingPublisher interface {
+	PublishRepoOnboarding(ctx context.Context, o model.RepoOnboarding) error
+}
 
 // Crawler performs incremental crawls of the configured Bitbucket projects.
 type Crawler struct {
@@ -19,13 +27,31 @@ type Crawler struct {
 	projects  []string
 	logger    *slog.Logger
 
+	// Self-onboarding (ADR-007). Both are set together via WithComponentConfig;
+	// when configPublisher is nil, self-onboarding is disabled.
+	configPublisher RepoOnboardingPublisher
+	configPath      string
+
 	mu      sync.Mutex
 	cursors map[string]string // repoID → newest published SHA
 	loaded  bool              // true after the first Load from the store
 }
 
-func NewCrawler(client BitbucketClient, publisher domain.GitPublisher, store Cursors, projects []string, logger *slog.Logger) *Crawler {
-	return &Crawler{
+// CrawlerOption configures optional Crawler behaviour.
+type CrawlerOption func(*Crawler)
+
+// WithComponentConfig enables per-repo self-onboarding: for each crawled repo
+// the crawler fetches path from the repo root and, when present, publishes a
+// RepoOnboarding event via publisher.
+func WithComponentConfig(publisher RepoOnboardingPublisher, path string) CrawlerOption {
+	return func(c *Crawler) {
+		c.configPublisher = publisher
+		c.configPath = path
+	}
+}
+
+func NewCrawler(client BitbucketClient, publisher domain.GitPublisher, store Cursors, projects []string, logger *slog.Logger, opts ...CrawlerOption) *Crawler {
+	c := &Crawler{
 		client:    client,
 		publisher: publisher,
 		store:     store,
@@ -33,6 +59,10 @@ func NewCrawler(client BitbucketClient, publisher domain.GitPublisher, store Cur
 		cursors:   map[string]string{},
 		logger:    logger.With("component", "bitbucket_crawler"),
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func (c *Crawler) Crawl(ctx context.Context) error {
@@ -82,11 +112,53 @@ func (c *Crawler) crawlProject(ctx context.Context, projectKey string) error {
 		if err != nil {
 			c.logger.Error("publish repo", "project", projectKey, "repo", apiRepo.Slug, "error", err)
 		}
+		c.selfOnboardRepo(ctx, projectKey, apiRepo.Slug, repo.RepoID)
 		if err = c.crawlRepo(ctx, projectKey, apiRepo.Slug); err != nil {
 			c.logger.Error("crawl repo", "project", projectKey, "repo", apiRepo.Slug, "error", err)
 		}
 	}
 	return nil
+}
+
+// selfOnboardRepo fetches the in-repo self-onboarding config for one repo and,
+// when present and valid, publishes a RepoOnboarding event. It is fail-soft: a
+// missing, unfetchable, or invalid file is logged and skipped so it never
+// aborts the crawl. A no-op when self-onboarding is disabled.
+func (c *Crawler) selfOnboardRepo(ctx context.Context, projectKey, repoSlug, repoID string) {
+	if c.configPublisher == nil || c.configPath == "" {
+		return
+	}
+
+	data, found, err := c.client.GetRawFile(ctx, projectKey, repoSlug, c.configPath)
+	if err != nil {
+		c.logger.Warn("fetching component config; skipping self-onboarding",
+			"project", projectKey, "repo", repoSlug, "path", c.configPath, "error", err)
+		return
+	}
+	if !found {
+		c.logger.Debug("no component config; repo not self-onboarded",
+			"project", projectKey, "repo", repoSlug, "path", c.configPath)
+		return
+	}
+
+	f, err := component.ParseRepoFile(data)
+	if err != nil {
+		c.logger.Warn("invalid component config; skipping self-onboarding",
+			"project", projectKey, "repo", repoSlug, "path", c.configPath, "error", err)
+		return
+	}
+
+	onboarding, err := f.ToRepoOnboarding(repoID)
+	if err != nil {
+		c.logger.Warn("converting component config; skipping self-onboarding",
+			"project", projectKey, "repo", repoSlug, "error", err)
+		return
+	}
+
+	c.logger.Info("repo self-onboarded", "repo", repoID, "component", onboarding.Component, "team", onboarding.Team)
+	if err := c.configPublisher.PublishRepoOnboarding(ctx, onboarding); err != nil {
+		c.logger.Error("publish repo onboarding", "repo", repoID, "error", err)
+	}
 }
 
 func (c *Crawler) crawlRepo(ctx context.Context, projectKey, repoSlug string) error {

@@ -465,7 +465,7 @@ func TestAggregate_Team(t *testing.T) {
 	is.NoErr(r.AddTeam(ctx, model.Team{Name: "beta"}))
 
 	q := query.Query{
-		Entity: query.EntityTeam,
+		Entity:   query.EntityTeam,
 		AggsOnly: true,
 		Aggs: map[string]query.Aggregation{
 			"by_name": {Op: query.AggTerms, Field: query.TeamName},

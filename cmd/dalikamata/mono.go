@@ -56,6 +56,7 @@ var monoCmd = &cobra.Command{
 		ingestApp.Projects = bitbucketProjects
 		ingestApp.CACertsDir = caCertsDir
 		ingestApp.Interval = bitbucketInterval
+		ingestApp.ComponentConfig = bitbucketComponentCfg
 
 		var configApp *app.IngestConfigApp
 		if componentsDir != "" {
@@ -151,6 +152,7 @@ func init() {
 	monoCmd.Flags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
 	monoCmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
 	monoCmd.Flags().DurationVar(&bitbucketInterval, "bitbucket-interval", 5*time.Minute, "how often to re-crawl Bitbucket for new commits and pull requests")
+	monoCmd.Flags().StringVar(&bitbucketComponentCfg, "component-config", "", "in-repo config path fetched per repo for self-onboarding, e.g. .dalikamata.yaml (empty = disabled)")
 	monoCmd.Flags().StringVar(&componentsDir, "components-dir", "", "directory of component YAML files (optional)")
 	monoCmd.Flags().StringVar(&jenkinsURL, "jenkins-url", "", "Jenkins base URL (optional; omit to skip Jenkins ingest)")
 	monoCmd.Flags().StringVar(&jenkinsUser, "jenkins-user", "", "Jenkins username")

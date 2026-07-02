@@ -133,6 +133,19 @@ var initialCommits = map[string][]apiCommit{
 	},
 }
 
+// fakeRawFiles maps "{repoSlug}/{path}" to raw file content. Two repos ship a
+// self-onboarding config (ADR-007); every other raw request returns 404.
+var fakeRawFiles = map[string]string{
+	"backend-api/.dalikamata.yaml": `version: "1"
+team: platform
+component: backend
+`,
+	"frontend-app/.dalikamata.yaml": `version: "1"
+team: web
+component: frontend
+`,
+}
+
 var fakePullRequests = map[string][]apiPullRequest{
 	"backend-api": {
 		{
@@ -255,6 +268,7 @@ func New(addr string, logger *slog.Logger) *Server {
 	mux.HandleFunc("GET /rest/api/1.0/projects/{projectKey}/repos", s.handleRepos)
 	mux.HandleFunc("GET /rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/commits", s.handleCommits)
 	mux.HandleFunc("GET /rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/pull-requests", s.handlePullRequests)
+	mux.HandleFunc("GET /rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/raw/{path...}", s.handleRawFile)
 	return s
 }
 
@@ -348,6 +362,20 @@ func (s *Server) handlePullRequests(w http.ResponseWriter, r *http.Request) {
 
 	prs := fakePullRequests[repoSlug]
 	writePagedJSON(w, prs)
+}
+
+func (s *Server) handleRawFile(w http.ResponseWriter, r *http.Request) {
+	repoSlug := r.PathValue("repoSlug")
+	path := r.PathValue("path")
+	s.logger.Info("fake: raw file", "repo", repoSlug, "path", path)
+
+	content, ok := fakeRawFiles[repoSlug+"/"+path]
+	if !ok {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(content))
 }
 
 // writePagedJSON encodes a slice as a Bitbucket-style paged response with pagination

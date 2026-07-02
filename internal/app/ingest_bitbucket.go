@@ -25,7 +25,10 @@ type IngestBitbucketApp struct {
 	Projects       []string
 	CACertsDir     string
 	Interval       time.Duration
-	logger         *slog.Logger
+	// ComponentConfig, when non-empty, enables per-repo self-onboarding
+	// (ADR-007): the in-repo path fetched from each repo root.
+	ComponentConfig string
+	logger          *slog.Logger
 }
 
 func NewIngestBitbucketApp(logger *slog.Logger) *IngestBitbucketApp {
@@ -68,7 +71,19 @@ func (a *IngestBitbucketApp) Run(ctx context.Context) error {
 		return fmt.Errorf("building HTTP client: %w", err)
 	}
 	client := bitbucket.NewClient(a.BitbucketURL, a.BitbucketToken, httpCl, a.logger)
-	crawler := bitbucket.NewCrawler(client, publisher, cursors, a.Projects, a.logger)
+
+	var crawlerOpts []bitbucket.CrawlerOption
+	if a.ComponentConfig != "" {
+		platformPublisher, platformCloser, err := dalinats.NewPlatformPublisher(ctx, natsURL, a.logger.With("port", "domain", "connection", "nats", "publisher", "platform"))
+		if err != nil {
+			return fmt.Errorf("create platform publisher: %w", err)
+		}
+		defer platformCloser()
+		crawlerOpts = append(crawlerOpts, bitbucket.WithComponentConfig(platformPublisher, a.ComponentConfig))
+		a.logger.Info("per-repo self-onboarding enabled", "component_config", a.ComponentConfig)
+	}
+
+	crawler := bitbucket.NewCrawler(client, publisher, cursors, a.Projects, a.logger, crawlerOpts...)
 
 	bitbucketService, err := bitbucket.NewIngestBitbucketService(crawler, a.Interval, a.logger)
 	if err != nil {

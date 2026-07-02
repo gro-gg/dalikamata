@@ -30,6 +30,7 @@ var (
 	bitbucketToken         string
 	bitbucketProjects      []string
 	bitbucketInterval      time.Duration
+	bitbucketComponentCfg  string
 	jenkinsInterval        time.Duration
 )
 

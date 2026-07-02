@@ -18,6 +18,7 @@ const (
 
 	SubjectPlatformTeam      = "ingest.platform.team"
 	SubjectPlatformComponent = "ingest.platform.component"
+	SubjectPlatformRepo      = "ingest.platform.repo"
 )
 
 // Query subjects — request-reply subjects for reading domain entities.
@@ -30,9 +31,9 @@ const (
 	SubjectQueryCicdWorkflowRun = "query.cicd.workflowRun"
 	SubjectQueryCicdTask        = "query.cicd.workflowTask"
 
-	SubjectQueryPlatformTeam        = "query.platform.team"
-	SubjectQueryPlatformComponent   = "query.platform.component"
-	SubjectQueryPlatformOwnership   = "query.platform.ownership"
+	SubjectQueryPlatformTeam      = "query.platform.team"
+	SubjectQueryPlatformComponent = "query.platform.component"
+	SubjectQueryPlatformOwnership = "query.platform.ownership"
 )
 
 // SubjectQueryAggregate is the single request-reply subject for server-side

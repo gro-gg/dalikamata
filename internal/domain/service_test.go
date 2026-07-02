@@ -34,6 +34,9 @@ func (s *stubRepository) AddWorkflowTask(_ context.Context, _ model.WorkflowTask
 }
 func (s *stubRepository) AddTeam(_ context.Context, _ model.Team) error           { return s.err }
 func (s *stubRepository) AddComponent(_ context.Context, _ model.Component) error { return s.err }
+func (s *stubRepository) AddRepoOnboarding(_ context.Context, _ model.RepoOnboarding) error {
+	return s.err
+}
 
 func (s *stubRepository) QueryRepos(_ context.Context, _ query.Query, _ func(model.Repo) error) error {
 	return s.err
