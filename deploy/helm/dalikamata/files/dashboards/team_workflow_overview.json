@@ -1,4 +1,849 @@
 {
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "dalikamata-team-workflow-overview"
+  },
+  "spec": {
+    "annotations": [
+      {
+        "kind": "AnnotationQuery",
+        "spec": {
+          "builtIn": true,
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "query": {
+            "datasource": {
+              "name": "-- Grafana --"
+            },
+            "group": "grafana",
+            "kind": "DataQuery",
+            "spec": {},
+            "version": "v0"
+          }
+        }
+      }
+    ],
+    "cursorSync": "Crosshair",
+    "description": "Recent build status, duration trends, and task breakdown for a single team.",
+    "editable": true,
+    "elements": {
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "dalikamata-api"
+                      },
+                      "group": "yesoreyeram-infinity-datasource",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "columns": [
+                          {
+                            "selector": "index",
+                            "text": "Run Number",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "status",
+                            "text": "Status",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "duration",
+                            "text": "Duration",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "workflow",
+                            "text": "Name",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "workflow_name",
+                            "text": "workflow_name",
+                            "type": "string"
+                          }
+                        ],
+                        "computed_columns": [],
+                        "filterExpression": "workflow_name in (${workflow:singlequote})",
+                        "filters": [],
+                        "format": "table",
+                        "global_query_id": "",
+                        "parser": "backend",
+                        "root_selector": "(\n    $makeRow := function($run, $wf, $idx) {\n        $run ? {\n            \"workflow\": $wf,\n            \"started_at\": $run.started_at,\n            \"status\": $run.status,\n            \"duration\": $run.duration,\n            \"index\": $idx,\n            \"workflow_name\": $run.workflow_name\n        } : null\n    };\n\n  $filtered := hits;\n\n  $distinct(hits.($join([workflow_id,branch],'/'))).(\n      $wf := $;\n\n      $sorted := $filtered[$join([workflow_id, branch],'/') = $wf] ^(>number);\n      [\n            [\n            $makeRow($sorted[9],$wf,9),\n            $makeRow($sorted[8],$wf,8),\n            $makeRow($sorted[7],$wf,7),\n            $makeRow($sorted[6],$wf,6),\n            $makeRow($sorted[3],$wf,5),\n            $makeRow($sorted[4],$wf,4),\n            $makeRow($sorted[5],$wf,3),\n            $makeRow($sorted[2],$wf,2),\n            $makeRow($sorted[1],$wf,1),\n            $makeRow($sorted[0],$wf,0)\n        ][ $ != null]\n      ]\n  );\n)",
+                        "source": "url",
+                        "type": "json",
+                        "url": "/api/v1/workflowRuns?filter.team_name=${team}&sort=-started_at&size=200",
+                        "url_options": {
+                          "data": "",
+                          "method": "GET"
+                        }
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "group": "filterFieldsByName",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "byVariable": false,
+                      "include": {
+                        "names": [
+                          "Duration",
+                          "Name",
+                          "Run Number",
+                          "Status"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "group": "groupingToMatrix",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "columnField": "Run Number",
+                      "emptyValue": "null",
+                      "rowField": "Name",
+                      "valueField": "Status"
+                    }
+                  }
+                },
+                {
+                  "group": "sortBy",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "fields": {},
+                      "sort": [
+                        {
+                          "field": "Name\\Run Number"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "",
+          "id": 1,
+          "links": [],
+          "title": "Recent Builds by Workflow — $team",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "fixedColor": "transparent",
+                    "mode": "fixed"
+                  },
+                  "custom": {
+                    "align": "center",
+                    "cellOptions": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false,
+                    "minWidth": 50,
+                    "styleField": "",
+                    "width": 90
+                  },
+                  "fieldMinMax": false,
+                  "mappings": [
+                    {
+                      "options": {
+                        "ABORTED": {
+                          "color": "text",
+                          "index": 2,
+                          "text": "ABORTED"
+                        },
+                        "FAILURE": {
+                          "color": "red",
+                          "index": 1,
+                          "text": "FAILURE"
+                        },
+                        "SUCCESS": {
+                          "color": "green",
+                          "index": 0,
+                          "text": "SUCCESS"
+                        },
+                        "UNSTABLE": {
+                          "color": "yellow",
+                          "index": 3,
+                          "text": "UNSTABLE"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": 0
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Name\\Run Number",
+                      "scope": "series"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 240
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": false,
+                "sortBy": []
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (workflow_name) (rate(workflow_run_duration_seconds_sum{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\",status=\"SUCCESS\"}[$__rate_interval])) / sum by (workflow_name) (rate(workflow_run_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\",status=\"SUCCESS\"}[$__rate_interval]))",
+                        "legendFormat": "{{workflow_name}}"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 2,
+          "links": [],
+          "title": "Workflow Run Duration (Successful Builds)",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 2,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  },
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "enableFacetedFilter": false,
+                  "overflow": "ellipsis",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "none"
+                }
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (workflow_name) (rate(workflow_task_duration_seconds_sum{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\",status=\"SUCCESS\"}[$__rate_interval])) / sum by (workflow_name) (rate(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\",status=\"SUCCESS\"}[$__rate_interval]))",
+                        "legendFormat": "{{workflow_name}}"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 3,
+          "links": [],
+          "title": "Mean Task Duration (Successful Tasks)",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 2,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  },
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "enableFacetedFilter": false,
+                  "overflow": "ellipsis",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "none"
+                }
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "sum by(task_name, task_order)(workflow_task_duration_seconds_sum{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\",status=\"SUCCESS\"}) / sum by(task_name, task_order)(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\",branch=~\"$branch\",status=\"SUCCESS\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "__auto",
+                        "range": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "group": "sortBy",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "fields": [
+                        {
+                          "desc": false,
+                          "displayName": "task_order"
+                        }
+                      ],
+                      "sort": [
+                        {
+                          "field": "task_order"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "group": "rowsToFields",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "mappings": [
+                        {
+                          "fieldName": "task_order",
+                          "handlerKey": "__ignore"
+                        },
+                        {
+                          "fieldName": "Time",
+                          "handlerKey": "__ignore"
+                        },
+                        {
+                          "fieldName": "Value",
+                          "handlerKey": "field.value"
+                        },
+                        {
+                          "fieldName": "task_name",
+                          "handlerKey": "field.name"
+                        }
+                      ],
+                      "nameField": "task_name",
+                      "valueField": "Value"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "",
+          "id": 4,
+          "links": [],
+          "title": "Mean Task Duration by Stage (Successful Tasks)",
+          "vizConfig": {
+            "group": "bargauge",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  },
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "displayMode": "lcd",
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "table",
+                  "overflow": "ellipsis",
+                  "placement": "right",
+                  "showLegend": true
+                },
+                "maxVizHeight": 300,
+                "minVizHeight": 16,
+                "minVizWidth": 8,
+                "namePlacement": "auto",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showUnfilled": true,
+                "sizing": "auto",
+                "text": {},
+                "valueMode": "color"
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "GridLayout",
+      "spec": {
+        "items": [
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-1"
+              },
+              "height": 8,
+              "width": 24,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-2"
+              },
+              "height": 9,
+              "width": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-3"
+              },
+              "height": 9,
+              "width": 12,
+              "x": 12,
+              "y": 8
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-4"
+              },
+              "height": 14,
+              "width": 24,
+              "x": 0,
+              "y": 17
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preload": false,
+    "tags": [
+      "dalikamata",
+      "cicd",
+      "workflow",
+      "team"
+    ],
+    "timeSettings": {
+      "autoRefresh": "30s",
+      "autoRefreshIntervals": [
+        "5s",
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ],
+      "fiscalYearStartMonth": 0,
+      "from": "now-7d",
+      "hideTimepicker": false,
+      "timezone": "browser",
+      "to": "now"
+    },
+    "title": "Team Workflow Overview",
+    "variables": [
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "ui",
+            "value": "ui"
+          },
+          "definition": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/teams\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Team",
+          "multi": false,
+          "name": "team",
+          "options": [],
+          "query": {
+            "datasource": {
+              "name": "dalikamata-api"
+            },
+            "group": "yesoreyeram-infinity-datasource",
+            "kind": "DataQuery",
+            "spec": {
+              "infinityQuery": {
+                "columns": [],
+                "filters": [],
+                "format": "table",
+                "parser": "backend",
+                "refId": "variable",
+                "root_selector": "$.hits",
+                "source": "url",
+                "type": "json",
+                "url": "/api/v1/teams",
+                "url_options": {
+                  "data": "",
+                  "method": "GET"
+                }
+              },
+              "query": "{\"refId\":\"StandardVariableQuery\",\"type\":\"json\",\"source\":\"url\",\"format\":\"variable\",\"parser\":\"backend\",\"url\":\"/api/v1/teams\",\"url_options\":{\"method\":\"GET\",\"data\":\"\"},\"root_selector\":\"hits\",\"columns\":[{\"selector\":\"name\",\"text\":\"text\",\"type\":\"string\"},{\"selector\":\"name\",\"text\":\"value\",\"type\":\"string\"}],\"filters\":[]}",
+              "queryType": "infinity",
+              "refId": "variable"
+            },
+            "version": "v0"
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "regexApplyTo": "value",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "All",
+            "value": [
+              "$__all"
+            ]
+          },
+          "definition": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\"}, workflow_name)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Workflow",
+          "multi": true,
+          "name": "workflow",
+          "options": [],
+          "query": {
+            "datasource": {
+              "name": "prometheus"
+            },
+            "group": "prometheus",
+            "kind": "DataQuery",
+            "spec": {
+              "query": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\"}, workflow_name)",
+              "refId": "StandardVariableQuery"
+            },
+            "version": "v0"
+          },
+          "refresh": "onTimeRangeChanged",
+          "regex": "",
+          "regexApplyTo": "value",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "All",
+            "value": [
+              "$__all"
+            ]
+          },
+          "definition": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"}, branch)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Branch",
+          "multi": true,
+          "name": "branch",
+          "options": [],
+          "query": {
+            "datasource": {
+              "name": "prometheus"
+            },
+            "group": "prometheus",
+            "kind": "DataQuery",
+            "spec": {
+              "query": "label_values(workflow_task_duration_seconds_count{team_name=~\"$team\",workflow_name=~\"$workflow\"}, branch)",
+              "refId": "StandardVariableQuery"
+            },
+            "version": "v0"
+          },
+          "refresh": "onTimeRangeChanged",
+          "regex": "",
+          "regexApplyTo": "value",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      }
+    ]
+  }
+}
+{
   "annotations": {
     "list": [
       {
