@@ -23,8 +23,25 @@ jobs:
         with:
           version: latest
 
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Check gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            echo "Run 'go fmt ./...' and commit the result."
+            exit 1
+          fi
+
   build-images:
-    needs: [test, lint]
+    needs: [test, lint, fmt]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
