@@ -45,7 +45,7 @@ func addWorkflowTask(t *testing.T, r *repo.MemoryRepository, task model.Workflow
 func runAggregateField(t *testing.T, r *repo.MemoryRepository, entity query.Entity, field string) map[string]bool {
 	t.Helper()
 	result, err := r.Aggregate(context.Background(), query.Query{
-		Entity: entity,
+		Entity:   entity,
 		AggsOnly: true,
 		Aggs: map[string]query.Aggregation{
 			"by_field": {Op: query.AggTerms, Field: field},

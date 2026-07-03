@@ -277,7 +277,7 @@ func TestAggregate_PRCycleTimeRoundTrip(t *testing.T) {
 	//   X/repo/1 — MERGED
 	//   X/repo/2 — OPEN
 	q := query.Query{
-		Entity: query.EntityPullRequest,
+		Entity:   query.EntityPullRequest,
 		AggsOnly: true,
 		Aggs: map[string]query.Aggregation{
 			"by_state": {Op: query.AggTerms, Field: query.PRState},

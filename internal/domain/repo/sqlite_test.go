@@ -134,7 +134,7 @@ func TestSQLite_PRCycleTimeClock(t *testing.T) {
 	}))
 
 	result, err := r.Aggregate(ctx, query.Query{
-		Entity: query.EntityPullRequest,
+		Entity:   query.EntityPullRequest,
 		AggsOnly: true,
 		Aggs: map[string]query.Aggregation{
 			"buckets": {Op: query.AggHistogram, Field: query.PRCycleTimeSeconds, Buckets: []float64{1800, 7200}},

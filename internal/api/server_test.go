@@ -464,4 +464,3 @@ func TestHandler_EmptyResult_ReturnsEmptyArray(t *testing.T) {
 		t.Errorf("hits should not encode as null when empty")
 	}
 }
-
