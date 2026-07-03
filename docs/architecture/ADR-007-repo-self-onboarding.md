@@ -16,7 +16,7 @@ Teams that own a repository are best placed to declare its ownership, and want t
 
 ## Decision
 
-Allow a repository to **self-onboard** by committing a config file to its root. When the Bitbucket ingestor is started with `--component-config <path>` (e.g. `--component-config=.dalikamata.yaml`), it fetches that path from each crawled repository and, when present, publishes a single new `ingest.platform.repo` event per onboarded repo. That event carries the containing repo together with the declared `team` and `component`; the domain upserts the Team and the Component from it and records the repo's membership. Self-onboarding does **not** publish `ingest.platform.team` or `ingest.platform.component` events — that remains the central crawler's job, and the central crawler's behaviour (ADR-005) is unchanged.
+Allow a repository to **self-onboard** by committing a config file to its root. When the Bitbucket ingestor is started with `--component-config-enabled` (default `false`), it fetches the path given by `--component-config-file` (default `dalikamata.yaml`) from each crawled repository and, when present, publishes a single new `ingest.platform.repo` event per onboarded repo. That event carries the containing repo together with the declared `team` and `component`; the domain upserts the Team and the Component from it and records the repo's membership. Self-onboarding does **not** publish `ingest.platform.team` or `ingest.platform.component` events — that remains the central crawler's job, and the central crawler's behaviour (ADR-005) is unchanged.
 
 **Schema** — the in-repo file omits the `repos:` list of the central schema, because the repository that contains the file *is* the implied sole member of the component:
 
@@ -28,13 +28,13 @@ component: payment-service
 
 The `version` field is validated identically to ADR-005 (`"1"`); `team` and `component` are required. Parsing and validation reuse `internal/config/component` rather than duplicating the schema.
 
-**Discovery** — a fixed path at the repo root, fetched via the Bitbucket raw endpoint (`/rest/api/1.0/projects/{key}/repos/{slug}/raw/{path}`), one request per repo. A `404` means "not onboarded" and is not an error.
+**Discovery** — a configurable path at the repo root (`--component-config-file`, default `dalikamata.yaml`), fetched via the Bitbucket raw endpoint (`/rest/api/1.0/projects/{key}/repos/{slug}/raw/{path}`), one request per repo. A `404` means "not onboarded" and is not an error.
 
 **Event semantics** — the `ingest.platform.repo` event is *additive and reassigning*. Handling it *adds* the repo to the named component and — because a repo belongs to at most one component — *removes* that repo from every other component's membership. Re-publishing the same repo under a different component name therefore moves it; publishing several repos under the same component name merges them into one component.
 
 **Fail-soft** — a missing, malformed, or unfetchable config file is logged and skipped. Self-onboarding must never abort a crawl: commit/PR ingestion for the repo continues regardless.
 
-**Off by default** — without `--component-config`, the Bitbucket crawler never fetches file contents and behaves exactly as before. The platform publisher is only created when the flag is set.
+**Off by default** — without `--component-config-enabled`, the Bitbucket crawler never fetches file contents and behaves exactly as before. The platform publisher is only created when the flag is set.
 
 ---
 

@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	defaultBitbucketInterval  = 5 * time.Minute
-	bitbucketCursorBucketName = "ingest-bitbucket-cursors"
+	defaultBitbucketInterval   = 5 * time.Minute
+	bitbucketCursorBucketName  = "ingest-bitbucket-cursors"
+	defaultComponentConfigFile = "dalikamata.yaml"
 )
 
 type IngestBitbucketApp struct {
@@ -25,21 +26,25 @@ type IngestBitbucketApp struct {
 	Projects       []string
 	CACertsDir     string
 	Interval       time.Duration
-	// ComponentConfig, when non-empty, enables per-repo self-onboarding
-	// (ADR-007): the in-repo path fetched from each repo root.
-	ComponentConfig string
-	logger          *slog.Logger
+	// ComponentConfigEnabled turns on per-repo self-onboarding (ADR-007).
+	// When set, ComponentConfigFile is fetched from each repo root.
+	ComponentConfigEnabled bool
+	// ComponentConfigFile is the in-repo path fetched per repo for
+	// self-onboarding. Defaults to defaultComponentConfigFile.
+	ComponentConfigFile string
+	logger              *slog.Logger
 }
 
 func NewIngestBitbucketApp(logger *slog.Logger) *IngestBitbucketApp {
 	a := &IngestBitbucketApp{
-		BitbucketURL:   "localhost:7999",
-		BitbucketToken: "aToken",
-		NATSHost:       internalnats.DefaultHost,
-		NATSPort:       internalnats.DefaultPort,
-		Projects:       []string{},
-		Interval:       defaultBitbucketInterval,
-		logger:         logger.With("service", "ingest_bitbucket"),
+		BitbucketURL:        "localhost:7999",
+		BitbucketToken:      "aToken",
+		NATSHost:            internalnats.DefaultHost,
+		NATSPort:            internalnats.DefaultPort,
+		Projects:            []string{},
+		Interval:            defaultBitbucketInterval,
+		ComponentConfigFile: defaultComponentConfigFile,
+		logger:              logger.With("service", "ingest_bitbucket"),
 	}
 
 	return a
@@ -73,14 +78,18 @@ func (a *IngestBitbucketApp) Run(ctx context.Context) error {
 	client := bitbucket.NewClient(a.BitbucketURL, a.BitbucketToken, httpCl, a.logger)
 
 	var crawlerOpts []bitbucket.CrawlerOption
-	if a.ComponentConfig != "" {
+	if a.ComponentConfigEnabled {
+		configFile := a.ComponentConfigFile
+		if configFile == "" {
+			configFile = defaultComponentConfigFile
+		}
 		platformPublisher, platformCloser, err := dalinats.NewPlatformPublisher(ctx, natsURL, a.logger.With("port", "domain", "connection", "nats", "publisher", "platform"))
 		if err != nil {
 			return fmt.Errorf("create platform publisher: %w", err)
 		}
 		defer platformCloser()
-		crawlerOpts = append(crawlerOpts, bitbucket.WithComponentConfig(platformPublisher, a.ComponentConfig))
-		a.logger.Info("per-repo self-onboarding enabled", "component_config", a.ComponentConfig)
+		crawlerOpts = append(crawlerOpts, bitbucket.WithComponentConfig(platformPublisher, configFile))
+		a.logger.Info("per-repo self-onboarding enabled", "component_config", configFile)
 	}
 
 	crawler := bitbucket.NewCrawler(client, publisher, cursors, a.Projects, a.logger, crawlerOpts...)

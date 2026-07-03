@@ -75,7 +75,7 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	is.Equal(len(prs), 9)
 }
 
-// TestIngestBitbucketSelfOnboarding verifies that, with --component-config set,
+// TestIngestBitbucketSelfOnboarding verifies that, with --component-config-enabled set,
 // the crawler fetches the in-repo config from each repo and publishes a
 // RepoOnboarding event for the two repos that ship one (backend-api,
 // frontend-app), while the config-less repos are silently skipped.
@@ -104,7 +104,8 @@ func TestIngestBitbucketSelfOnboarding(t *testing.T) {
 	ingestApp.BitbucketURL = fmt.Sprintf("http://127.0.0.1:%d", bbPort)
 	ingestApp.BitbucketToken = "test-token"
 	ingestApp.Projects = []string{"PROJ", "INFRA"}
-	ingestApp.ComponentConfig = ".dalikamata.yaml"
+	ingestApp.ComponentConfigEnabled = true
+	ingestApp.ComponentConfigFile = ".dalikamata.yaml"
 
 	ingestCtx, ingestCancel := context.WithCancel(t.Context())
 	t.Cleanup(ingestCancel)
