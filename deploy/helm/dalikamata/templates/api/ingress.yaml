@@ -1,0 +1,33 @@
+{{- if and .Values.api.enabled .Values.api.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "dalikamata.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dalikamata.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  {{- with .Values.api.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.api.ingress.className }}
+  ingressClassName: {{ .Values.api.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ required "api.ingress.hostname is required when api.ingress.enabled is true" .Values.api.ingress.hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "dalikamata.fullname" . }}-api
+                port:
+                  name: api
+  {{- with .Values.api.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

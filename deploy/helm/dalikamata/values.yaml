@@ -25,6 +25,24 @@ metrics:
 api:
   enabled: true
   port: 2113
+  ingress:
+    enabled: false
+    # IngressClass to use (e.g. "nginx", "traefik"). Leave empty to use the cluster default.
+    className: ""
+    # Required when ingress.enabled is true — hostname the API will be served on.
+    hostname: ""
+    # Arbitrary annotations forwarded to the Ingress object.
+    # Useful for cert-manager, rewrite rules, auth middleware, etc.
+    # annotations:
+    #   cert-manager.io/cluster-issuer: letsencrypt-prod
+    #   nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    annotations: {}
+    # TLS configuration. Each entry names a Secret and the hosts it covers.
+    # tls:
+    #   - hosts:
+    #       - api.example.com
+    #     secretName: api-tls
+    tls: []
 
 ingest:
   bitbucket:
