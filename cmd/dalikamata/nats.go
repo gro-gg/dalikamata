@@ -59,5 +59,9 @@ var natsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(natsCmd)
-	natsCmd.Flags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
+	addNATSFlags(natsCmd)
+}
+
+func addNATSFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&natsPath, "nats-data", "./data/nats", "NATS server persistence path")
 }

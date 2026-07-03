@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/metrics"
 	"github.com/spf13/cobra"
 
 	"codeberg.org/aeforged/dalikamata/internal/app"
@@ -49,4 +50,11 @@ var metricsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(metricsCmd)
+	addMetricsFlags(metricsCmd)
+}
+
+func addMetricsFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&metricsAddr, "metrics-addr", metrics.DefaultMetricsAddr, "metrics HTTP listen address")
+	cmd.Flags().DurationVar(&metricRefreshInterval, "metric-refresh-interval", metrics.DefaultRefreshInterval, "how often background loops recompute each metric")
+	cmd.Flags().DurationVar(&metricAggregateTimeout, "metric-aggregate-timeout", metrics.DefaultAggregateTimeout, "per-aggregation query timeout for metric refresh loops")
 }

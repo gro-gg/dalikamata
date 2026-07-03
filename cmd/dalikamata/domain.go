@@ -52,5 +52,9 @@ var domainCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(domainCmd)
-	domainCmd.Flags().StringVar(&domainDBPath, "db-path", "", "SQLite database file for persistent storage (empty = in-memory, data lost on restart)")
+	addDomainFlags(domainCmd)
+}
+
+func addDomainFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&domainDBPath, "db-path", "", "SQLite database file for persistent storage (empty = in-memory, data lost on restart)")
 }

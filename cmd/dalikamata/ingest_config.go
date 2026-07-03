@@ -32,5 +32,9 @@ events to the NATS platform ingest subjects.`,
 
 func init() {
 	ingestCmd.AddCommand(configIngestCmd)
-	configIngestCmd.Flags().StringVar(&componentsDir, "dir", "", "directory containing component YAML files")
+	addConfigFlags(configIngestCmd)
+}
+
+func addConfigFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&componentsDir, "dir", "", "directory containing component YAML files")
 }

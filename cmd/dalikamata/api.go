@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"codeberg.org/aeforged/dalikamata/internal/api"
 	"github.com/spf13/cobra"
 
 	"codeberg.org/aeforged/dalikamata/internal/app"
@@ -49,4 +50,10 @@ var apiCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(apiCmd)
+	addApiFlags(apiCmd)
+}
+
+func addApiFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&apiAddr, "api-addr", api.DefaultAPIAddr, "query API HTTP listen address")
+	cmd.Flags().DurationVar(&apiQueryTimeout, "api-query-timeout", api.DefaultQueryTimeout, "per-request query timeout for the API server")
 }

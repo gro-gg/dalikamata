@@ -71,11 +71,14 @@ var jenkinsCmd = &cobra.Command{
 
 func init() {
 	ingestCmd.AddCommand(jenkinsCmd)
+	addJenkinsFlags(jenkinsCmd)
+}
 
-	jenkinsCmd.Flags().StringVar(&jenkinsURL, "jenkins-url", "", "Jenkins base URL (e.g. https://jenkins.example.com)")
-	jenkinsCmd.Flags().StringVar(&jenkinsUser, "jenkins-user", "", "Jenkins username")
-	jenkinsCmd.Flags().StringVar(&jenkinsToken, "jenkins-token", "", "Jenkins API token")
-	jenkinsCmd.Flags().StringSliceVar(&jenkinsJobs, "jenkins-jobs", nil, "full Jenkins job paths to crawl (comma-separated); crawl all if omitted")
-	jenkinsCmd.Flags().StringToStringVar(&jenkinsRepoOverride, "jenkins-repo-override", nil, "manual pipeline→repoID mapping, e.g. my-pipeline=PROJ/my-repo (comma-separated key=value pairs)")
-	jenkinsCmd.Flags().DurationVar(&jenkinsInterval, "jenkins-interval", 5*time.Minute, "how often to re-crawl Jenkins for new builds")
+func addJenkinsFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&jenkinsURL, "jenkins-url", "", "Jenkins base URL (e.g. https://jenkins.example.com)")
+	cmd.Flags().StringVar(&jenkinsUser, "jenkins-user", "", "Jenkins username")
+	cmd.Flags().StringVar(&jenkinsToken, "jenkins-token", "", "Jenkins API token")
+	cmd.Flags().StringSliceVar(&jenkinsJobs, "jenkins-jobs", nil, "full Jenkins job paths to crawl (comma-separated); crawl all if omitted")
+	cmd.Flags().StringToStringVar(&jenkinsRepoOverride, "jenkins-repo-override", nil, "manual pipeline→repoID mapping, e.g. my-pipeline=PROJ/my-repo (comma-separated key=value pairs)")
+	cmd.Flags().DurationVar(&jenkinsInterval, "jenkins-interval", 5*time.Minute, "how often to re-crawl Jenkins for new builds")
 }
