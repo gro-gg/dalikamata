@@ -39,6 +39,13 @@ ingest:
     # Optional: directory inside the container where CA certificates are stored.
     # Pass the mount path of your extraVolumeMounts cert bundle here (e.g. "/etc/ssl/certs/custom").
     caCertsDir: ""
+    # Per-repo self-onboarding (ADR-007): fetch an in-repo config file from each
+    # crawled repo and publish Team + Component ownership from it.
+    componentConfig:
+      # Enable self-onboarding (maps to --component-config-enabled).
+      enabled: false
+      # In-repo path fetched per repo (maps to --component-config-file).
+      file: "dalikamata.yaml"
     # Extra volumes to attach to the Bitbucket ingest pod (e.g. CA certificate ConfigMaps).
     extraVolumes: []
     # - name: ca-certs

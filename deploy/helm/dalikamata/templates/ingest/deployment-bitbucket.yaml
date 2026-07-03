@@ -34,6 +34,10 @@ spec:
             {{- if .Values.ingest.bitbucket.caCertsDir }}
             - "--ca-certs-dir={{ .Values.ingest.bitbucket.caCertsDir }}"
             {{- end }}
+            {{- if .Values.ingest.bitbucket.componentConfig.enabled }}
+            - "--component-config-enabled"
+            - "--component-config-file={{ .Values.ingest.bitbucket.componentConfig.file }}"
+            {{- end }}
             {{- if .Values.ingest.bitbucket.debug }}
             - "--debug"
             {{- end }}
