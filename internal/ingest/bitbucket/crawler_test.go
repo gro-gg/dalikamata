@@ -428,7 +428,8 @@ func onboardingClient() *fakeBitbucketClient {
 			"PROJ": {{Slug: "onboarded", Name: "Onboarded"}, {Slug: "plain", Name: "Plain"}},
 		},
 		commits: map[string][]apiCommit{
-			"PROJ/onboarded": {}, "PROJ/plain": {},
+			"PROJ/onboarded": {{ID: "aaa111", Author: apiGitUser{Name: "alice"}, AuthorTimestamp: 1000}},
+			"PROJ/plain":     {{ID: "bbb222", Author: apiGitUser{Name: "bob"}, AuthorTimestamp: 2000}},
 		},
 		pullRequests: map[string][]apiPullRequest{
 			"PROJ/onboarded": {}, "PROJ/plain": {},

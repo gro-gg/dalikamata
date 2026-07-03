@@ -114,8 +114,7 @@ func (c *Crawler) crawlProject(ctx context.Context, projectKey string) error {
 		if err != nil {
 			c.logger.Error("publish repo", "project", projectKey, "repo", apiRepo.Slug, "error", err)
 		}
-		c.selfOnboardRepo(ctx, projectKey, apiRepo.Slug, repo.RepoID)
-		if err = c.crawlRepo(ctx, projectKey, apiRepo.Slug); err != nil {
+		if err = c.crawlRepo(ctx, projectKey, apiRepo.Slug, repo.RepoID); err != nil {
 			c.logger.Error("crawl repo", "project", projectKey, "repo", apiRepo.Slug, "error", err)
 		}
 	}
@@ -168,11 +167,15 @@ func (c *Crawler) selfOnboardRepo(ctx context.Context, projectKey, repoSlug, rep
 		"project", projectKey, "repo", repoSlug, "paths", c.configPaths)
 }
 
-func (c *Crawler) crawlRepo(ctx context.Context, projectKey, repoSlug string) error {
+func (c *Crawler) crawlRepo(ctx context.Context, projectKey, repoSlug, repoID string) error {
 	c.logger.Info("crawling repo", "project", projectKey, "repo", repoSlug)
 
-	if err := c.crawlCommits(ctx, projectKey, repoSlug); err != nil {
+	hasNew, err := c.crawlCommits(ctx, projectKey, repoSlug)
+	if err != nil {
 		return fmt.Errorf("crawl commits: %w", err)
+	}
+	if hasNew {
+		c.selfOnboardRepo(ctx, projectKey, repoSlug, repoID)
 	}
 
 	if err := c.crawlPullRequests(ctx, projectKey, repoSlug); err != nil {
@@ -182,7 +185,7 @@ func (c *Crawler) crawlRepo(ctx context.Context, projectKey, repoSlug string) er
 	return nil
 }
 
-func (c *Crawler) crawlCommits(ctx context.Context, projectKey, repoSlug string) error {
+func (c *Crawler) crawlCommits(ctx context.Context, projectKey, repoSlug string) (bool, error) {
 	repoID := model.NewRepoID(projectKey, repoSlug)
 
 	c.mu.Lock()
@@ -205,10 +208,10 @@ func (c *Crawler) crawlCommits(ctx context.Context, projectKey, repoSlug string)
 		commits, err = c.client.GetCommits(ctx, projectKey, repoSlug, "")
 	}
 	if err != nil {
-		return fmt.Errorf("get commits: %w", err)
+		return false, fmt.Errorf("get commits: %w", err)
 	}
 	if len(commits) == 0 {
-		return nil
+		return false, nil
 	}
 
 	for _, commit := range commits {
@@ -230,13 +233,13 @@ func (c *Crawler) crawlCommits(ctx context.Context, projectKey, repoSlug string)
 	newSHA := commits[0].ID
 	if saveErr := c.store.Save(ctx, repoID, newSHA); saveErr != nil {
 		c.logger.Error("saving commit cursor", "repo", repoID, "sha", newSHA, "error", saveErr)
-		return nil
+		return true, nil
 	}
 	c.mu.Lock()
 	c.cursors[repoID] = newSHA
 	c.mu.Unlock()
 
-	return nil
+	return true, nil
 }
 
 func (c *Crawler) crawlPullRequests(ctx context.Context, projectKey, repoSlug string) error {
