@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -40,29 +39,16 @@ func (p *GITPublisher) Close() {
 }
 
 func (p *GITPublisher) PublishRepo(ctx context.Context, repo model.Repo) error {
-	p.logger.Debug("publishing repo", "subject", SubjectRepo, "ID", repo.RepoID, "Name", repo.Name)
-	return p.publish(ctx, SubjectRepo, repo)
+	p.logger.Debug("publishing repo", "subject", SubjectRepo, "id", repo.RepoID, "name", repo.Name)
+	return publish(ctx, p.stream, p.logger, SubjectRepo, repo)
 }
 
 func (p *GITPublisher) PublishCommit(ctx context.Context, commit model.Commit) error {
-	p.logger.Debug("publishing commit", "subject", SubjectCommit, "SHA", commit.SHA, "RepoID", commit.RepoID)
-	return p.publish(ctx, SubjectCommit, commit)
+	p.logger.Debug("publishing commit", "subject", SubjectCommit, "sha", commit.SHA, "repo_id", commit.RepoID)
+	return publish(ctx, p.stream, p.logger, SubjectCommit, commit)
 }
 
 func (p *GITPublisher) PublishPullRequest(ctx context.Context, pr model.PullRequest) error {
-	p.logger.Debug("publishing pull request", "subject", SubjectPullRequest, "ID", pr.ID)
-	return p.publish(ctx, SubjectPullRequest, pr)
-}
-
-func (p *GITPublisher) publish(ctx context.Context, subject string, payload any) error {
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("JSON marshal: %w", err)
-	}
-
-	_, err = p.stream.Publish(ctx, subject, b)
-	if err != nil {
-		return fmt.Errorf("publishing to %s: %w", subject, err)
-	}
-	return nil
+	p.logger.Debug("publishing pull request", "subject", SubjectPullRequest, "id", pr.ID)
+	return publish(ctx, p.stream, p.logger, SubjectPullRequest, pr)
 }

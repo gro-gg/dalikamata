@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -40,27 +39,15 @@ func (p *PlatformPublisher) Close() {
 
 func (p *PlatformPublisher) PublishTeam(ctx context.Context, team model.Team) error {
 	p.logger.Debug("publishing team", "subject", SubjectPlatformTeam, "name", team.Name)
-	return p.publish(ctx, SubjectPlatformTeam, team)
+	return publish(ctx, p.stream, p.logger, SubjectPlatformTeam, team)
 }
 
 func (p *PlatformPublisher) PublishComponent(ctx context.Context, comp model.Component) error {
 	p.logger.Debug("publishing component", "subject", SubjectPlatformComponent, "name", comp.Name, "team", comp.TeamName)
-	return p.publish(ctx, SubjectPlatformComponent, comp)
+	return publish(ctx, p.stream, p.logger, SubjectPlatformComponent, comp)
 }
 
-func (p *PlatformPublisher) PublishRepoOnboarding(ctx context.Context, o model.RepoOnboarding) error {
-	p.logger.Debug("publishing repo onboarding", "subject", SubjectPlatformRepo, "repo_id", o.RepoID, "component", o.Component, "team", o.Team)
-	return p.publish(ctx, SubjectPlatformRepo, o)
-}
-
-func (p *PlatformPublisher) publish(ctx context.Context, subject string, payload any) error {
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("JSON marshal: %w", err)
-	}
-	_, err = p.stream.Publish(ctx, subject, b)
-	if err != nil {
-		return fmt.Errorf("publishing to %s: %w", subject, err)
-	}
-	return nil
+func (p *PlatformPublisher) PublishRepoOnboarding(ctx context.Context, repo model.RepoOnboarding) error {
+	p.logger.Debug("publishing repo onboarding", "subject", SubjectPlatformRepo, "repo_id", repo.RepoID, "component", repo.Component, "team", repo.Team)
+	return publish(ctx, p.stream, p.logger, SubjectPlatformRepo, repo)
 }
