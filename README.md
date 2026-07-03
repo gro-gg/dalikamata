@@ -25,19 +25,20 @@ Key flags (available on all commands via root):
 | `--nats-port` | `4222` | NATS server port |
 | `--debug` | `false` | Enable debug logging |
 | `--grace-period` | `10s` | Shutdown grace period |
-| `--metrics-addr` | `0.0.0.0:2112` | Prometheus metrics listen address |
-| `--metric-refresh-interval` | `30s` | How often background loops recompute each metric |
-| `--metric-aggregate-timeout` | `30s` | Per-aggregation query timeout for metric refresh loops |
-| `--api-addr` | `0.0.0.0:2113` | HTTP query API listen address |
-| `--api-query-timeout` | `30s` | Per-request query timeout for the API server |
+| `--ca-certs-dir` | _(none)_ | Directory containing custom CA certificates (`.pem`, `.crt`, `.cer`) |
 
-The `nats` and `mono` commands also accept `--nats-data` (default `./data/nats`) to set the JetStream persistence directory.
+`dalikamata nats` flags:
 
-The `domain` and `mono` commands accept `--db-path` to enable SQLite persistence for domain entities. When omitted, an in-memory repository is used and entity state is lost on restart.
+| Flag | Default | Description |
+|---|---|---|
+| `--nats-data` | `./data/nats` | Set the JetStream persistence directory |
 
-```bash
-dalikamata domain --db-path ./data/dalikamata.db
-```
+
+`dalikamata domain` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--db-path` | _(none)_ | Enables SQLite persistence for domain entities. When omitted, an in-memory repository is used and entity state is lost on restart. |
 
 `dalikamata ingest bitbucket` flags:
 
@@ -47,6 +48,8 @@ dalikamata domain --db-path ./data/dalikamata.db
 | `--bitbucket-token` | _(required)_ | Bitbucket personal access token |
 | `--bitbucket-projects` | _(required)_ | Comma-separated list of Bitbucket project keys to crawl |
 | `--bitbucket-interval` | `5m` | How often to re-crawl for new commits and pull requests |
+| `--component-config-enabled` | `false` | Enable per-repo self-onboarding: fetch an in-repo config file from each repo root |
+| `--component-config-file` | `dalikamata.yaml,...` | Candidate in-repo config paths tried per repo (comma-separated, first match wins; requires `--component-config-enabled`) |
 
 The Bitbucket ingestor runs on a repeating ticker loop. The first crawl fires immediately on startup; subsequent crawls are spaced by `--bitbucket-interval`. Each repo's newest published commit SHA is persisted in a JetStream KV bucket (`ingest-bitbucket-cursors`) so that restarts do not re-ingest already-published commits. Only new commits (those reachable from the default branch tip but not from the cursor SHA) are fetched on subsequent ticks; pull requests and repos are refetched in full on every tick (they are small and re-publish is idempotent).
 
@@ -69,7 +72,24 @@ The Jenkins ingestor runs on the same repeating ticker pattern as the Bitbucket 
 |---|---|---|
 | `--dir` | _(required)_ | Directory of per-component YAML files (`*.yaml` / `*.yml`) |
 
-`dalikamata mono` also accepts `--components-dir` (optional) to run the config crawler alongside the other ingest sources, `--bitbucket-interval` to control the Bitbucket crawl cadence, and `--jenkins-interval` to control the Jenkins crawl cadence.
+`dalikamata metrics` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--metrics-addr` | `0.0.0.0:2112` | Prometheus metrics listen address |
+| `--metric-refresh-interval` | `30s` | How often background loops recompute each metric |
+| `--metric-aggregate-timeout` | `30s` | Per-aggregation query timeout for metric refresh loops |
+
+`dalikamata api` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--api-addr` | `0.0.0.0:2113` | HTTP query API listen address |
+| `--api-query-timeout` | `30s` | Per-request query timeout for the API server |
+
+`dalikamata mono` flags:
+
+The `mono` command is a convenience wrapper that starts NATS, domain, metrics, API, and all three ingestors in a single process. It accepts all flags from the individual commands.
 
 ## Docker Compose
 
