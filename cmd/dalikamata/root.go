@@ -32,7 +32,7 @@ var (
 	bitbucketInterval      time.Duration
 
 	bitbucketComponentCfgEnabled bool
-	bitbucketComponentCfgFile    string
+	bitbucketComponentCfgFiles   []string
 
 	jenkinsInterval time.Duration
 )

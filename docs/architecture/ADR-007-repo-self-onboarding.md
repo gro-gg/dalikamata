@@ -28,7 +28,9 @@ component: payment-service
 
 The `version` field is validated identically to ADR-005 (`"1"`); `team` and `component` are required. Parsing and validation reuse `internal/config/component` rather than duplicating the schema.
 
-**Discovery** — a configurable path at the repo root (`--component-config-file`, default `dalikamata.yaml`), fetched via the Bitbucket raw endpoint (`/rest/api/1.0/projects/{key}/repos/{slug}/raw/{path}`), one request per repo. A `404` means "not onboarded" and is not an error.
+**Discovery** — an ordered list of candidate paths at the repo root (`--component-config-file`, comma-separated, default `dalikamata.yaml,dalikamata.yml,.dalikamata.yaml,.dalikamata.yml`), each fetched via the Bitbucket raw endpoint (`/rest/api/1.0/projects/{key}/repos/{slug}/raw/{path}`). The candidates are tried in order and the **first one present wins**; a `404` means "this candidate is absent" and is not an error. Bitbucket's raw API resolves one concrete path and has no glob/wildcard support, so the accepted extensions/locations are enumerated explicitly rather than matched by pattern. Cost is up to one request per candidate per repo, stopping at the first hit.
+
+> Supporting true patterns (e.g. `*.yaml`) would require listing repo directories via the Bitbucket **browse** API (`/rest/api/1.0/projects/{key}/repos/{slug}/browse/{path}`) and a matching fake-server route. Deferred; the candidate list covers the `.yaml`/`.yml` and alternate-location cases without it.
 
 **Event semantics** — the `ingest.platform.repo` event is *additive and reassigning*. Handling it *adds* the repo to the named component and — because a repo belongs to at most one component — *removes* that repo from every other component's membership. Re-publishing the same repo under a different component name therefore moves it; publishing several repos under the same component name merges them into one component.
 
@@ -44,6 +46,6 @@ The `version` field is validated identically to ADR-005 (`"1"`); `team` and `com
 - A repo changes ownership by being re-published under a different component name (it is stolen from the old one). This is the intended "move a repo to another component" flow.
 - For each Component, either the central crawler (ADR-005) or self-onboarding is used, not both at the same time. Mixing the two for one component is possible but its behaviour is not defined.
 - The Bitbucket crawler gains a dependency on `internal/config/component` (schema parsing/validation), reused from the central crawler rather than duplicated.
-- Cost is one extra HTTP request per repo per crawl when enabled; when disabled there is no additional cost.
+- Cost is up to one extra HTTP request per configured candidate path per repo per crawl when enabled (stopping at the first hit); when disabled there is no additional cost.
 - The `INGEST` JetStream stream wildcard (`ingest.>`) already covers the new `ingest.platform.repo` subject — no stream reconfiguration is needed.
 - The ingest path is idempotent (upsert by name / membership reassignment), so re-crawling after a config change is safe.

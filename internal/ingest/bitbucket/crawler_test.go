@@ -443,7 +443,7 @@ func TestCrawl_SelfOnboard_PublishesEvent(t *testing.T) {
 	}
 	onboard := &fakeOnboardingPublisher{}
 	crawler := NewCrawler(client, &fakePublisher{}, newFakeCursors(), []string{"PROJ"}, newTestLogger(),
-		WithComponentConfig(onboard, ".dalikamata.yaml"))
+		WithComponentConfig(onboard, []string{".dalikamata.yaml"}))
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatal(err)
@@ -462,6 +462,29 @@ func TestCrawl_SelfOnboard_PublishesEvent(t *testing.T) {
 	}
 }
 
+func TestCrawl_SelfOnboard_FirstMatchingCandidateWins(t *testing.T) {
+	client := onboardingClient()
+	// Repo carries only the .yml variant; the earlier .yaml candidate 404s.
+	client.rawFiles = map[string][]byte{
+		"PROJ/onboarded/.dalikamata.yml": []byte("version: \"1\"\nteam: web\ncomponent: frontend\n"),
+	}
+	onboard := &fakeOnboardingPublisher{}
+	crawler := NewCrawler(client, &fakePublisher{}, newFakeCursors(), []string{"PROJ"}, newTestLogger(),
+		WithComponentConfig(onboard, []string{".dalikamata.yaml", ".dalikamata.yml"}))
+
+	if err := crawler.Crawl(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(onboard.onboardings) != 1 {
+		t.Fatalf("onboardings = %d, want 1 (%v)", len(onboard.onboardings), onboard.onboardings)
+	}
+	got := onboard.onboardings[0]
+	if got.Component != "frontend" || got.Team != "web" {
+		t.Errorf("got component=%q team=%q, want frontend/web", got.Component, got.Team)
+	}
+}
+
 func TestCrawl_SelfOnboard_InvalidConfigSkippedAndCrawlContinues(t *testing.T) {
 	client := onboardingClient()
 	client.rawFiles = map[string][]byte{
@@ -470,7 +493,7 @@ func TestCrawl_SelfOnboard_InvalidConfigSkippedAndCrawlContinues(t *testing.T) {
 	onboard := &fakeOnboardingPublisher{}
 	pub := &fakePublisher{}
 	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"PROJ"}, newTestLogger(),
-		WithComponentConfig(onboard, ".dalikamata.yaml"))
+		WithComponentConfig(onboard, []string{".dalikamata.yaml"}))
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatal(err)
@@ -491,7 +514,7 @@ func TestCrawl_SelfOnboard_FetchErrorSkippedAndCrawlContinues(t *testing.T) {
 	onboard := &fakeOnboardingPublisher{}
 	pub := &fakePublisher{}
 	crawler := NewCrawler(client, pub, newFakeCursors(), []string{"PROJ"}, newTestLogger(),
-		WithComponentConfig(onboard, ".dalikamata.yaml"))
+		WithComponentConfig(onboard, []string{".dalikamata.yaml"}))
 
 	if err := crawler.Crawl(context.Background()); err != nil {
 		t.Fatal(err)

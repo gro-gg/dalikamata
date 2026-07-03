@@ -44,8 +44,10 @@ ingest:
     componentConfig:
       # Enable self-onboarding (maps to --component-config-enabled).
       enabled: false
-      # In-repo path fetched per repo (maps to --component-config-file).
-      file: "dalikamata.yaml"
+      # In-repo candidate path(s) tried per repo, comma-separated, first match
+      # wins (maps to --component-config-file). Bitbucket's raw API has no glob
+      # support, so list the accepted paths explicitly.
+      file: "dalikamata.yaml,dalikamata.yml,.dalikamata.yaml,.dalikamata.yml"
     # Extra volumes to attach to the Bitbucket ingest pod (e.g. CA certificate ConfigMaps).
     extraVolumes: []
     # - name: ca-certs

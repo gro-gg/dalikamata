@@ -57,7 +57,7 @@ var monoCmd = &cobra.Command{
 		ingestApp.CACertsDir = caCertsDir
 		ingestApp.Interval = bitbucketInterval
 		ingestApp.ComponentConfigEnabled = bitbucketComponentCfgEnabled
-		ingestApp.ComponentConfigFile = bitbucketComponentCfgFile
+		ingestApp.ComponentConfigFiles = bitbucketComponentCfgFiles
 
 		var configApp *app.IngestConfigApp
 		if componentsDir != "" {
@@ -154,7 +154,7 @@ func init() {
 	monoCmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
 	monoCmd.Flags().DurationVar(&bitbucketInterval, "bitbucket-interval", 5*time.Minute, "how often to re-crawl Bitbucket for new commits and pull requests")
 	monoCmd.Flags().BoolVar(&bitbucketComponentCfgEnabled, "component-config-enabled", false, "enable per-repo self-onboarding: fetch an in-repo config file from each repo root")
-	monoCmd.Flags().StringVar(&bitbucketComponentCfgFile, "component-config-file", "dalikamata.yaml", "in-repo config path fetched per repo for self-onboarding (requires --component-config-enabled)")
+	monoCmd.Flags().StringSliceVar(&bitbucketComponentCfgFiles, "component-config-file", []string{"dalikamata.yaml", "dalikamata.yml", ".dalikamata.yaml", ".dalikamata.yml"}, "in-repo config path(s) tried per repo for self-onboarding, first match wins (comma-separated; requires --component-config-enabled)")
 	monoCmd.Flags().StringVar(&componentsDir, "components-dir", "", "directory of component YAML files (optional)")
 	monoCmd.Flags().StringVar(&jenkinsURL, "jenkins-url", "", "Jenkins base URL (optional; omit to skip Jenkins ingest)")
 	monoCmd.Flags().StringVar(&jenkinsUser, "jenkins-user", "", "Jenkins username")

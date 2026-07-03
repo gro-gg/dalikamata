@@ -105,7 +105,7 @@ func TestIngestBitbucketSelfOnboarding(t *testing.T) {
 	ingestApp.BitbucketToken = "test-token"
 	ingestApp.Projects = []string{"PROJ", "INFRA"}
 	ingestApp.ComponentConfigEnabled = true
-	ingestApp.ComponentConfigFile = ".dalikamata.yaml"
+	ingestApp.ComponentConfigFiles = []string{".dalikamata.yaml"}
 
 	ingestCtx, ingestCancel := context.WithCancel(t.Context())
 	t.Cleanup(ingestCancel)

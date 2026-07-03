@@ -32,7 +32,7 @@ var bitbucketCmd = &cobra.Command{
 		app.CACertsDir = caCertsDir
 		app.Interval = bitbucketInterval
 		app.ComponentConfigEnabled = bitbucketComponentCfgEnabled
-		app.ComponentConfigFile = bitbucketComponentCfgFile
+		app.ComponentConfigFiles = bitbucketComponentCfgFiles
 		ctx := cmd.Root().Context()
 		var wg sync.WaitGroup
 		var runErr error
@@ -65,5 +65,5 @@ func init() {
 	bitbucketCmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
 	bitbucketCmd.Flags().DurationVar(&bitbucketInterval, "bitbucket-interval", 5*time.Minute, "how often to re-crawl Bitbucket for new commits and pull requests")
 	bitbucketCmd.Flags().BoolVar(&bitbucketComponentCfgEnabled, "component-config-enabled", false, "enable per-repo self-onboarding: fetch an in-repo config file from each repo root")
-	bitbucketCmd.Flags().StringVar(&bitbucketComponentCfgFile, "component-config-file", "dalikamata.yaml", "in-repo config path fetched per repo for self-onboarding (requires --component-config-enabled)")
+	bitbucketCmd.Flags().StringSliceVar(&bitbucketComponentCfgFiles, "component-config-file", []string{"dalikamata.yaml", "dalikamata.yml", ".dalikamata.yaml", ".dalikamata.yml"}, "in-repo config path(s) tried per repo for self-onboarding, first match wins (comma-separated; requires --component-config-enabled)")
 }

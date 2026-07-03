@@ -13,10 +13,16 @@ import (
 )
 
 const (
-	defaultBitbucketInterval   = 5 * time.Minute
-	bitbucketCursorBucketName  = "ingest-bitbucket-cursors"
-	defaultComponentConfigFile = "dalikamata.yaml"
+	defaultBitbucketInterval  = 5 * time.Minute
+	bitbucketCursorBucketName = "ingest-bitbucket-cursors"
 )
+
+// defaultComponentConfigFiles are the ordered in-repo candidate paths tried per
+// repo for self-onboarding when none are given. Dotted variants are included so
+// the default matches the common `.dalikamata.yaml` convention.
+var defaultComponentConfigFiles = []string{
+	"dalikamata.yaml", "dalikamata.yml", ".dalikamata.yaml", ".dalikamata.yml",
+}
 
 type IngestBitbucketApp struct {
 	BitbucketURL   string
@@ -27,24 +33,25 @@ type IngestBitbucketApp struct {
 	CACertsDir     string
 	Interval       time.Duration
 	// ComponentConfigEnabled turns on per-repo self-onboarding (ADR-007).
-	// When set, ComponentConfigFile is fetched from each repo root.
+	// When set, ComponentConfigFiles are tried from each repo root.
 	ComponentConfigEnabled bool
-	// ComponentConfigFile is the in-repo path fetched per repo for
-	// self-onboarding. Defaults to defaultComponentConfigFile.
-	ComponentConfigFile string
-	logger              *slog.Logger
+	// ComponentConfigFiles is the ordered list of in-repo candidate paths tried
+	// per repo for self-onboarding, first match wins. Defaults to
+	// defaultComponentConfigFiles.
+	ComponentConfigFiles []string
+	logger               *slog.Logger
 }
 
 func NewIngestBitbucketApp(logger *slog.Logger) *IngestBitbucketApp {
 	a := &IngestBitbucketApp{
-		BitbucketURL:        "localhost:7999",
-		BitbucketToken:      "aToken",
-		NATSHost:            internalnats.DefaultHost,
-		NATSPort:            internalnats.DefaultPort,
-		Projects:            []string{},
-		Interval:            defaultBitbucketInterval,
-		ComponentConfigFile: defaultComponentConfigFile,
-		logger:              logger.With("service", "ingest_bitbucket"),
+		BitbucketURL:         "localhost:7999",
+		BitbucketToken:       "aToken",
+		NATSHost:             internalnats.DefaultHost,
+		NATSPort:             internalnats.DefaultPort,
+		Projects:             []string{},
+		Interval:             defaultBitbucketInterval,
+		ComponentConfigFiles: defaultComponentConfigFiles,
+		logger:               logger.With("service", "ingest_bitbucket"),
 	}
 
 	return a
@@ -79,17 +86,17 @@ func (a *IngestBitbucketApp) Run(ctx context.Context) error {
 
 	var crawlerOpts []bitbucket.CrawlerOption
 	if a.ComponentConfigEnabled {
-		configFile := a.ComponentConfigFile
-		if configFile == "" {
-			configFile = defaultComponentConfigFile
+		configFiles := a.ComponentConfigFiles
+		if len(configFiles) == 0 {
+			configFiles = defaultComponentConfigFiles
 		}
 		platformPublisher, platformCloser, err := dalinats.NewPlatformPublisher(ctx, natsURL, a.logger.With("port", "domain", "connection", "nats", "publisher", "platform"))
 		if err != nil {
 			return fmt.Errorf("create platform publisher: %w", err)
 		}
 		defer platformCloser()
-		crawlerOpts = append(crawlerOpts, bitbucket.WithComponentConfig(platformPublisher, configFile))
-		a.logger.Info("per-repo self-onboarding enabled", "component_config", configFile)
+		crawlerOpts = append(crawlerOpts, bitbucket.WithComponentConfig(platformPublisher, configFiles))
+		a.logger.Info("per-repo self-onboarding enabled", "component_config", configFiles)
 	}
 
 	crawler := bitbucket.NewCrawler(client, publisher, cursors, a.Projects, a.logger, crawlerOpts...)

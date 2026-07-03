@@ -28,9 +28,10 @@ type Crawler struct {
 	logger    *slog.Logger
 
 	// Self-onboarding (ADR-007). Both are set together via WithComponentConfig;
-	// when configPublisher is nil, self-onboarding is disabled.
+	// when configPublisher is nil, self-onboarding is disabled. configPaths is an
+	// ordered list of candidate in-repo paths tried per repo, first match wins.
 	configPublisher RepoOnboardingPublisher
-	configPath      string
+	configPaths     []string
 
 	mu      sync.Mutex
 	cursors map[string]string // repoID → newest published SHA
@@ -41,12 +42,13 @@ type Crawler struct {
 type CrawlerOption func(*Crawler)
 
 // WithComponentConfig enables per-repo self-onboarding: for each crawled repo
-// the crawler fetches path from the repo root and, when present, publishes a
-// RepoOnboarding event via publisher.
-func WithComponentConfig(publisher RepoOnboardingPublisher, path string) CrawlerOption {
+// the crawler tries paths (in order) from the repo root and, on the first one
+// present, publishes a RepoOnboarding event via publisher. Bitbucket's raw API
+// has no glob support, so the candidate paths are listed explicitly.
+func WithComponentConfig(publisher RepoOnboardingPublisher, paths []string) CrawlerOption {
 	return func(c *Crawler) {
 		c.configPublisher = publisher
-		c.configPath = path
+		c.configPaths = paths
 	}
 }
 
@@ -120,45 +122,50 @@ func (c *Crawler) crawlProject(ctx context.Context, projectKey string) error {
 	return nil
 }
 
-// selfOnboardRepo fetches the in-repo self-onboarding config for one repo and,
-// when present and valid, publishes a RepoOnboarding event. It is fail-soft: a
-// missing, unfetchable, or invalid file is logged and skipped so it never
-// aborts the crawl. A no-op when self-onboarding is disabled.
+// selfOnboardRepo tries the candidate config paths for one repo and, on the
+// first one present, publishes a RepoOnboarding event. It is fail-soft: a fetch
+// error on a candidate is logged and the next candidate is tried; a missing file
+// is skipped; the first *found* file wins even if it is invalid (logged, not
+// fallen through). Nothing here aborts the crawl. A no-op when disabled.
 func (c *Crawler) selfOnboardRepo(ctx context.Context, projectKey, repoSlug, repoID string) {
-	if c.configPublisher == nil || c.configPath == "" {
+	if c.configPublisher == nil || len(c.configPaths) == 0 {
 		return
 	}
 
-	data, found, err := c.client.GetRawFile(ctx, projectKey, repoSlug, c.configPath)
-	if err != nil {
-		c.logger.Warn("fetching component config; skipping self-onboarding",
-			"project", projectKey, "repo", repoSlug, "path", c.configPath, "error", err)
-		return
-	}
-	if !found {
-		c.logger.Debug("no component config; repo not self-onboarded",
-			"project", projectKey, "repo", repoSlug, "path", c.configPath)
+	for _, path := range c.configPaths {
+		data, found, err := c.client.GetRawFile(ctx, projectKey, repoSlug, path)
+		if err != nil {
+			c.logger.Warn("fetching component config; trying next candidate",
+				"project", projectKey, "repo", repoSlug, "path", path, "error", err)
+			continue
+		}
+		if !found {
+			continue
+		}
+
+		f, err := component.ParseRepoFile(data)
+		if err != nil {
+			c.logger.Warn("invalid component config; skipping self-onboarding",
+				"project", projectKey, "repo", repoSlug, "path", path, "error", err)
+			return
+		}
+
+		onboarding, err := f.ToRepoOnboarding(repoID)
+		if err != nil {
+			c.logger.Warn("converting component config; skipping self-onboarding",
+				"project", projectKey, "repo", repoSlug, "path", path, "error", err)
+			return
+		}
+
+		c.logger.Info("repo self-onboarded", "repo", repoID, "path", path, "component", onboarding.Component, "team", onboarding.Team)
+		if err := c.configPublisher.PublishRepoOnboarding(ctx, onboarding); err != nil {
+			c.logger.Error("publish repo onboarding", "repo", repoID, "error", err)
+		}
 		return
 	}
 
-	f, err := component.ParseRepoFile(data)
-	if err != nil {
-		c.logger.Warn("invalid component config; skipping self-onboarding",
-			"project", projectKey, "repo", repoSlug, "path", c.configPath, "error", err)
-		return
-	}
-
-	onboarding, err := f.ToRepoOnboarding(repoID)
-	if err != nil {
-		c.logger.Warn("converting component config; skipping self-onboarding",
-			"project", projectKey, "repo", repoSlug, "error", err)
-		return
-	}
-
-	c.logger.Info("repo self-onboarded", "repo", repoID, "component", onboarding.Component, "team", onboarding.Team)
-	if err := c.configPublisher.PublishRepoOnboarding(ctx, onboarding); err != nil {
-		c.logger.Error("publish repo onboarding", "repo", repoID, "error", err)
-	}
+	c.logger.Debug("no component config; repo not self-onboarded",
+		"project", projectKey, "repo", repoSlug, "paths", c.configPaths)
 }
 
 func (c *Crawler) crawlRepo(ctx context.Context, projectKey, repoSlug string) error {
