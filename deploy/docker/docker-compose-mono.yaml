@@ -32,7 +32,7 @@ services:
       - "--bitbucket-url=http://dalikamata-fake-bitbucket:17990"
       - "--bitbucket-token=test-token"
       - "--bitbucket-projects=PROJ,INFRA"
-      - "--components-dir=/components"
+      - "--dir=/components"
     depends_on:
       - dalikamata-fake-bitbucket
     ports:
