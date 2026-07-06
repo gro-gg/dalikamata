@@ -74,7 +74,7 @@ func TestOwnershipIndex_ComponentBeforeWorkflows(t *testing.T) {
 		TeamName: "team-alpha",
 		RepoIDs:  []string{"r1"},
 	})
-	addWorkflow(t, r, model.Workflow{ID: "wf1", Name: "Build Pipeline", RepoID: "r1"})
+	addWorkflow(t, r, model.Workflow{ID: "wf1", Name: "Build Pipeline", RepoIDs: []string{"r1"}})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run1", WorkflowID: "wf1", Status: "SUCCESS", Duration: 120})
 
 	teams := runAggregateField(t, r, query.EntityWorkflowRun, query.RunTeamName)
@@ -97,7 +97,7 @@ func TestOwnershipIndex_WorkflowsBeforeComponent(t *testing.T) {
 	is := is.New(t)
 	r := newRepo()
 
-	addWorkflow(t, r, model.Workflow{ID: "wf2", Name: "Deploy", RepoID: "r2"})
+	addWorkflow(t, r, model.Workflow{ID: "wf2", Name: "Deploy", RepoIDs: []string{"r2"}})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run2", WorkflowID: "wf2", Status: "SUCCESS", Duration: 60})
 
 	// Before the component is registered the team should be unknown.
@@ -123,8 +123,8 @@ func TestOwnershipIndex_ComponentOverwriteShrinksList(t *testing.T) {
 	is := is.New(t)
 	r := newRepo()
 
-	addWorkflow(t, r, model.Workflow{ID: "wf3", Name: "Old Pipeline", RepoID: "r3a"})
-	addWorkflow(t, r, model.Workflow{ID: "wf4", Name: "New Pipeline", RepoID: "r3b"})
+	addWorkflow(t, r, model.Workflow{ID: "wf3", Name: "Old Pipeline", RepoIDs: []string{"r3a"}})
+	addWorkflow(t, r, model.Workflow{ID: "wf4", Name: "New Pipeline", RepoIDs: []string{"r3b"}})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run3", WorkflowID: "wf3", Status: "SUCCESS", Duration: 30})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run4", WorkflowID: "wf4", Status: "SUCCESS", Duration: 45})
 
@@ -159,7 +159,7 @@ func TestOwnershipIndex_TaskEnrichment(t *testing.T) {
 		TeamName: "team-delta",
 		RepoIDs:  []string{"r4"},
 	})
-	addWorkflow(t, r, model.Workflow{ID: "wf5", Name: "Test Suite", RepoID: "r4"})
+	addWorkflow(t, r, model.Workflow{ID: "wf5", Name: "Test Suite", RepoIDs: []string{"r4"}})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run5", WorkflowID: "wf5", Status: "SUCCESS", Duration: 200})
 	addWorkflowTask(t, r, model.WorkflowTask{WorkflowRunID: "run5", Name: "unit-tests", Status: "SUCCESS", Duration: 90})
 	addWorkflowTask(t, r, model.WorkflowTask{WorkflowRunID: "run5", Name: "lint", Status: "SUCCESS", Duration: 30})
@@ -204,17 +204,22 @@ func TestOwnershipDiagnostics_AllReasons(t *testing.T) {
 
 	// "ok" — full chain resolves
 	addComponent(t, r, model.Component{Name: "svc-ok", TeamName: "team-ok", RepoIDs: []string{"repo-ok"}})
-	addWorkflow(t, r, model.Workflow{ID: "wf-ok", RepoID: "repo-ok"})
+	addWorkflow(t, r, model.Workflow{ID: "wf-ok", RepoIDs: []string{"repo-ok"}})
 
-	// "missing_repo_id" — workflow has no RepoID
-	addWorkflow(t, r, model.Workflow{ID: "wf-no-repo", RepoID: ""})
+	// "ok" via a second repo — first repo (shared lib) is unowned, so ownership
+	// resolves to the second, onboarded repo.
+	addComponent(t, r, model.Component{Name: "svc-multi", TeamName: "team-multi", RepoIDs: []string{"repo-app"}})
+	addWorkflow(t, r, model.Workflow{ID: "wf-multi", RepoIDs: []string{"shared-lib", "repo-app"}})
 
-	// "no_component_for_repo" — RepoID set but no component claims it
-	addWorkflow(t, r, model.Workflow{ID: "wf-no-comp", RepoID: "repo-unowned"})
+	// "missing_repo_id" — workflow has no repos
+	addWorkflow(t, r, model.Workflow{ID: "wf-no-repo", RepoIDs: nil})
+
+	// "no_component_for_repo" — repos set but no component claims any of them
+	addWorkflow(t, r, model.Workflow{ID: "wf-no-comp", RepoIDs: []string{"repo-unowned"}})
 
 	// "no_team_for_component" — component exists but TeamName is empty
 	addComponent(t, r, model.Component{Name: "svc-noteam", TeamName: "", RepoIDs: []string{"repo-noteam"}})
-	addWorkflow(t, r, model.Workflow{ID: "wf-noteam", RepoID: "repo-noteam"})
+	addWorkflow(t, r, model.Workflow{ID: "wf-noteam", RepoIDs: []string{"repo-noteam"}})
 
 	diags, err := r.OwnershipDiagnostics(ctx)
 	is.NoErr(err)
@@ -227,20 +232,25 @@ func TestOwnershipDiagnostics_AllReasons(t *testing.T) {
 	is.Equal(byWF["wf-ok"].Reason, "ok")
 	is.Equal(byWF["wf-ok"].TeamName, "team-ok")
 	is.Equal(byWF["wf-ok"].ComponentName, "svc-ok")
-	is.Equal(byWF["wf-ok"].RepoID, "repo-ok")
+	is.Equal(byWF["wf-ok"].RepoIDs, []string{"repo-ok"})
+
+	is.Equal(byWF["wf-multi"].Reason, "ok")
+	is.Equal(byWF["wf-multi"].TeamName, "team-multi")
+	is.Equal(byWF["wf-multi"].ComponentName, "svc-multi")
+	is.Equal(byWF["wf-multi"].RepoIDs, []string{"shared-lib", "repo-app"})
 
 	is.Equal(byWF["wf-no-repo"].Reason, "missing_repo_id")
-	is.Equal(byWF["wf-no-repo"].RepoID, "")
+	is.Equal(len(byWF["wf-no-repo"].RepoIDs), 0)
 
 	is.Equal(byWF["wf-no-comp"].Reason, "no_component_for_repo")
-	is.Equal(byWF["wf-no-comp"].RepoID, "repo-unowned")
+	is.Equal(byWF["wf-no-comp"].RepoIDs, []string{"repo-unowned"})
 
 	is.Equal(byWF["wf-noteam"].Reason, "no_team_for_component")
 	is.Equal(byWF["wf-noteam"].ComponentName, "svc-noteam")
 }
 
 // TestQueryWorkflowRuns_ResolvedTeamName verifies the full projection chain:
-// Team → Component(RepoIDs) → Workflow(RepoID) → WorkflowRun carries team_name.
+// Team → Component(RepoIDs) → Workflow(RepoIDs) → WorkflowRun carries team_name.
 func TestQueryWorkflowRuns_ResolvedTeamName(t *testing.T) {
 	is := is.New(t)
 	r := newRepo()
@@ -250,7 +260,7 @@ func TestQueryWorkflowRuns_ResolvedTeamName(t *testing.T) {
 		t.Fatal(err)
 	}
 	addComponent(t, r, model.Component{Name: "svc-alpha", TeamName: "team-alpha", RepoIDs: []string{"PROJ/alpha-api"}})
-	addWorkflow(t, r, model.Workflow{ID: "alpha-build", Name: "Alpha Build", RepoID: "PROJ/alpha-api"})
+	addWorkflow(t, r, model.Workflow{ID: "alpha-build", Name: "Alpha Build", RepoIDs: []string{"PROJ/alpha-api"}})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run-alpha-1", WorkflowID: "alpha-build", Status: "SUCCESS", Duration: 90})
 
 	var runs []model.WorkflowRun

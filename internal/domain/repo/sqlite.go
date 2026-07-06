@@ -119,10 +119,14 @@ func (r *SQLiteRepository) AddPullRequest(ctx context.Context, pr model.PullRequ
 }
 
 func (r *SQLiteRepository) AddWorkflow(ctx context.Context, w model.Workflow) error {
-	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO workflows (id, name, repo_id) VALUES (?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name=excluded.name, repo_id=excluded.repo_id`,
-		w.ID, w.Name, w.RepoID)
+	repoIDs, err := json.Marshal(w.RepoIDs)
+	if err != nil {
+		return fmt.Errorf("marshaling workflow repo_ids: %w", err)
+	}
+	_, err = r.db.ExecContext(ctx, `
+		INSERT INTO workflows (id, name, repo_ids) VALUES (?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET name=excluded.name, repo_ids=excluded.repo_ids`,
+		w.ID, w.Name, string(repoIDs))
 	return err
 }
 
@@ -327,7 +331,7 @@ func (r *SQLiteRepository) loadPullRequests(ctx context.Context) ([]model.PullRe
 }
 
 func (r *SQLiteRepository) loadWorkflows(ctx context.Context) ([]model.Workflow, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name, repo_id FROM workflows`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name, repo_ids FROM workflows`)
 	if err != nil {
 		return nil, err
 	}
@@ -335,8 +339,12 @@ func (r *SQLiteRepository) loadWorkflows(ctx context.Context) ([]model.Workflow,
 	var out []model.Workflow
 	for rows.Next() {
 		var v model.Workflow
-		if err := rows.Scan(&v.ID, &v.Name, &v.RepoID); err != nil {
+		var repoIDs string
+		if err := rows.Scan(&v.ID, &v.Name, &repoIDs); err != nil {
 			return nil, err
+		}
+		if err := json.Unmarshal([]byte(repoIDs), &v.RepoIDs); err != nil {
+			return nil, fmt.Errorf("unmarshaling workflow repo_ids: %w", err)
 		}
 		out = append(out, v)
 	}
@@ -450,10 +458,10 @@ func (r *SQLiteRepository) ownerLookupFromDB(ctx context.Context) (ownerLookup, 
 			rtc[repoID] = c.Name
 		}
 	}
-	wtr := make(map[string]string, len(workflows))     // workflowID → repoID
+	wtr := make(map[string][]string, len(workflows))   // workflowID → repoIDs
 	wfNames := make(map[string]string, len(workflows)) // workflowID → name
 	for _, w := range workflows {
-		wtr[w.ID] = w.RepoID
+		wtr[w.ID] = w.RepoIDs
 		wfNames[w.ID] = w.Name
 	}
 	return newOwnerLookup(rtc, wtr, ct, wfNames), nil

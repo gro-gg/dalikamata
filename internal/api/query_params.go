@@ -43,9 +43,8 @@ var validFields = map[query.Entity]map[string]struct{}{
 		query.PRCycleTimeSeconds: {},
 	},
 	query.EntityWorkflow: {
-		query.WorkflowID:     {},
-		query.WorkflowName:   {},
-		query.WorkflowRepoID: {},
+		query.WorkflowID:   {},
+		query.WorkflowName: {},
 	},
 	query.EntityWorkflowRun: {
 		query.RunID:            {},

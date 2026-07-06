@@ -69,20 +69,30 @@ func TestIngestJenkinsIntegration(t *testing.T) {
 	jobs := testhelper.CollectMessages[model.Workflow](t, js, dalinats.SubjectCicdWorkflow, 6, 20*time.Second)
 	is.Equal(len(jobs), 6)
 
-	// Every workflow must carry a non-empty RepoID in projectKey/slug form.
+	// Every workflow must carry at least one RepoID in projectKey/slug form.
 	for _, wf := range jobs {
-		is.True(wf.RepoID != "") // RepoID must be populated from remote URL
+		is.True(len(wf.RepoIDs) > 0) // RepoIDs must be populated from remote URLs
 	}
 	// Workflow ID must never contain a branch leaf (no "shared-lib/main" etc.)
 	for _, wf := range jobs {
 		is.True(wf.ID == wf.Name) // Name == ID per current convention
 	}
-	// Backend, frontend, and shared-lib each resolve to a distinct repo.
+	// Backend jobs check out both the app repo and the shared library, so the
+	// workflow lists both repos (in checkout order: app repo first).
+	byID := map[string]model.Workflow{}
+	for _, wf := range jobs {
+		byID[wf.ID] = wf
+	}
+	is.Equal(byID["build-backend"].RepoIDs, []string{"PROJ/backend-api", "PROJ/shared-lib"})
+
+	// Across all workflows exactly three distinct repos appear.
 	repoIDs := map[string]bool{}
 	for _, wf := range jobs {
-		repoIDs[wf.RepoID] = true
+		for _, id := range wf.RepoIDs {
+			repoIDs[id] = true
+		}
 	}
-	is.Equal(len(repoIDs), 3) // ACME/backend, ACME/frontend, ACME/shared-lib
+	is.Equal(len(repoIDs), 3) // PROJ/backend-api, PROJ/frontend-app, PROJ/shared-lib
 
 	// 5 plain jobs × 10 builds + 2 branches × 3 builds = 56 workflow runs
 	runs := testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 56, 20*time.Second)
@@ -222,7 +232,7 @@ func TestIngestJenkinsIncremental(t *testing.T) {
 	cursors2, err := jenkins.NewJetStreamCursors(ctx, jsForCursors, "test-jenkins-cursors")
 	is.NoErr(err)
 
-	crawler2 := jenkins.NewCrawler(client, publisher2, cursors2, nil, l)
+	crawler2 := jenkins.NewCrawler(client, publisher2, cursors2, nil, nil, l)
 
 	streamInfo2, err := ingestStream.Info(ctx)
 	is.NoErr(err)

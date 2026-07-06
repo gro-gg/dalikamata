@@ -429,7 +429,8 @@ rather than bare strings — they are stable across refactors.
 |---|---|---|
 | `query.WorkflowID` | `id` | string |
 | `query.WorkflowName` | `name` | string |
-| `query.WorkflowRepoID` | `repo_id` | string |
+
+A workflow carries `repo_ids` (a list of every repo checked out — app repo plus shared libraries), but it is not a filterable query field: the scalar query engine cannot match against a list (the same reason a Component's `repo_ids` is not filterable).
 
 ### WorkflowRun
 

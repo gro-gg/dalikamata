@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 
@@ -329,11 +330,11 @@ func TestCrawl_PlainJobNotStripped(t *testing.T) {
 	}
 }
 
-// ---- extractRepoID ----------------------------------------------------------
+// ---- extractRepoIDs ---------------------------------------------------------
 
-func TestExtractRepoID_PrefersHigherSHAVariety(t *testing.T) {
-	// Shared library appears first but has the same SHA in every build (pinned).
-	// App repo SHA changes each build → extractRepoID must pick the app repo.
+func TestExtractRepoIDs_CollectsAllInFirstSeenOrder(t *testing.T) {
+	// A build checks out a shared library (first) and the app repo (second).
+	// extractRepoIDs must return both, in first-seen order — no guessing.
 	builds := []apiBuild{
 		{Actions: []apiBuildAction{
 			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
@@ -344,57 +345,40 @@ func TestExtractRepoID_PrefersHigherSHAVariety(t *testing.T) {
 			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA2"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
 		}},
 	}
-	got := extractRepoID(builds)
-	if got != "PROJ/backend" {
-		t.Errorf("extractRepoID = %q, want %q", got, "PROJ/backend")
+	got := extractRepoIDs(builds)
+	want := []string{"PROJ/shared-lib", "PROJ/backend"}
+	if !slices.Equal(got, want) {
+		t.Errorf("extractRepoIDs = %v, want %v", got, want)
 	}
 }
 
-func TestExtractRepoID_FallsBackToLastBuildDataOnSingleBuild(t *testing.T) {
-	// Single build: SHA variety cannot distinguish repos. Must return the last
-	// BuildData URL, not the first (shared lib appears first in actions).
+func TestExtractRepoIDs_DeduplicatesAcrossBuilds(t *testing.T) {
+	// The same repos appear in every build; each ID must be listed once.
 	builds := []apiBuild{
 		{Actions: []apiBuildAction{
-			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
-			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
-		}},
-	}
-	got := extractRepoID(builds)
-	if got != "PROJ/backend" {
-		t.Errorf("extractRepoID = %q, want %q", got, "PROJ/backend")
-	}
-}
-
-func TestExtractRepoID_FallsBackToLastBuildDataWhenAllSHAsSame(t *testing.T) {
-	// Multiple builds, but all repos have the same SHA in every build (e.g. a
-	// hotfix pipeline deploying a fixed tag). Cannot distinguish by SHA variety
-	// → fall back to the last BuildData URL.
-	builds := []apiBuild{
-		{Actions: []apiBuildAction{
-			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
 			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
 		}},
 		{Actions: []apiBuildAction{
-			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "libSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/shared-lib.git"}},
 			{Class: classGitBuildData, LastBuiltRevision: &apiRevision{SHA1: "appSHA"}, RemoteUrls: []string{"https://bb.example.com/scm/proj/backend.git"}},
 		}},
 	}
-	got := extractRepoID(builds)
-	if got != "PROJ/backend" {
-		t.Errorf("extractRepoID = %q, want %q", got, "PROJ/backend")
+	got := extractRepoIDs(builds)
+	want := []string{"PROJ/backend"}
+	if !slices.Equal(got, want) {
+		t.Errorf("extractRepoIDs = %v, want %v", got, want)
 	}
 }
 
-func TestExtractRepoID_NoBuildData(t *testing.T) {
+func TestExtractRepoIDs_NoBuildData(t *testing.T) {
 	builds := []apiBuild{{Actions: []apiBuildAction{{Class: "unrelated.Action"}}}}
-	if got := extractRepoID(builds); got != "" {
-		t.Errorf("extractRepoID = %q, want empty", got)
+	if got := extractRepoIDs(builds); len(got) != 0 {
+		t.Errorf("extractRepoIDs = %v, want empty", got)
 	}
 }
 
-func TestExtractRepoID_EmptyBuilds(t *testing.T) {
-	if got := extractRepoID(nil); got != "" {
-		t.Errorf("extractRepoID = %q, want empty", got)
+func TestExtractRepoIDs_EmptyBuilds(t *testing.T) {
+	if got := extractRepoIDs(nil); len(got) != 0 {
+		t.Errorf("extractRepoIDs = %v, want empty", got)
 	}
 }
 
@@ -1084,16 +1068,16 @@ func TestCrawl_MultibranchBranchFromJobPath(t *testing.T) {
 	}
 }
 
-// TestPublishWorkflow_EmptyRepoIDPublishesWithWarning verifies that when
-// extractRepoID returns "" (no BuildData action present) and no repo_overrides
-// entry exists, PublishWorkflow is still called (the record is indexed) but
-// with an empty RepoID — the ownership chain will report "missing_repo_id".
-func TestPublishWorkflow_EmptyRepoIDPublishesWithWarning(t *testing.T) {
+// TestPublishWorkflow_EmptyRepoIDsPublishesWithWarning verifies that when
+// extractRepoIDs returns nothing (no BuildData action present) and no
+// repo_overrides entry exists, PublishWorkflow is still called (the record is
+// indexed) but with no repos — the ownership chain reports "missing_repo_id".
+func TestPublishWorkflow_EmptyRepoIDsPublishesWithWarning(t *testing.T) {
 	client := &fakeJenkinsClient{
 		jobs: map[string][]apiJob{
 			"": {{Class: classWorkflowJob, Name: "no-git-info"}},
 		},
-		// Build has no BuildData action — extractRepoID will return "".
+		// Build has no BuildData action — extractRepoIDs will return nothing.
 		builds: map[string][]apiBuild{
 			"no-git-info": {{Number: 1, Result: "SUCCESS", Timestamp: 1_000_000, Duration: 10_000}},
 		},
@@ -1106,18 +1090,18 @@ func TestPublishWorkflow_EmptyRepoIDPublishesWithWarning(t *testing.T) {
 	if len(pub.workflows) != 1 {
 		t.Fatalf("workflows published = %d, want 1", len(pub.workflows))
 	}
-	if pub.workflows[0].RepoID != "" {
-		t.Errorf("workflow RepoID = %q, want empty (no BuildData)", pub.workflows[0].RepoID)
+	if len(pub.workflows[0].RepoIDs) != 0 {
+		t.Errorf("workflow RepoIDs = %v, want empty (no BuildData)", pub.workflows[0].RepoIDs)
 	}
 	if len(pub.workflowRuns) != 1 {
 		t.Errorf("workflow runs = %d, want 1", len(pub.workflowRuns))
 	}
 }
 
-// TestRepoOverride_PopulatesRepoID verifies that when extractRepoID returns ""
-// but a repo_overrides entry exists for the pipeline, PublishWorkflow IS called
-// with the override repoID.
-func TestRepoOverride_PopulatesRepoID(t *testing.T) {
+// TestRepoOverride_PopulatesRepoIDs verifies that when extractRepoIDs returns
+// nothing but a repo_overrides entry exists for the pipeline, PublishWorkflow IS
+// called with the override repoID as the sole repo.
+func TestRepoOverride_PopulatesRepoIDs(t *testing.T) {
 	client := &fakeJenkinsClient{
 		jobs: map[string][]apiJob{
 			"": {{Class: classWorkflowJob, Name: "no-git-info"}},
@@ -1135,7 +1119,7 @@ func TestRepoOverride_PopulatesRepoID(t *testing.T) {
 	if len(pub.workflows) != 1 {
 		t.Fatalf("workflows published = %d, want 1", len(pub.workflows))
 	}
-	if pub.workflows[0].RepoID != "PROJ/my-repo" {
-		t.Errorf("workflow RepoID = %q, want PROJ/my-repo", pub.workflows[0].RepoID)
+	if !slices.Equal(pub.workflows[0].RepoIDs, []string{"PROJ/my-repo"}) {
+		t.Errorf("workflow RepoIDs = %v, want [PROJ/my-repo]", pub.workflows[0].RepoIDs)
 	}
 }

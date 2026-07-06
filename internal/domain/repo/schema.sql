@@ -22,11 +22,10 @@ CREATE TABLE IF NOT EXISTS pull_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_pull_requests_repo_id ON pull_requests(repo_id);
 CREATE TABLE IF NOT EXISTS workflows (
-	id      TEXT PRIMARY KEY,
-	name    TEXT NOT NULL,
-	repo_id TEXT NOT NULL
+	id       TEXT PRIMARY KEY,
+	name     TEXT NOT NULL,
+	repo_ids TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_workflows_repo_id ON workflows(repo_id);
 CREATE TABLE IF NOT EXISTS workflow_runs (
 	id          TEXT PRIMARY KEY,
 	workflow_id TEXT NOT NULL,

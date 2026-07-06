@@ -136,10 +136,26 @@ var jobConfigs = map[string]jobConfig{
 	},
 }
 
+// sharedLibURL is the remote of a shared library that some jobs check out
+// alongside their application repo. Backend jobs list it as a *second* checkout
+// per build (see jobsWithSharedLib), reproducing the real-world case where a
+// single Jenkins build carries multiple BuildData actions.
+const sharedLibURL = "https://bitbucket.example.com/scm/proj/shared-lib.git"
+
+// jobsWithSharedLib names the plain jobs that additionally check out the shared
+// library. Their builds carry a second BuildData action for the library, so the
+// published Workflow lists two repos; ownership resolution skips the unowned
+// shared library and resolves to the (onboarded) app repo.
+var jobsWithSharedLib = map[string]bool{
+	"build-backend":  true,
+	"test-backend":   true,
+	"deploy-backend": true,
+}
+
 // jobRemoteURL maps each fixture job to its Bitbucket Server remote URL.
 // Bitbucket Server HTTPS clone URLs use a lowercase project key under /scm/
 // even when the canonical project key is uppercase (e.g. PROJ). The Jenkins
-// crawler normalises this back to uppercase, so extractRepoID still produces
+// crawler normalises this back to uppercase, so the crawler produces
 // "PROJ/backend-api" etc. — matching the IDs from the Bitbucket crawler.
 var jobRemoteURL = map[string]string{
 	"build-backend":     "https://bitbucket.example.com/scm/proj/backend-api.git",
@@ -215,19 +231,36 @@ func init() {
 			result := buildResults[(i+jobIdx*3)%10]
 			branch := buildBranches[(i+jobIdx*2)%10]
 			buildTime := epoch.Add(-span + time.Duration(i)*step)
+			// The application repo's BuildData comes first: extractBranch and
+			// extractCommitSHA read the first action, so the build's branch/SHA
+			// must come from the app repo, not the pinned library.
+			actions := []apiBuildAction{{
+				Class: classGitBuildData,
+				LastBuiltRevision: &apiRevision{
+					SHA1:   deterministicSHA(jobIdx, i),
+					Branch: []apiBranch{{Name: branch}},
+				},
+				RemoteUrls: []string{jobRemoteURL[name]},
+			}}
+			if jobsWithSharedLib[name] {
+				// A second checkout: the shared library, pinned to a fixed SHA
+				// (as a versioned library dependency would be). It is not
+				// onboarded to a component, so ownership resolution skips it.
+				actions = append(actions, apiBuildAction{
+					Class: classGitBuildData,
+					LastBuiltRevision: &apiRevision{
+						SHA1:   "libpin00",
+						Branch: []apiBranch{{Name: "origin/main"}},
+					},
+					RemoteUrls: []string{sharedLibURL},
+				})
+			}
 			builds[i] = apiBuild{
 				Number:    i + 1,
 				Result:    result,
 				Timestamp: ms(buildTime),
 				Duration:  cfg.durations[i],
-				Actions: []apiBuildAction{{
-					Class: classGitBuildData,
-					LastBuiltRevision: &apiRevision{
-						SHA1:   deterministicSHA(jobIdx, i),
-						Branch: []apiBranch{{Name: branch}},
-					},
-					RemoteUrls: []string{jobRemoteURL[name]},
-				}},
+				Actions:   actions,
 			}
 		}
 		fakeBuilds[name] = builds

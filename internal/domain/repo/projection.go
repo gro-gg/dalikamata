@@ -55,11 +55,13 @@ func prCycleTimeSeconds(pr model.PullRequest, now time.Time) float64 {
 }
 
 // projectWorkflow converts a Workflow to a field map for query evaluation.
+// The repo list is intentionally omitted: a workflow can reference several
+// repos and the scalar query engine cannot filter a []string field (the same
+// reason projectComponent omits its RepoIDs).
 func projectWorkflow(w model.Workflow) map[string]any {
 	return map[string]any{
-		q.WorkflowID:     w.ID,
-		q.WorkflowName:   w.Name,
-		q.WorkflowRepoID: w.RepoID,
+		q.WorkflowID:   w.ID,
+		q.WorkflowName: w.Name,
 	}
 }
 

@@ -107,7 +107,7 @@ func TestAddRepoOnboarding_Reassign(t *testing.T) {
 
 	// The reassignment must be reflected in the ownership chain: a workflow on
 	// the repo now resolves to the new component/team.
-	addWorkflow(t, r, model.Workflow{ID: "wf", Name: "Build", RepoID: "PROJ/svc"})
+	addWorkflow(t, r, model.Workflow{ID: "wf", Name: "Build", RepoIDs: []string{"PROJ/svc"}})
 	addWorkflowRun(t, r, model.WorkflowRun{ID: "run", WorkflowID: "wf", Status: "SUCCESS", Duration: 10})
 	teams := runAggregateField(t, r, query.EntityWorkflowRun, query.RunTeamName)
 	is.True(teams["team-b"])

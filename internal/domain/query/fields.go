@@ -35,11 +35,12 @@ const (
 	PRCycleTimeSeconds = "cycle_time_seconds"
 )
 
-// Workflow fields.
+// Workflow fields. The repo list is not exposed as a filterable field: a
+// workflow may reference several repos and the scalar query engine cannot match
+// against a []string (same as Component's repo list).
 const (
-	WorkflowID     = "id"
-	WorkflowName   = "name"
-	WorkflowRepoID = "repo_id"
+	WorkflowID   = "id"
+	WorkflowName = "name"
 )
 
 // WorkflowRun fields.

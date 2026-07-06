@@ -172,10 +172,10 @@ func (r *MemoryRepository) snapshotOwnerLookup() ownerLookup {
 	for k, v := range r.componentToTeam {
 		ct[k] = v
 	}
-	wtr := make(map[string]string, len(r.workflows))
+	wtr := make(map[string][]string, len(r.workflows))
 	wfNames := make(map[string]string, len(r.workflows))
 	for k, v := range r.workflows {
-		wtr[k] = v.RepoID
+		wtr[k] = v.RepoIDs
 		wfNames[k] = v.Name
 	}
 	return newOwnerLookup(rtc, wtr, ct, wfNames)
@@ -183,18 +183,30 @@ func (r *MemoryRepository) snapshotOwnerLookup() ownerLookup {
 
 // newOwnerLookup builds an ownerLookup from four plain maps:
 //   - rtc:     repoID → owning component name
-//   - wtr:     workflowID → repoID
+//   - wtr:     workflowID → repoIDs
 //   - ct:      component name → team name
 //   - wfNames: workflowID → human-readable workflow name
 //
-// Ownership is derived as: workflowID → repoID → componentName → teamName.
+// Ownership is derived as: workflowID → repoIDs → componentName → teamName. A
+// workflow may reference several repos (app repo plus shared libraries); the
+// first repo (in publish order) that maps to a known component determines the
+// owner, so unowned shared libraries are naturally skipped.
 // The returned closures only read these maps, so callers must pass copies they
 // own (no shared mutable state) to keep the lookup safe to use without a lock.
-func newOwnerLookup(rtc, wtr, ct, wfNames map[string]string) ownerLookup {
+func newOwnerLookup(rtc map[string]string, wtr map[string][]string, ct, wfNames map[string]string) ownerLookup {
+	// firstOwnedComponent returns the owning component of the first repo that
+	// maps to one, or "" when none of the workflow's repos are owned.
+	firstOwnedComponent := func(workflowID string) string {
+		for _, repoID := range wtr[workflowID] {
+			if compName := rtc[repoID]; compName != "" {
+				return compName
+			}
+		}
+		return ""
+	}
 	return ownerLookup{
 		ownership: func(workflowID string) (string, string) {
-			repoID := wtr[workflowID]
-			compName := rtc[repoID]
+			compName := firstOwnedComponent(workflowID)
 			if compName == "" {
 				return "unknown", "unknown"
 			}
@@ -211,19 +223,19 @@ func newOwnerLookup(rtc, wtr, ct, wfNames map[string]string) ownerLookup {
 			return workflowID
 		},
 		diagnose: func(workflowID string) model.OwnershipDiagnostics {
-			repoID := wtr[workflowID]
-			if repoID == "" {
+			repoIDs := wtr[workflowID]
+			if len(repoIDs) == 0 {
 				return model.OwnershipDiagnostics{WorkflowID: workflowID, Reason: "missing_repo_id"}
 			}
-			compName := rtc[repoID]
+			compName := firstOwnedComponent(workflowID)
 			if compName == "" {
-				return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoID: repoID, Reason: "no_component_for_repo"}
+				return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoIDs: repoIDs, Reason: "no_component_for_repo"}
 			}
 			teamName := ct[compName]
 			if teamName == "" {
-				return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoID: repoID, ComponentName: compName, Reason: "no_team_for_component"}
+				return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoIDs: repoIDs, ComponentName: compName, Reason: "no_team_for_component"}
 			}
-			return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoID: repoID, ComponentName: compName, TeamName: teamName, Reason: "ok"}
+			return model.OwnershipDiagnostics{WorkflowID: workflowID, RepoIDs: repoIDs, ComponentName: compName, TeamName: teamName, Reason: "ok"}
 		},
 	}
 }

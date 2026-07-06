@@ -184,14 +184,14 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 			continue
 		}
 
-		repoID := extractRepoID(allNewBuilds)
-		if repoID == "" {
+		repoIDs := extractRepoIDs(allNewBuilds)
+		if len(repoIDs) == 0 {
 			if override, ok := c.repoOverrides[pp]; ok {
-				repoID = override
+				repoIDs = []string{override}
 			}
 		}
-		if repoID == "" {
-			// Without a RepoID the ownership chain (Workflow → Repo → Component → Team)
+		if len(repoIDs) == 0 {
+			// Without any RepoID the ownership chain (Workflow → Repo → Component → Team)
 			// cannot be resolved. Publish the record anyway so runs are indexed, but
 			// log a warning so operators know to add a repo_overrides entry or ensure
 			// Jenkins BuildData is populated.
@@ -200,9 +200,9 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 				"hint", "add a --jenkins-repo-override entry or ensure Jenkins BuildData is populated")
 		}
 		workflow := model.Workflow{
-			ID:     pp,
-			Name:   pp,
-			RepoID: repoID,
+			ID:      pp,
+			Name:    pp,
+			RepoIDs: repoIDs,
 		}
 		if err := c.publisher.PublishWorkflow(ctx, workflow); err != nil {
 			c.logger.Error("publishing workflow", "pipeline", pp, "error", err)
@@ -403,82 +403,34 @@ func extractCommitSHA(b apiBuild) string {
 	return ""
 }
 
-// extractRepoID returns the repo ID most likely to be the main application repo
-// by counting unique SHAs per remote URL across all builds. Shared libraries are
-// typically pinned (same SHA in every build); the app repo gets a new commit per
-// build, so it accumulates the most unique SHAs. When SHA variation cannot
-// distinguish repos (single build, or all repos on the same commit), it falls
-// back to the last BuildData URL — shared libraries typically appear before the
-// main checkout in the actions list.
-func extractRepoID(builds []apiBuild) string {
-	type entry struct {
-		shas map[string]struct{}
-	}
-	byID := map[string]*entry{}
-	var idOrder []string // insertion order for deterministic tiebreaking
-
+// extractRepoIDs returns every distinct repo ID checked out across the given
+// builds, in first-seen order. A Jenkins build legitimately checks out multiple
+// repos (the application repo plus shared libraries), so the workflow carries
+// them all rather than guessing which one is "the" main repo. Disambiguation to
+// a single owner happens downstream during ownership resolution, where the first
+// repo that maps to a known component wins.
+func extractRepoIDs(builds []apiBuild) []string {
+	var ids []string
+	seen := map[string]struct{}{}
 	for _, b := range builds {
 		for _, action := range b.Actions {
 			if !strings.Contains(action.Class, "BuildData") {
 				continue
 			}
-			if action.LastBuiltRevision == nil {
-				continue
-			}
-			sha := action.LastBuiltRevision.SHA1
 			for _, raw := range action.RemoteUrls {
 				id := repoIDFromURL(raw)
 				if id == "" {
 					continue
 				}
-				if _, seen := byID[id]; !seen {
-					byID[id] = &entry{shas: map[string]struct{}{}}
-					idOrder = append(idOrder, id)
+				if _, ok := seen[id]; ok {
+					continue
 				}
-				if sha != "" {
-					byID[id].shas[sha] = struct{}{}
-				}
+				seen[id] = struct{}{}
+				ids = append(ids, id)
 			}
 		}
 	}
-
-	if len(idOrder) == 0 {
-		return ""
-	}
-
-	bestID := idOrder[0]
-	bestCount := len(byID[idOrder[0]].shas)
-	for _, id := range idOrder[1:] {
-		if count := len(byID[id].shas); count > bestCount {
-			bestCount = count
-			bestID = id
-		}
-	}
-
-	if bestCount <= 1 {
-		return lastBuildDataRepoID(builds)
-	}
-	return bestID
-}
-
-// lastBuildDataRepoID returns the repo ID from the last valid BuildData remote
-// URL seen across all builds. Shared libraries typically appear as the first
-// BuildData action, so iterating to the last gives us the main checkout.
-func lastBuildDataRepoID(builds []apiBuild) string {
-	var last string
-	for _, b := range builds {
-		for _, action := range b.Actions {
-			if !strings.Contains(action.Class, "BuildData") {
-				continue
-			}
-			for _, raw := range action.RemoteUrls {
-				if id := repoIDFromURL(raw); id != "" {
-					last = id
-				}
-			}
-		}
-	}
-	return last
+	return ids
 }
 
 func repoIDFromURL(raw string) string {

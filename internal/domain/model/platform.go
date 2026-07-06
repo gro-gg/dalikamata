@@ -22,13 +22,16 @@ type RepoOnboarding struct {
 }
 
 // OwnershipDiagnostics reports how a single Workflow resolves to a team via
-// the Workflow.RepoID → Component.RepoIDs → Component.TeamName chain. Reason
-// is one of "ok", "missing_repo_id", "no_component_for_repo", or
+// the Workflow.RepoIDs → Component.RepoIDs → Component.TeamName chain. A
+// workflow may reference several repos (e.g. app repo plus shared libraries);
+// ownership resolves to the first repo that maps to a known component. Reason
+// is one of "ok", "missing_repo_id" (the workflow has no repos),
+// "no_component_for_repo" (none of the repos map to a component), or
 // "no_team_for_component".
 type OwnershipDiagnostics struct {
-	WorkflowID    string `json:"workflow_id"`
-	RepoID        string `json:"repo_id"`
-	ComponentName string `json:"component_name"`
-	TeamName      string `json:"team_name"`
-	Reason        string `json:"reason"`
+	WorkflowID    string   `json:"workflow_id"`
+	RepoIDs       []string `json:"repo_ids"`
+	ComponentName string   `json:"component_name"`
+	TeamName      string   `json:"team_name"`
+	Reason        string   `json:"reason"`
 }

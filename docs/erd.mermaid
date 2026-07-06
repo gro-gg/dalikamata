@@ -10,7 +10,7 @@ erDiagram
 
     Repo        ||--o{ Commit            : ""
     Repo        ||--o{ PullRequest       : ""
-    Repo        ||--o{ Workflow          : ""
+    Repo        }o--o{ Workflow          : ""
     Workflow    ||--o{ WorkflowRun       : ""
     WorkflowRun ||--o{ WorkflowTask      : ""
     Commit      ||--o{ WorkflowRun       : ""

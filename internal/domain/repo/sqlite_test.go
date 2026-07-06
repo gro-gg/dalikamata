@@ -156,8 +156,8 @@ func TestSQLite_OwnershipEnrichment(t *testing.T) {
 	ctx := context.Background()
 	r := newSQLite(t)
 
-	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf1", Name: "Build Pipeline", RepoID: "r1"}))
-	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf2", Name: "Deploy", RepoID: "r2"}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf1", Name: "Build Pipeline", RepoIDs: []string{"r1"}}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf2", Name: "Deploy", RepoIDs: []string{"r2"}}))
 	is.NoErr(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run1", WorkflowID: "wf1", Status: "SUCCESS"}))
 	is.NoErr(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run2", WorkflowID: "wf2", Status: "SUCCESS"}))
 	is.NoErr(r.AddComponent(ctx, model.Component{
@@ -221,11 +221,11 @@ func TestSQLite_OwnershipDiagnostics(t *testing.T) {
 	r := newSQLite(t)
 
 	is.NoErr(r.AddComponent(ctx, model.Component{Name: "svc-ok", TeamName: "team-ok", RepoIDs: []string{"repo-ok"}}))
-	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-ok", RepoID: "repo-ok"}))
-	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-no-repo", RepoID: ""}))
-	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-no-comp", RepoID: "repo-unowned"}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-ok", RepoIDs: []string{"repo-ok"}}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-no-repo", RepoIDs: nil}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-no-comp", RepoIDs: []string{"repo-unowned"}}))
 	is.NoErr(r.AddComponent(ctx, model.Component{Name: "svc-noteam", TeamName: "", RepoIDs: []string{"repo-noteam"}}))
-	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-noteam", RepoID: "repo-noteam"}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-noteam", RepoIDs: []string{"repo-noteam"}}))
 
 	diags, err := r.OwnershipDiagnostics(ctx)
 	is.NoErr(err)
