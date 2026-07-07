@@ -365,12 +365,19 @@ func (s *MetricsService) refreshWorkflowTask(ctx context.Context) error {
 	return nil
 }
 
-// runMetricLoop runs refresh immediately then on each tick of s.refreshInterval
-// until ctx is cancelled. Errors are logged; a failed refresh retains the last
-// cached value so dashboards see stale data rather than disappearing series.
+// metricLoopInitialInterval is the delay before the second refresh. Subsequent
+// delays double until they reach refreshInterval (exponential backoff).
+const metricLoopInitialInterval = 2 * time.Second
+
+// runMetricLoop runs refresh immediately, then backs off exponentially from
+// metricLoopInitialInterval up to s.refreshInterval, and holds there. This
+// means a cold-start with no data retries quickly, while a steady-state system
+// is not polled excessively.
 func (s *MetricsService) runMetricLoop(ctx context.Context, name string, refresh func(context.Context) error) {
 	s.tickRefresh(ctx, name, refresh)
-	t := time.NewTicker(s.refreshInterval)
+
+	interval := min(metricLoopInitialInterval, s.refreshInterval)
+	t := time.NewTimer(interval)
 	defer t.Stop()
 	for {
 		select {
@@ -378,6 +385,10 @@ func (s *MetricsService) runMetricLoop(ctx context.Context, name string, refresh
 			return
 		case <-t.C:
 			s.tickRefresh(ctx, name, refresh)
+			if interval < s.refreshInterval {
+				interval = min(interval*2, s.refreshInterval)
+			}
+			t.Reset(interval)
 		}
 	}
 }
