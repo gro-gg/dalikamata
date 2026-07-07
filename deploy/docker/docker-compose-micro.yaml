@@ -46,6 +46,7 @@ services:
       - "--nats-port=24222"
       - "--metrics-addr=0.0.0.0:22112"
       - "metrics"
+      - "--metric-refresh-interval=1s"
     depends_on:
       - dalikamata-nats
     ports:
