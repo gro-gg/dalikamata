@@ -72,8 +72,9 @@ func NewServer(client QueryFetcher, logger *slog.Logger, addr string, opts ...Op
 // Run starts the HTTP server and blocks until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
 	srv := &http.Server{
-		Addr:    s.addr,
-		Handler: s.newMux(),
+		Addr:              s.addr,
+		Handler:           s.newMux(),
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	var wg sync.WaitGroup

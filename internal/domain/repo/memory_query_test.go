@@ -338,7 +338,7 @@ func TestQueryCommits_ConcurrentReadWrite(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			_ = r.AddCommit(ctx, model.Commit{
-				SHA:    string(rune('a' + i)),
+				SHA:    string(rune('a' + i)), //nolint:gosec // test-only, i is bounded
 				RepoID: "R",
 			})
 		}(i)

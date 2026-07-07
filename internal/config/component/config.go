@@ -26,7 +26,7 @@ type RepoRef struct {
 
 // Load reads and validates a single component YAML file.
 func Load(path string) (ComponentFile, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // user-supplied config path by design
 	if err != nil {
 		return ComponentFile{}, fmt.Errorf("read %s: %w", path, err)
 	}

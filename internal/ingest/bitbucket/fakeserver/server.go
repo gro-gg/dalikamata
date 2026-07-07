@@ -261,7 +261,7 @@ func New(addr string, logger *slog.Logger) *Server {
 
 	mux := http.NewServeMux()
 	s := &Server{
-		httpServer: &http.Server{Addr: addr, Handler: mux},
+		httpServer: &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 30 * time.Second},
 		logger:     logger,
 		commits:    commitsCopy,
 	}

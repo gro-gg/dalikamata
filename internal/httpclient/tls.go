@@ -39,7 +39,7 @@ func NewHTTPClient(certsDir string) (*http.Client, error) {
 			continue
 		}
 		pemPath := filepath.Join(certsDir, entry.Name())
-		pemData, err := os.ReadFile(pemPath)
+		pemData, err := os.ReadFile(pemPath) //nolint:gosec // user-supplied CA cert directory by design
 		if err != nil {
 			return nil, fmt.Errorf("reading CA cert file %q: %w", pemPath, err)
 		}

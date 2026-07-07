@@ -268,8 +268,9 @@ func (s *MetricsService) Run(ctx context.Context) error {
 	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
 	srv := &http.Server{
-		Addr:    s.metricsAddr,
-		Handler: mux,
+		Addr:              s.metricsAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	var wg sync.WaitGroup

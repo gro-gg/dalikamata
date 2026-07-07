@@ -32,7 +32,7 @@ func WaitHTTP(t *testing.T, url string) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(url) //nolint:noctx
+		resp, err := http.Get(url) //nolint:noctx,gosec // test helper polling loop
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {

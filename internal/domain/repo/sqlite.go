@@ -197,25 +197,22 @@ func (r *SQLiteRepository) AddRepoOnboarding(ctx context.Context, o model.RepoOn
 	if err != nil {
 		return fmt.Errorf("load components: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 	var components []model.Component
 	for rows.Next() {
 		var c model.Component
 		var repoIDs string
 		if err := rows.Scan(&c.Name, &c.TeamName, &repoIDs); err != nil {
-			_ = rows.Close()
 			return fmt.Errorf("scan component: %w", err)
 		}
 		if err := json.Unmarshal([]byte(repoIDs), &c.RepoIDs); err != nil {
-			_ = rows.Close()
 			return fmt.Errorf("unmarshaling component repo_ids: %w", err)
 		}
 		components = append(components, c)
 	}
 	if err := rows.Err(); err != nil {
-		_ = rows.Close()
 		return fmt.Errorf("iterate components: %w", err)
 	}
-	_ = rows.Close()
 
 	// A repo belongs to at most one component: strip it from every other one.
 	for _, c := range components {
