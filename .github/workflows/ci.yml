@@ -12,6 +12,15 @@ jobs:
           go-version-file: go.mod
       - run: go test ./... -race
 
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -41,7 +50,7 @@ jobs:
           fi
 
   build-images:
-    needs: [test, lint, fmt]
+    needs: [test, vet, lint, fmt]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
