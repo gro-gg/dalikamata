@@ -10,16 +10,19 @@ After every code change, run these steps **in order**. A change is not done unti
 # 0. build
 go build ./...
 
-# 1. test
+# 1. vet
+go vet ./...
+
+# 2. test
 go test ./... -race
 
-# 2. lint
+# 3. lint
 golangci-lint run
 
-# 3. fmt
+# 4. fmt
 go fmt ./...
 
-# 4. e2e-test
+# 5. e2e-test
 go test -tags=e2e ./internal/e2e/... -v -timeout 2m -skip-docker-build
 
 ```
