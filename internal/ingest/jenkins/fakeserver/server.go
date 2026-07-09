@@ -134,6 +134,22 @@ var jobConfigs = map[string]jobConfig{
 		stages:    []stageSpec{{"Checkout", 0.05}, {"Build", 0.45}, {"Test", 0.50}},
 		durations: []int64{48_000, 62_000, 85_000},
 	},
+	// terraform-modules: plan/apply pipeline — mostly 2–15 min, occasional slow apply.
+	"terraform-modules": {
+		stages: []stageSpec{{"Checkout", 0.05}, {"Init", 0.10}, {"Validate", 0.10}, {"Plan", 0.30}, {"Apply", 0.45}},
+		durations: []int64{
+			120_000, 210_000, 300_000, 400_000, 500_000,
+			620_000, 730_000, 850_000, 1_000_000, 1_150_000,
+		},
+	},
+	// k8s-configs: manifest apply pipeline — fast, typically under 5 min.
+	"k8s-configs": {
+		stages: []stageSpec{{"Checkout", 0.05}, {"Validate", 0.15}, {"Apply", 0.55}, {"Verify", 0.25}},
+		durations: []int64{
+			40_000, 70_000, 100_000, 140_000, 180_000,
+			230_000, 280_000, 330_000, 390_000, 460_000,
+		},
+	},
 }
 
 // sharedLibURL is the remote of a shared library that some jobs check out
@@ -147,9 +163,11 @@ const sharedLibURL = "https://bitbucket.example.com/scm/proj/shared-lib.git"
 // published Workflow lists two repos; ownership resolution skips the unowned
 // shared library and resolves to the (onboarded) app repo.
 var jobsWithSharedLib = map[string]bool{
-	"build-backend":  true,
-	"test-backend":   true,
-	"deploy-backend": true,
+	"build-backend":   true,
+	"test-backend":    true,
+	"deploy-backend":  true,
+	"build-frontend":  true,
+	"deploy-frontend": true,
 }
 
 // jobRemoteURL maps each fixture job to its Bitbucket Server remote URL.
@@ -165,12 +183,15 @@ var jobRemoteURL = map[string]string{
 	"deploy-frontend":   "https://bitbucket.example.com/scm/proj/frontend-app.git",
 	"shared-lib/main":   "https://bitbucket.example.com/scm/proj/shared-lib.git",
 	"shared-lib/hotfix": "https://bitbucket.example.com/scm/proj/shared-lib.git",
+	"terraform-modules": "https://bitbucket.example.com/scm/infra/terraform-modules.git",
+	"k8s-configs":       "https://bitbucket.example.com/scm/infra/k8s-configs.git",
 }
 
 // jobOrder fixes the iteration order of jobs so the fixture is deterministic.
 var jobOrder = []string{
 	"build-backend", "test-backend", "deploy-backend",
 	"build-frontend", "deploy-frontend",
+	"terraform-modules", "k8s-configs",
 }
 
 // multibranchPipelines lists root-level MultiBranchPipeline jobs and their branches.

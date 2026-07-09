@@ -1,5 +1,5 @@
 version: "1"
 name: frontend
-team: ui
+team: ui-team
 repos:
   - id: PROJ/frontend-app

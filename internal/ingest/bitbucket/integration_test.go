@@ -120,10 +120,10 @@ func TestIngestBitbucketSelfOnboarding(t *testing.T) {
 	for _, o := range onboardings {
 		byRepo[o.RepoID] = o
 	}
-	is.Equal(byRepo[model.NewRepoID("PROJ", "backend-api")].Component, "backend")
-	is.Equal(byRepo[model.NewRepoID("PROJ", "backend-api")].Team, "platform")
-	is.Equal(byRepo[model.NewRepoID("PROJ", "frontend-app")].Component, "frontend")
-	is.Equal(byRepo[model.NewRepoID("PROJ", "frontend-app")].Team, "web")
+	is.Equal(byRepo[model.NewRepoID("INFRA", "terraform-modules")].Component, "platform")
+	is.Equal(byRepo[model.NewRepoID("INFRA", "terraform-modules")].Team, "platform-team")
+	is.Equal(byRepo[model.NewRepoID("INFRA", "k8s-configs")].Component, "platform")
+	is.Equal(byRepo[model.NewRepoID("INFRA", "k8s-configs")].Team, "platform-team")
 }
 
 // TestIngestBitbucketIncremental verifies the per-repo commit cursor:

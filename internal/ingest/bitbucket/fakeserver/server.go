@@ -136,13 +136,13 @@ var initialCommits = map[string][]apiCommit{
 // fakeRawFiles maps "{repoSlug}/{path}" to raw file content. Two repos ship a
 // self-onboarding config (ADR-007); every other raw request returns 404.
 var fakeRawFiles = map[string]string{
-	"backend-api/.dalikamata.yaml": `version: "1"
-team: platform
-component: backend
+	"terraform-modules/.dalikamata.yaml": `version: "1"
+team: platform-team
+component: platform
 `,
-	"frontend-app/.dalikamata.yaml": `version: "1"
-team: web
-component: frontend
+	"k8s-configs/.dalikamata.yaml": `version: "1"
+team: platform-team
+component: platform
 `,
 }
 

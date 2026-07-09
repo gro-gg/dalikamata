@@ -62,10 +62,10 @@ func TestIngestJenkinsIntegration(t *testing.T) {
 
 	// 4. Assert NATS message counts.
 	// fakeserver fixture:
-	//   5 plain WorkflowJobs + 1 MultibranchPipeline (shared-lib) with 2 branches
-	//   → 6 Workflow messages (shared-lib/main and shared-lib/hotfix deduplicate to one)
-	jobs := testhelper.CollectMessages[model.Workflow](t, js, dalinats.SubjectCicdWorkflow, 6, 20*time.Second)
-	is.Equal(len(jobs), 6)
+	//   7 plain WorkflowJobs + 1 MultibranchPipeline (shared-lib) with 2 branches
+	//   → 8 Workflow messages (shared-lib/main and shared-lib/hotfix deduplicate to one)
+	jobs := testhelper.CollectMessages[model.Workflow](t, js, dalinats.SubjectCicdWorkflow, 8, 20*time.Second)
+	is.Equal(len(jobs), 8)
 
 	// Every workflow must carry at least one RepoID in projectKey/slug form.
 	for _, wf := range jobs {
@@ -83,18 +83,18 @@ func TestIngestJenkinsIntegration(t *testing.T) {
 	}
 	is.Equal(byID["build-backend"].RepoIDs, []string{"PROJ/backend-api", "PROJ/shared-lib"})
 
-	// Across all workflows exactly three distinct repos appear.
+	// Across all workflows exactly five distinct repos appear.
 	repoIDs := map[string]bool{}
 	for _, wf := range jobs {
 		for _, id := range wf.RepoIDs {
 			repoIDs[id] = true
 		}
 	}
-	is.Equal(len(repoIDs), 3) // PROJ/backend-api, PROJ/frontend-app, PROJ/shared-lib
+	is.Equal(len(repoIDs), 5) // PROJ/backend-api, PROJ/frontend-app, PROJ/shared-lib, INFRA/terraform-modules, INFRA/k8s-configs
 
-	// 5 plain jobs × 10 builds + 2 branches × 3 builds = 56 workflow runs
-	runs := testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 56, 20*time.Second)
-	is.Equal(len(runs), 56)
+	// 7 plain jobs × 10 builds + 2 branches × 3 builds = 76 workflow runs
+	runs := testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 76, 20*time.Second)
+	is.Equal(len(runs), 76)
 
 	// All shared-lib runs must reference the pipeline ID, not a branch path.
 	for _, r := range runs {
@@ -103,10 +103,11 @@ func TestIngestJenkinsIntegration(t *testing.T) {
 		}
 	}
 
-	// build-backend(4) + test-backend(3) + deploy-backend(4) + build-frontend(4) + deploy-frontend(4) = 19 stages × 10 builds = 190
+	// build-backend(4) + test-backend(3) + deploy-backend(4) + build-frontend(4) + deploy-frontend(4)
+	// + terraform-modules(5) + k8s-configs(4) = 28 stages × 10 builds = 280
 	// shared-lib branches return no stages.
-	stages := testhelper.CollectMessages[model.WorkflowTask](t, js, dalinats.SubjectCicdWorkflowTask, 190, 20*time.Second)
-	is.Equal(len(stages), 190)
+	stages := testhelper.CollectMessages[model.WorkflowTask](t, js, dalinats.SubjectCicdWorkflowTask, 280, 20*time.Second)
+	is.Equal(len(stages), 280)
 }
 
 func TestIngestJenkins_ExplicitBranchStripsName(t *testing.T) {
@@ -204,8 +205,8 @@ func TestIngestJenkinsIncremental(t *testing.T) {
 
 	// 1. First crawl: all fixture builds published.
 	is.NoErr(crawler.Crawl(ctx))
-	// 5 plain jobs × 10 builds + 2 branches × 3 builds = 56 runs.
-	_ = testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 56, 15*time.Second)
+	// 7 plain jobs × 10 builds + 2 branches × 3 builds = 76 runs.
+	_ = testhelper.CollectMessages[model.WorkflowRun](t, js, dalinats.SubjectCicdWorkflowRun, 76, 15*time.Second)
 
 	// 2. Inject a new build and run a second crawl. Assert exactly 1 new run.
 	jkSrv.AddBuild("build-backend", jenkinsfake.NewBuild(11, "SUCCESS"))

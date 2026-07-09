@@ -64,7 +64,7 @@ services:
     ports:
       - "22113:22113"
 
-  dalikamata-ingest:
+  dalikamata-ingest-bitbucket:
     image: dalikamata:latest
     command:
       - "--nats-host=dalikamata-nats"
@@ -74,6 +74,8 @@ services:
       - "--bitbucket-url=http://dalikamata-fake-bitbucket:27990"
       - "--bitbucket-token=test-token"
       - "--bitbucket-projects=PROJ,INFRA"
+      - "--component-config-enabled"
+      - "--component-config-file=.dalikamata.yaml"
     depends_on:
       - dalikamata-fake-bitbucket
       - dalikamata-domain

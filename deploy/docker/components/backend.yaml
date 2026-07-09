@@ -1,5 +1,5 @@
 version: "1"
 name: backend
-team: platform
+team: backend-team
 repos:
   - id: PROJ/backend-api
