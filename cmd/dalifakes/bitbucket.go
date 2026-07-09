@@ -16,7 +16,7 @@ The fake server exposes the Bitbucket Server REST API v1 with a small set of
 pre-populated projects, repositories, commits, and pull requests.
 
 Pre-populated projects:
-  PROJ  – Project Alpha  (repos: backend-api, frontend-app, shared-lib)
+  PROJ  – Project Alpha  (repos: backend-api, frontend-app, shared-lib, notification-service)
   INFRA – Infrastructure (repos: k8s-configs, terraform-modules)
 
 Point the ingest command at it with:

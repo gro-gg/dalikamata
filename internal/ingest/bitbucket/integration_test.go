@@ -60,17 +60,17 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	}()
 
 	// 4. Assert NATS message counts
-	// fakeserver fixture: PROJ(3 repos) + INFRA(2 repos) = 5
-	repos := testhelper.CollectMessages[model.Repo](t, js, dalinats.SubjectRepo, 5, 10*time.Second)
-	is.Equal(len(repos), 5)
+	// fakeserver fixture: PROJ(4 repos) + INFRA(2 repos) = 6
+	repos := testhelper.CollectMessages[model.Repo](t, js, dalinats.SubjectRepo, 6, 10*time.Second)
+	is.Equal(len(repos), 6)
 
-	// backend-api(5) + frontend-app(3) + shared-lib(2) + k8s-configs(2) + terraform-modules(3) = 15
-	commits := testhelper.CollectMessages[model.Commit](t, js, dalinats.SubjectCommit, 15, 10*time.Second)
-	is.Equal(len(commits), 15)
+	// backend-api(5) + frontend-app(3) + shared-lib(2) + k8s-configs(2) + terraform-modules(3) + notification-service(3) = 18
+	commits := testhelper.CollectMessages[model.Commit](t, js, dalinats.SubjectCommit, 18, 10*time.Second)
+	is.Equal(len(commits), 18)
 
-	// backend-api(3) + frontend-app(2) + shared-lib(1) + k8s-configs(1) + terraform-modules(2) = 9
-	prs := testhelper.CollectMessages[model.PullRequest](t, js, dalinats.SubjectPullRequest, 9, 10*time.Second)
-	is.Equal(len(prs), 9)
+	// backend-api(3) + frontend-app(2) + shared-lib(1) + k8s-configs(1) + terraform-modules(2) + notification-service(2) = 11
+	prs := testhelper.CollectMessages[model.PullRequest](t, js, dalinats.SubjectPullRequest, 11, 10*time.Second)
+	is.Equal(len(prs), 11)
 }
 
 // TestIngestBitbucketSelfOnboarding verifies that, with --component-config-enabled set,
@@ -127,7 +127,7 @@ func TestIngestBitbucketSelfOnboarding(t *testing.T) {
 }
 
 // TestIngestBitbucketIncremental verifies the per-repo commit cursor:
-//  1. First crawl publishes all fixture commits (15).
+//  1. First crawl publishes all fixture commits (18).
 //  2. After AddCommit, a second crawl publishes exactly 1 new commit.
 //  3. A fresh crawler that reloads cursors from the KV store publishes 0
 //     new commits — proving the cursor survived the simulated restart.
@@ -172,9 +172,9 @@ func TestIngestBitbucketIncremental(t *testing.T) {
 	projects := []string{"PROJ", "INFRA"}
 	crawler := bitbucket.NewCrawler(client, publisher, cursors, projects, l)
 
-	// 4. First crawl: all 15 fixture commits must be published.
+	// 4. First crawl: all 18 fixture commits must be published.
 	is.NoErr(crawler.Crawl(ctx))
-	_ = testhelper.CollectMessages[model.Commit](t, js, dalinats.SubjectCommit, 15, 10*time.Second)
+	_ = testhelper.CollectMessages[model.Commit](t, js, dalinats.SubjectCommit, 18, 10*time.Second)
 
 	// 5. Inject a new commit and run a second crawl.
 	bbSrv.AddCommit("backend-api", fakeserver.NewCommit("new-commit-sha-01", "feat: incremental test"))
@@ -187,7 +187,7 @@ func TestIngestBitbucketIncremental(t *testing.T) {
 
 	is.NoErr(crawler.Crawl(ctx))
 
-	// Only the 1 new commit should have been published (not the 15 old ones).
+	// Only the 1 new commit should have been published (not the 18 old ones).
 	newCommits := collectCommitsSince(t, is, ingestStream, seqBeforeCrawl2+1)
 	is.Equal(len(newCommits), 1)
 	is.Equal(newCommits[0].SHA, "new-commit-sha-01")

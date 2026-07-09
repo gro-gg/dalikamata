@@ -150,6 +150,16 @@ var jobConfigs = map[string]jobConfig{
 			230_000, 280_000, 330_000, 390_000, 460_000,
 		},
 	},
+	// notification-service: single build/test/deploy pipeline — no component
+	// configuration is ingested for this repo (see the Bitbucket fakeserver),
+	// so its ownership always resolves to no_component_for_repo.
+	"notification-service": {
+		stages: []stageSpec{{"Checkout", 0.05}, {"Build", 0.30}, {"Test", 0.35}, {"Deploy", 0.30}},
+		durations: []int64{
+			45_000, 90_000, 150_000, 220_000, 300_000,
+			380_000, 460_000, 540_000, 620_000, 700_000,
+		},
+	},
 }
 
 // sharedLibURL is the remote of a shared library that some jobs check out
@@ -176,15 +186,16 @@ var jobsWithSharedLib = map[string]bool{
 // crawler normalises this back to uppercase, so the crawler produces
 // "PROJ/backend-api" etc. — matching the IDs from the Bitbucket crawler.
 var jobRemoteURL = map[string]string{
-	"build-backend":     "https://bitbucket.example.com/scm/proj/backend-api.git",
-	"test-backend":      "https://bitbucket.example.com/scm/proj/backend-api.git",
-	"deploy-backend":    "https://bitbucket.example.com/scm/proj/backend-api.git",
-	"build-frontend":    "https://bitbucket.example.com/scm/proj/frontend-app.git",
-	"deploy-frontend":   "https://bitbucket.example.com/scm/proj/frontend-app.git",
-	"shared-lib/main":   "https://bitbucket.example.com/scm/proj/shared-lib.git",
-	"shared-lib/hotfix": "https://bitbucket.example.com/scm/proj/shared-lib.git",
-	"terraform-modules": "https://bitbucket.example.com/scm/infra/terraform-modules.git",
-	"k8s-configs":       "https://bitbucket.example.com/scm/infra/k8s-configs.git",
+	"build-backend":        "https://bitbucket.example.com/scm/proj/backend-api.git",
+	"test-backend":         "https://bitbucket.example.com/scm/proj/backend-api.git",
+	"deploy-backend":       "https://bitbucket.example.com/scm/proj/backend-api.git",
+	"build-frontend":       "https://bitbucket.example.com/scm/proj/frontend-app.git",
+	"deploy-frontend":      "https://bitbucket.example.com/scm/proj/frontend-app.git",
+	"shared-lib/main":      "https://bitbucket.example.com/scm/proj/shared-lib.git",
+	"shared-lib/hotfix":    "https://bitbucket.example.com/scm/proj/shared-lib.git",
+	"terraform-modules":    "https://bitbucket.example.com/scm/infra/terraform-modules.git",
+	"k8s-configs":          "https://bitbucket.example.com/scm/infra/k8s-configs.git",
+	"notification-service": "https://bitbucket.example.com/scm/proj/notification-service.git",
 }
 
 // jobOrder fixes the iteration order of jobs so the fixture is deterministic.
@@ -192,6 +203,7 @@ var jobOrder = []string{
 	"build-backend", "test-backend", "deploy-backend",
 	"build-frontend", "deploy-frontend",
 	"terraform-modules", "k8s-configs",
+	"notification-service",
 }
 
 // multibranchPipelines lists root-level MultiBranchPipeline jobs and their branches.

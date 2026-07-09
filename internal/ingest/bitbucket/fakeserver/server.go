@@ -89,6 +89,7 @@ var fakeRepos = map[string][]apiRepo{
 		{Slug: "backend-api", Name: "Backend API", Project: fakeProjects["PROJ"]},
 		{Slug: "frontend-app", Name: "Frontend App", Project: fakeProjects["PROJ"]},
 		{Slug: "shared-lib", Name: "Shared Library", Project: fakeProjects["PROJ"]},
+		{Slug: "notification-service", Name: "Notification Service", Project: fakeProjects["PROJ"]},
 	},
 	"INFRA": {
 		{Slug: "k8s-configs", Name: "Kubernetes Configs", Project: fakeProjects["INFRA"]},
@@ -131,10 +132,17 @@ var initialCommits = map[string][]apiCommit{
 		{ID: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6e5f6a1", Message: "fix: correct IAM role trust policy", Author: bob, AuthorTimestamp: ms(now.Add(-30 * time.Hour)), Committer: bob, CommitterTimestamp: ms(now.Add(-30 * time.Hour))},
 		{ID: "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6f6a1b2c3", Message: "refactor: extract VPC into reusable module", Author: carol, AuthorTimestamp: ms(now.Add(-4 * time.Hour)), Committer: carol, CommitterTimestamp: ms(now.Add(-4 * time.Hour))},
 	},
+	"notification-service": {
+		{ID: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6d1e2", Message: "feat: add email notification channel", Author: alice, AuthorTimestamp: ms(now.Add(-80 * time.Hour)), Committer: alice, CommitterTimestamp: ms(now.Add(-80 * time.Hour))},
+		{ID: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1e2f3", Message: "fix: dedupe duplicate push notifications", Author: bob, AuthorTimestamp: ms(now.Add(-40 * time.Hour)), Committer: bob, CommitterTimestamp: ms(now.Add(-40 * time.Hour))},
+		{ID: "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2f3a4", Message: "feat: add retry queue for failed deliveries", Author: carol, AuthorTimestamp: ms(now.Add(-5 * time.Hour)), Committer: carol, CommitterTimestamp: ms(now.Add(-5 * time.Hour))},
+	},
 }
 
 // fakeRawFiles maps "{repoSlug}/{path}" to raw file content. Two repos ship a
-// self-onboarding config (ADR-007); every other raw request returns 404.
+// self-onboarding config (ADR-007); every other raw request returns 404 —
+// including notification-service, which intentionally ships no component
+// configuration at all (neither self-onboarding nor central).
 var fakeRawFiles = map[string]string{
 	"terraform-modules/.dalikamata.yaml": `version: "1"
 team: platform-team
@@ -236,6 +244,26 @@ var fakePullRequests = map[string][]apiPullRequest{
 			FromRef:     apiPRRef{DisplayId: "fix/iam-trust-policy"},
 			ToRef:       apiPRRef{DisplayId: "main"},
 			CreatedDate: ms(now.Add(-48 * time.Hour)), UpdatedDate: ms(now.Add(-30 * time.Hour)),
+		},
+	},
+	"notification-service": {
+		{
+			ID: 1, Title: "feat: add email notification channel", Description: "Adds a new SMTP-backed notification channel alongside push.",
+			State:       "MERGED",
+			Author:      apiPRParticipant{User: alicePR, Role: "AUTHOR", Status: "APPROVED"},
+			Reviewers:   []apiPRParticipant{{User: bobPR, Role: "REVIEWER", Status: "APPROVED"}},
+			FromRef:     apiPRRef{DisplayId: "feature/email-channel"},
+			ToRef:       apiPRRef{DisplayId: "main"},
+			CreatedDate: ms(now.Add(-84 * time.Hour)), UpdatedDate: ms(now.Add(-80 * time.Hour)),
+		},
+		{
+			ID: 2, Title: "feat: add retry queue for failed deliveries", Description: "Introduces a bounded retry queue for notifications that fail to deliver.",
+			State:       "OPEN",
+			Author:      apiPRParticipant{User: carolPR, Role: "AUTHOR", Status: "UNAPPROVED"},
+			Reviewers:   []apiPRParticipant{{User: bobPR, Role: "REVIEWER", Status: "UNAPPROVED"}},
+			FromRef:     apiPRRef{DisplayId: "feature/retry-queue"},
+			ToRef:       apiPRRef{DisplayId: "main"},
+			CreatedDate: ms(now.Add(-5 * time.Hour)), UpdatedDate: ms(now.Add(-5 * time.Hour)),
 		},
 	},
 }
