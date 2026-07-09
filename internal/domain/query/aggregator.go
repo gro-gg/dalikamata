@@ -40,6 +40,13 @@ func applyAgg(items []map[string]any, agg Aggregation) (AggregationResult, error
 // applyTerms groups items by the string representation of a field value,
 // preserving insertion order for within-group items and sorting buckets
 // lexicographically for deterministic output.
+//
+// A []string field value (e.g. component_name/team_name/owner on enriched
+// Workflow entities, which may resolve to several owners) fans the item out
+// into one bucket per distinct element instead of a single bucket keyed by the
+// whole slice — Elasticsearch-style multi-valued terms aggregation. An empty
+// []string skips the item entirely (unlike a missing/nil scalar field, which
+// still buckets under "<nil>"): there is no owner to attribute the item to.
 func applyTerms(items []map[string]any, agg Aggregation) (AggregationResult, error) {
 	type group struct {
 		key   any
@@ -48,14 +55,29 @@ func applyTerms(items []map[string]any, agg Aggregation) (AggregationResult, err
 	var order []string
 	groups := make(map[string]*group)
 
-	for _, item := range items {
-		val := item[agg.Field]
-		k := fmt.Sprint(val)
+	addToBucket := func(key any, item map[string]any) {
+		k := fmt.Sprint(key)
 		if _, ok := groups[k]; !ok {
-			groups[k] = &group{key: val}
+			groups[k] = &group{key: key}
 			order = append(order, k)
 		}
 		groups[k].items = append(groups[k].items, item)
+	}
+
+	for _, item := range items {
+		val := item[agg.Field]
+		if list, isList := val.([]string); isList {
+			seen := make(map[string]bool, len(list))
+			for _, elem := range list {
+				if seen[elem] {
+					continue
+				}
+				seen[elem] = true
+				addToBucket(elem, item)
+			}
+			continue
+		}
+		addToBucket(val, item)
 	}
 
 	sort.Strings(order)

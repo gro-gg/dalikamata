@@ -206,8 +206,8 @@ func TestOwnershipDiagnostics_AllReasons(t *testing.T) {
 	addComponent(t, r, model.Component{Name: "svc-ok", TeamName: "team-ok", RepoIDs: []string{"repo-ok"}})
 	addWorkflow(t, r, model.Workflow{ID: "wf-ok", RepoIDs: []string{"repo-ok"}})
 
-	// "ok" via a second repo — first repo (shared lib) is unowned, so ownership
-	// resolves to the second, onboarded repo.
+	// "ok" overall via a second repo — the first repo (shared lib) is unowned
+	// and reported separately; the second, onboarded repo resolves fully.
 	addComponent(t, r, model.Component{Name: "svc-multi", TeamName: "team-multi", RepoIDs: []string{"repo-app"}})
 	addWorkflow(t, r, model.Workflow{ID: "wf-multi", RepoIDs: []string{"shared-lib", "repo-app"}})
 
@@ -230,23 +230,81 @@ func TestOwnershipDiagnostics_AllReasons(t *testing.T) {
 	}
 
 	is.Equal(byWF["wf-ok"].Reason, "ok")
-	is.Equal(byWF["wf-ok"].TeamName, "team-ok")
-	is.Equal(byWF["wf-ok"].ComponentName, "svc-ok")
-	is.Equal(byWF["wf-ok"].RepoIDs, []string{"repo-ok"})
+	is.Equal(byWF["wf-ok"].Owners, []model.RepoOwnership{
+		{RepoID: "repo-ok", ComponentName: "svc-ok", TeamName: "team-ok", Reason: "ok"},
+	})
 
 	is.Equal(byWF["wf-multi"].Reason, "ok")
-	is.Equal(byWF["wf-multi"].TeamName, "team-multi")
-	is.Equal(byWF["wf-multi"].ComponentName, "svc-multi")
-	is.Equal(byWF["wf-multi"].RepoIDs, []string{"shared-lib", "repo-app"})
+	is.Equal(byWF["wf-multi"].Owners, []model.RepoOwnership{
+		{RepoID: "shared-lib", Reason: "no_component_for_repo"},
+		{RepoID: "repo-app", ComponentName: "svc-multi", TeamName: "team-multi", Reason: "ok"},
+	})
 
 	is.Equal(byWF["wf-no-repo"].Reason, "missing_repo_id")
-	is.Equal(len(byWF["wf-no-repo"].RepoIDs), 0)
+	is.Equal(len(byWF["wf-no-repo"].Owners), 0)
 
 	is.Equal(byWF["wf-no-comp"].Reason, "no_component_for_repo")
-	is.Equal(byWF["wf-no-comp"].RepoIDs, []string{"repo-unowned"})
+	is.Equal(byWF["wf-no-comp"].Owners, []model.RepoOwnership{
+		{RepoID: "repo-unowned", Reason: "no_component_for_repo"},
+	})
 
 	is.Equal(byWF["wf-noteam"].Reason, "no_team_for_component")
-	is.Equal(byWF["wf-noteam"].ComponentName, "svc-noteam")
+	is.Equal(byWF["wf-noteam"].Owners, []model.RepoOwnership{
+		{RepoID: "repo-noteam", ComponentName: "svc-noteam", Reason: "no_team_for_component"},
+	})
+}
+
+// TestOwnershipIndex_MultiOwner verifies that a workflow referencing repos
+// owned by different components resolves to ALL of them, not just the first.
+func TestOwnershipIndex_MultiOwner(t *testing.T) {
+	is := is.New(t)
+	r := newRepo()
+	ctx := context.Background()
+
+	addComponent(t, r, model.Component{Name: "svc-app", TeamName: "team-app", RepoIDs: []string{"r-app"}})
+	addComponent(t, r, model.Component{Name: "svc-lib", TeamName: "team-lib", RepoIDs: []string{"r-lib"}})
+	addWorkflow(t, r, model.Workflow{ID: "wf-multi", Name: "Multi", RepoIDs: []string{"r-app", "r-lib"}})
+	addWorkflowRun(t, r, model.WorkflowRun{ID: "run-multi", WorkflowID: "wf-multi", Status: "SUCCESS", Duration: 60})
+
+	var runs []model.WorkflowRun
+	err := r.QueryWorkflowRuns(ctx, query.Query{Entity: query.EntityWorkflowRun}, func(run model.WorkflowRun) error {
+		runs = append(runs, run)
+		return nil
+	})
+	is.NoErr(err)
+	is.Equal(len(runs), 1)
+	is.Equal(runs[0].ComponentNames, []string{"svc-app", "svc-lib"})
+	is.Equal(runs[0].TeamNames, []string{"team-app", "team-lib"})
+
+	teams := runAggregateField(t, r, query.EntityWorkflowRun, query.RunTeamName)
+	is.True(teams["team-app"])
+	is.True(teams["team-lib"])
+
+	comps := runAggregateField(t, r, query.EntityWorkflowRun, query.RunComponentName)
+	is.True(comps["svc-app"])
+	is.True(comps["svc-lib"])
+}
+
+// TestOwnershipIndex_MultiOwner_DedupesSameComponent verifies that two repos
+// belonging to the same component contribute a single deduplicated owner pair.
+func TestOwnershipIndex_MultiOwner_DedupesSameComponent(t *testing.T) {
+	is := is.New(t)
+	r := newRepo()
+	ctx := context.Background()
+
+	addComponent(t, r, model.Component{Name: "svc-shared", TeamName: "team-shared", RepoIDs: []string{"r1", "r2"}})
+	addWorkflow(t, r, model.Workflow{ID: "wf-dup", Name: "Dup", RepoIDs: []string{"r1", "r2"}})
+	addWorkflowRun(t, r, model.WorkflowRun{ID: "run-dup", WorkflowID: "wf-dup", Status: "SUCCESS", Duration: 60})
+
+	var runs []model.WorkflowRun
+	err := r.QueryWorkflowRuns(ctx, query.Query{Entity: query.EntityWorkflowRun}, func(run model.WorkflowRun) error {
+		runs = append(runs, run)
+		return nil
+	})
+	is.NoErr(err)
+	is.Equal(len(runs), 1)
+	is.Equal(runs[0].ComponentNames, []string{"svc-shared"})
+	is.Equal(runs[0].TeamNames, []string{"team-shared"})
 }
 
 // TestQueryWorkflowRuns_ResolvedTeamName verifies the full projection chain:
@@ -270,7 +328,7 @@ func TestQueryWorkflowRuns_ResolvedTeamName(t *testing.T) {
 	})
 	is.NoErr(err)
 	is.Equal(len(runs), 1)
-	is.Equal(runs[0].TeamName, "team-alpha")
-	is.Equal(runs[0].ComponentName, "svc-alpha")
+	is.Equal(runs[0].TeamNames, []string{"team-alpha"})
+	is.Equal(runs[0].ComponentNames, []string{"svc-alpha"})
 	is.Equal(runs[0].WorkflowName, "Alpha Build")
 }

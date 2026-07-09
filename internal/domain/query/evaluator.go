@@ -23,8 +23,14 @@ func Match(filter *Filter, fields map[string]any) (bool, error) {
 	case OpRange:
 		return matchRange(filter, fields)
 	case OpExists:
-		_, ok := fields[filter.Field]
-		return ok, nil
+		v, ok := fields[filter.Field]
+		if !ok {
+			return false, nil
+		}
+		if list, isList := v.([]string); isList {
+			return len(list) > 0, nil
+		}
+		return true, nil
 	default:
 		return false, fmt.Errorf("unknown filter op: %q", filter.Op)
 	}
@@ -73,6 +79,9 @@ func matchTerm(f *Filter, fields map[string]any) (bool, error) {
 	if !ok {
 		return false, nil
 	}
+	if list, isList := fieldVal.([]string); isList {
+		return matchAnyElement(list, []Value{*f.Value})
+	}
 	cmp, err := compareFieldValue(fieldVal, *f.Value)
 	return err == nil && cmp == 0, err
 }
@@ -81,6 +90,9 @@ func matchTerms(f *Filter, fields map[string]any) (bool, error) {
 	fieldVal, ok := fields[f.Field]
 	if !ok {
 		return false, nil
+	}
+	if list, isList := fieldVal.([]string); isList {
+		return matchAnyElement(list, f.Values)
 	}
 	for _, v := range f.Values {
 		cmp, err := compareFieldValue(fieldVal, v)
@@ -94,6 +106,25 @@ func matchTerms(f *Filter, fields map[string]any) (bool, error) {
 	return false, nil
 }
 
+// matchAnyElement reports whether any element of a []string field value equals
+// any of the candidate values (Elasticsearch-style multi-valued field
+// semantics: a list field "matches" a term/terms filter when at least one of
+// its elements matches).
+func matchAnyElement(list []string, candidates []Value) (bool, error) {
+	for _, elem := range list {
+		for _, v := range candidates {
+			cmp, err := compareFieldValue(elem, v)
+			if err != nil {
+				return false, err
+			}
+			if cmp == 0 {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 func matchRange(f *Filter, fields map[string]any) (bool, error) {
 	if f.Range == nil {
 		return false, fmt.Errorf("range filter on %q: range is nil", f.Field)
@@ -101,6 +132,9 @@ func matchRange(f *Filter, fields map[string]any) (bool, error) {
 	fieldVal, ok := fields[f.Field]
 	if !ok {
 		return false, nil
+	}
+	if _, isList := fieldVal.([]string); isList {
+		return false, fmt.Errorf("range filter on %q: not supported on list fields", f.Field)
 	}
 	r := f.Range
 	if r.GT != nil {
@@ -246,7 +280,10 @@ func compareFieldValue(fieldVal any, v Value) (int, error) {
 }
 
 // compareAny compares two arbitrary projection values of the same type.
-// Returns -1/0/1; incompatible types or nil values return 0.
+// Returns -1/0/1; incompatible types or nil values return 0. []string values
+// (e.g. team_name/component_name on enriched Workflow entities) have no
+// defined ordering and fall through to the 0 (equal) case, so sorting on a
+// list field is a stable no-op rather than an error.
 func compareAny(a, b any) int {
 	if a == nil || b == nil {
 		return 0

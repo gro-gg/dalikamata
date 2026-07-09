@@ -77,41 +77,44 @@ var workflowRunBuckets = []float64{60, 300, 900, 1800, 3600, 7200, 21600}
 // workflowTaskBuckets covers individual stage durations (30s–1h).
 var workflowTaskBuckets = []float64{30, 60, 120, 300, 600, 1800, 3600}
 
-// workflowRunQuery aggregates run durations by team → component → workflow_id → workflow_name → branch → status.
+// workflowRunQuery aggregates run durations by owner (team|component pivot,
+// split back into the team_name/component_name labels at emit time — see
+// emitWorkflowRunTree) → workflow_id → workflow_name → branch → status.
+//
+// A run owned by several (team, component) pairs is fanned out into every
+// owning pair's bucket (query.RunOwner is a []string of correlated
+// "team|component" keys), so each pair gets its own full set of observations.
+// Consequently a sum across all team_name label values double-counts runs
+// that are jointly owned — per-team/per-component views (what dashboards
+// filter on) are accurate.
 var workflowRunQuery = query.Query{
 	Entity:   query.EntityWorkflowRun,
 	AggsOnly: true,
 	Aggs: map[string]query.Aggregation{
-		"by_team": {
+		"by_owner": {
 			Op:    query.AggTerms,
-			Field: query.RunTeamName,
+			Field: query.RunOwner,
 			Aggs: map[string]query.Aggregation{
-				"by_component": {
+				"by_workflow_id": {
 					Op:    query.AggTerms,
-					Field: query.RunComponentName,
+					Field: query.RunWorkflowID,
 					Aggs: map[string]query.Aggregation{
-						"by_workflow_id": {
+						"by_workflow_name": {
 							Op:    query.AggTerms,
-							Field: query.RunWorkflowID,
+							Field: query.RunWorkflowName,
 							Aggs: map[string]query.Aggregation{
-								"by_workflow_name": {
+								"by_branch": {
 									Op:    query.AggTerms,
-									Field: query.RunWorkflowName,
+									Field: query.RunBranch,
 									Aggs: map[string]query.Aggregation{
-										"by_branch": {
+										"by_status": {
 											Op:    query.AggTerms,
-											Field: query.RunBranch,
+											Field: query.RunStatus,
 											Aggs: map[string]query.Aggregation{
-												"by_status": {
-													Op:    query.AggTerms,
-													Field: query.RunStatus,
-													Aggs: map[string]query.Aggregation{
-														"duration": {
-															Op:      query.AggHistogram,
-															Field:   query.RunDuration,
-															Buckets: workflowRunBuckets,
-														},
-													},
+												"duration": {
+													Op:      query.AggHistogram,
+													Field:   query.RunDuration,
+													Buckets: workflowRunBuckets,
 												},
 											},
 										},
@@ -126,49 +129,45 @@ var workflowRunQuery = query.Query{
 	},
 }
 
-// workflowTaskQuery aggregates task durations by team → component → workflow_id → workflow_name → branch → task_name → task_order → status.
+// workflowTaskQuery aggregates task durations by owner (team|component pivot
+// — see workflowRunQuery) → workflow_id → workflow_name → branch → task_name
+// → task_order → status.
 var workflowTaskQuery = query.Query{
 	Entity:   query.EntityWorkflowTask,
 	AggsOnly: true,
 	Aggs: map[string]query.Aggregation{
-		"by_team": {
+		"by_owner": {
 			Op:    query.AggTerms,
-			Field: query.TaskTeamName,
+			Field: query.TaskOwner,
 			Aggs: map[string]query.Aggregation{
-				"by_component": {
+				"by_workflow_id": {
 					Op:    query.AggTerms,
-					Field: query.TaskComponentName,
+					Field: query.TaskWorkflowID,
 					Aggs: map[string]query.Aggregation{
-						"by_workflow_id": {
+						"by_workflow_name": {
 							Op:    query.AggTerms,
-							Field: query.TaskWorkflowID,
+							Field: query.TaskWorkflowName,
 							Aggs: map[string]query.Aggregation{
-								"by_workflow_name": {
+								"by_branch": {
 									Op:    query.AggTerms,
-									Field: query.TaskWorkflowName,
+									Field: query.TaskBranch,
 									Aggs: map[string]query.Aggregation{
-										"by_branch": {
+										"by_task_name": {
 											Op:    query.AggTerms,
-											Field: query.TaskBranch,
+											Field: query.TaskName,
 											Aggs: map[string]query.Aggregation{
-												"by_task_name": {
+												"by_task_order": {
 													Op:    query.AggTerms,
-													Field: query.TaskName,
+													Field: query.TaskOrder,
 													Aggs: map[string]query.Aggregation{
-														"by_task_order": {
+														"by_status": {
 															Op:    query.AggTerms,
-															Field: query.TaskOrder,
+															Field: query.TaskStatus,
 															Aggs: map[string]query.Aggregation{
-																"by_status": {
-																	Op:    query.AggTerms,
-																	Field: query.TaskStatus,
-																	Aggs: map[string]query.Aggregation{
-																		"duration": {
-																			Op:      query.AggHistogram,
-																			Field:   query.TaskDuration,
-																			Buckets: workflowTaskBuckets,
-																		},
-																	},
+																"duration": {
+																	Op:      query.AggHistogram,
+																	Field:   query.TaskDuration,
+																	Buckets: workflowTaskBuckets,
 																},
 															},
 														},
@@ -508,59 +507,61 @@ func intKey(key any, label string) (int, error) {
 	}
 }
 
-// emitWorkflowRunTree walks team→component→workflow_id→workflow_name→branch→status→duration
-// and emits one workflow_run_duration_seconds histogram per leaf.
+// emitWorkflowRunTree walks owner→workflow_id→workflow_name→branch→status→duration
+// and emits one workflow_run_duration_seconds histogram per leaf. The owner
+// bucket key is a combined "team|component" pivot (query.OwnerKey); it is
+// split back into the team_name/component_name label values here so the
+// Prometheus series shape is unchanged.
 func (s *MetricsService) emitWorkflowRunTree(ch chan<- prometheus.Metric, result map[string]query.AggregationResult) error {
-	byTeam, ok := result["by_team"]
+	byOwner, ok := result["by_owner"]
 	if !ok {
 		return nil
 	}
-	for _, teamB := range byTeam.Buckets {
-		team, err := strKey(teamB.Key, "by_team")
+	for _, ownerB := range byOwner.Buckets {
+		ownerKey, err := strKey(ownerB.Key, "by_owner")
 		if err != nil {
 			return err
 		}
-		for _, compB := range teamB.Aggs["by_component"].Buckets {
-			comp, err := strKey(compB.Key, "by_component")
+		team, comp, err := query.SplitOwnerKey(ownerKey)
+		if err != nil {
+			s.logger.Error("splitting owner aggregation key", "key", ownerKey, "error", err)
+			continue
+		}
+		for _, wfIDB := range ownerB.Aggs["by_workflow_id"].Buckets {
+			wfID, err := strKey(wfIDB.Key, "by_workflow_id")
 			if err != nil {
 				return err
 			}
-			for _, wfIDB := range compB.Aggs["by_workflow_id"].Buckets {
-				wfID, err := strKey(wfIDB.Key, "by_workflow_id")
+			for _, wfNameB := range wfIDB.Aggs["by_workflow_name"].Buckets {
+				wfName, err := strKey(wfNameB.Key, "by_workflow_name")
 				if err != nil {
 					return err
 				}
-				for _, wfNameB := range wfIDB.Aggs["by_workflow_name"].Buckets {
-					wfName, err := strKey(wfNameB.Key, "by_workflow_name")
+				for _, branchB := range wfNameB.Aggs["by_branch"].Buckets {
+					branch, err := strKey(branchB.Key, "by_branch")
 					if err != nil {
 						return err
 					}
-					for _, branchB := range wfNameB.Aggs["by_branch"].Buckets {
-						branch, err := strKey(branchB.Key, "by_branch")
+					for _, statusB := range branchB.Aggs["by_status"].Buckets {
+						status, err := strKey(statusB.Key, "by_status")
 						if err != nil {
 							return err
 						}
-						for _, statusB := range branchB.Aggs["by_status"].Buckets {
-							status, err := strKey(statusB.Key, "by_status")
-							if err != nil {
-								return err
-							}
-							durAgg, ok := statusB.Aggs["duration"]
-							if !ok {
-								continue
-							}
-							bm, err := extractBucketMap(durAgg)
-							if err != nil {
-								return err
-							}
-							ch <- prometheus.MustNewConstHistogram(
-								s.wfRunDesc,
-								durAgg.DocCount,
-								durAgg.Sum,
-								bm,
-								team, comp, wfID, wfName, branch, status,
-							)
+						durAgg, ok := statusB.Aggs["duration"]
+						if !ok {
+							continue
 						}
+						bm, err := extractBucketMap(durAgg)
+						if err != nil {
+							return err
+						}
+						ch <- prometheus.MustNewConstHistogram(
+							s.wfRunDesc,
+							durAgg.DocCount,
+							durAgg.Sum,
+							bm,
+							team, comp, wfID, wfName, branch, status,
+						)
 					}
 				}
 			}
@@ -569,70 +570,70 @@ func (s *MetricsService) emitWorkflowRunTree(ch chan<- prometheus.Metric, result
 	return nil
 }
 
-// emitWorkflowTaskTree walks team→component→workflow_id→workflow_name→branch→task_name→task_order→status→duration
-// and emits one workflow_task_duration_seconds histogram per leaf.
+// emitWorkflowTaskTree walks owner→workflow_id→workflow_name→branch→task_name→task_order→status→duration
+// and emits one workflow_task_duration_seconds histogram per leaf. See
+// emitWorkflowRunTree for the owner-key split.
 func (s *MetricsService) emitWorkflowTaskTree(ch chan<- prometheus.Metric, result map[string]query.AggregationResult) error {
-	byTeam, ok := result["by_team"]
+	byOwner, ok := result["by_owner"]
 	if !ok {
 		return nil
 	}
-	for _, teamB := range byTeam.Buckets {
-		team, err := strKey(teamB.Key, "by_team")
+	for _, ownerB := range byOwner.Buckets {
+		ownerKey, err := strKey(ownerB.Key, "by_owner")
 		if err != nil {
 			return err
 		}
-		for _, compB := range teamB.Aggs["by_component"].Buckets {
-			comp, err := strKey(compB.Key, "by_component")
+		team, comp, err := query.SplitOwnerKey(ownerKey)
+		if err != nil {
+			s.logger.Error("splitting owner aggregation key", "key", ownerKey, "error", err)
+			continue
+		}
+		for _, wfIDB := range ownerB.Aggs["by_workflow_id"].Buckets {
+			wfID, err := strKey(wfIDB.Key, "by_workflow_id")
 			if err != nil {
 				return err
 			}
-			for _, wfIDB := range compB.Aggs["by_workflow_id"].Buckets {
-				wfID, err := strKey(wfIDB.Key, "by_workflow_id")
+			for _, wfNameB := range wfIDB.Aggs["by_workflow_name"].Buckets {
+				wfName, err := strKey(wfNameB.Key, "by_workflow_name")
 				if err != nil {
 					return err
 				}
-				for _, wfNameB := range wfIDB.Aggs["by_workflow_name"].Buckets {
-					wfName, err := strKey(wfNameB.Key, "by_workflow_name")
+				for _, branchB := range wfNameB.Aggs["by_branch"].Buckets {
+					branch, err := strKey(branchB.Key, "by_branch")
 					if err != nil {
 						return err
 					}
-					for _, branchB := range wfNameB.Aggs["by_branch"].Buckets {
-						branch, err := strKey(branchB.Key, "by_branch")
+					for _, taskB := range branchB.Aggs["by_task_name"].Buckets {
+						taskName, err := strKey(taskB.Key, "by_task_name")
 						if err != nil {
 							return err
 						}
-						for _, taskB := range branchB.Aggs["by_task_name"].Buckets {
-							taskName, err := strKey(taskB.Key, "by_task_name")
+						for _, orderB := range taskB.Aggs["by_task_order"].Buckets {
+							order, err := intKey(orderB.Key, "by_task_order")
 							if err != nil {
 								return err
 							}
-							for _, orderB := range taskB.Aggs["by_task_order"].Buckets {
-								order, err := intKey(orderB.Key, "by_task_order")
+							taskOrder := fmt.Sprintf("%02d", order)
+							for _, statusB := range orderB.Aggs["by_status"].Buckets {
+								status, err := strKey(statusB.Key, "by_status")
 								if err != nil {
 									return err
 								}
-								taskOrder := fmt.Sprintf("%02d", order)
-								for _, statusB := range orderB.Aggs["by_status"].Buckets {
-									status, err := strKey(statusB.Key, "by_status")
-									if err != nil {
-										return err
-									}
-									durAgg, ok := statusB.Aggs["duration"]
-									if !ok {
-										continue
-									}
-									bm, err := extractBucketMap(durAgg)
-									if err != nil {
-										return err
-									}
-									ch <- prometheus.MustNewConstHistogram(
-										s.wfTaskDesc,
-										durAgg.DocCount,
-										durAgg.Sum,
-										bm,
-										team, comp, wfID, wfName, branch, taskName, taskOrder, status,
-									)
+								durAgg, ok := statusB.Aggs["duration"]
+								if !ok {
+									continue
 								}
+								bm, err := extractBucketMap(durAgg)
+								if err != nil {
+									return err
+								}
+								ch <- prometheus.MustNewConstHistogram(
+									s.wfTaskDesc,
+									durAgg.DocCount,
+									durAgg.Sum,
+									bm,
+									team, comp, wfID, wfName, branch, taskName, taskOrder, status,
+								)
 							}
 						}
 					}

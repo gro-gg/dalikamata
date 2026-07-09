@@ -25,11 +25,14 @@ type WorkflowRun struct {
 	StartedAt  time.Time `json:"started_at"`
 	Duration   float64   `json:"duration"`
 
-	// Enriched at query time by joining against the component/team index.
-	// Empty (and omitted) when stored or published over the ingest stream.
-	WorkflowName  string `json:"workflow_name,omitempty"`
-	ComponentName string `json:"component_name,omitempty"`
-	TeamName      string `json:"team_name,omitempty"`
+	// Enriched at query time by joining against the component/team index. A
+	// workflow can reference several repos belonging to different components,
+	// so ComponentNames/TeamNames list ALL resolved owners (deduplicated,
+	// publish order; ["unknown"] when none resolve) rather than a single
+	// owner. Empty (and omitted) when stored or published over the ingest stream.
+	WorkflowName   string   `json:"workflow_name,omitempty"`
+	ComponentNames []string `json:"component_name,omitempty"`
+	TeamNames      []string `json:"team_name,omitempty"`
 }
 
 type WorkflowTask struct {
@@ -40,11 +43,13 @@ type WorkflowTask struct {
 	StartedAt     time.Time `json:"started_at"`
 	Duration      float64   `json:"duration"`
 
-	// Enriched at query time by joining via the parent WorkflowRun.
-	// Empty (and omitted) when stored or published over the ingest stream.
-	WorkflowID    string `json:"workflow_id,omitempty"`
-	WorkflowName  string `json:"workflow_name,omitempty"`
-	ComponentName string `json:"component_name,omitempty"`
-	TeamName      string `json:"team_name,omitempty"`
-	Branch        string `json:"branch,omitempty"`
+	// Enriched at query time by joining via the parent WorkflowRun. See
+	// WorkflowRun.ComponentNames/TeamNames — a task inherits ALL of its
+	// workflow's resolved owners. Empty (and omitted) when stored or
+	// published over the ingest stream.
+	WorkflowID     string   `json:"workflow_id,omitempty"`
+	WorkflowName   string   `json:"workflow_name,omitempty"`
+	ComponentNames []string `json:"component_name,omitempty"`
+	TeamNames      []string `json:"team_name,omitempty"`
+	Branch         string   `json:"branch,omitempty"`
 }

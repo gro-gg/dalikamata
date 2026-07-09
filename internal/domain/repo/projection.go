@@ -55,14 +55,24 @@ func prCycleTimeSeconds(pr model.PullRequest, now time.Time) float64 {
 }
 
 // projectWorkflow converts a Workflow to a field map for query evaluation.
-// The repo list is intentionally omitted: a workflow can reference several
-// repos and the scalar query engine cannot filter a []string field (the same
-// reason projectComponent omits its RepoIDs).
+// RepoIDs is exposed as a []string; evaluator.go matches it by membership
+// (any element equal to the filter value).
 func projectWorkflow(w model.Workflow) map[string]any {
 	return map[string]any{
-		q.WorkflowID:   w.ID,
-		q.WorkflowName: w.Name,
+		q.WorkflowID:      w.ID,
+		q.WorkflowName:    w.Name,
+		q.WorkflowRepoIDs: w.RepoIDs,
 	}
+}
+
+// owner is one resolved (component, team) pair of a workflow — a workflow may
+// resolve to several when its repos belong to different components. Team is
+// "unknown" when the component has no team, but Component is always set (a
+// repo that maps to no component contributes no owner at all — see
+// newOwnerLookup).
+type owner struct {
+	Component string
+	Team      string
 }
 
 // ownerLookup carries the closures needed to enrich WorkflowRun and
@@ -70,21 +80,65 @@ func projectWorkflow(w model.Workflow) map[string]any {
 // All closures must be safe to call concurrently and without holding any lock,
 // because they operate on snapshot data captured under the repository's RLock.
 type ownerLookup struct {
-	// ownership returns (componentName, teamName) for the given workflowID,
-	// falling back to ("unknown", "unknown") for unclaimed workflows.
-	ownership func(workflowID string) (component, team string)
+	// owners returns the deduplicated (component, team) pairs for the given
+	// workflowID, in the workflow's repo publish order, falling back to
+	// [{"unknown","unknown"}] when none of its repos resolve to an owner.
+	owners func(workflowID string) []owner
 	// workflowName returns the human-readable workflow name for the given ID,
 	// falling back to the ID itself when no Workflow record exists.
 	workflowName func(workflowID string) string
-	// diagnose returns the full resolution chain for the given workflowID,
-	// indicating at which arm it succeeded or failed.
+	// diagnose returns the full per-repo resolution chain for the given
+	// workflowID, indicating at which arm each repo succeeded or failed.
 	diagnose func(workflowID string) model.OwnershipDiagnostics
 }
 
+// ownerComponents returns the deduplicated, order-preserving component names
+// of owners.
+func ownerComponents(owners []owner) []string {
+	out := make([]string, 0, len(owners))
+	seen := make(map[string]bool, len(owners))
+	for _, o := range owners {
+		if seen[o.Component] {
+			continue
+		}
+		seen[o.Component] = true
+		out = append(out, o.Component)
+	}
+	return out
+}
+
+// ownerTeams returns the deduplicated, order-preserving team names of owners.
+func ownerTeams(owners []owner) []string {
+	out := make([]string, 0, len(owners))
+	seen := make(map[string]bool, len(owners))
+	for _, o := range owners {
+		if seen[o.Team] {
+			continue
+		}
+		seen[o.Team] = true
+		out = append(out, o.Team)
+	}
+	return out
+}
+
+// ownerKeys returns the correlated "team|component" pivot key (see
+// q.OwnerKey) for each owner pair, in order. Used for the projection-only
+// RunOwner/TaskOwner aggregation field so a terms-agg fan-out cannot mix up
+// team/component pairings — see fields.go.
+func ownerKeys(owners []owner) []string {
+	out := make([]string, len(owners))
+	for i, o := range owners {
+		out[i] = q.OwnerKey(o.Team, o.Component)
+	}
+	return out
+}
+
 // projectWorkflowRun converts a WorkflowRun to a field map for query evaluation.
-// Enriched fields (team_name, component_name, workflow_name) are looked up via lkp.
+// Enriched fields (team_name, component_name, workflow_name, owner) are looked
+// up via lkp; team_name/component_name are []string since a workflow can
+// resolve to several owners.
 func projectWorkflowRun(r model.WorkflowRun, lkp ownerLookup) map[string]any {
-	component, team := lkp.ownership(r.WorkflowID)
+	owners := lkp.owners(r.WorkflowID)
 	return map[string]any{
 		q.RunID:            r.ID,
 		q.RunWorkflowID:    r.WorkflowID,
@@ -95,8 +149,9 @@ func projectWorkflowRun(r model.WorkflowRun, lkp ownerLookup) map[string]any {
 		q.RunStartedAt:     r.StartedAt,
 		q.RunDuration:      r.Duration,
 		q.RunWorkflowName:  lkp.workflowName(r.WorkflowID),
-		q.RunComponentName: component,
-		q.RunTeamName:      team,
+		q.RunComponentName: ownerComponents(owners),
+		q.RunTeamName:      ownerTeams(owners),
+		q.RunOwner:         ownerKeys(owners),
 	}
 }
 
@@ -109,7 +164,7 @@ func projectWorkflowTask(t model.WorkflowTask, runs map[string]model.WorkflowRun
 		workflowID = run.WorkflowID
 		branch = run.Branch
 	}
-	component, team := lkp.ownership(workflowID)
+	owners := lkp.owners(workflowID)
 	return map[string]any{
 		q.TaskWorkflowRunID: t.WorkflowRunID,
 		q.TaskOrder:         t.Order,
@@ -119,8 +174,9 @@ func projectWorkflowTask(t model.WorkflowTask, runs map[string]model.WorkflowRun
 		q.TaskDuration:      t.Duration,
 		q.TaskWorkflowID:    workflowID,
 		q.TaskWorkflowName:  lkp.workflowName(workflowID),
-		q.TaskComponentName: component,
-		q.TaskTeamName:      team,
+		q.TaskComponentName: ownerComponents(owners),
+		q.TaskTeamName:      ownerTeams(owners),
+		q.TaskOwner:         ownerKeys(owners),
 		q.TaskBranch:        branch,
 	}
 }

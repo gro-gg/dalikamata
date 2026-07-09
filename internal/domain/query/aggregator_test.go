@@ -62,6 +62,101 @@ func TestAggTerms_MissingField(t *testing.T) {
 	is.Equal(len(result["by_state"].Buckets), 2)
 }
 
+// ---- terms: []string fan-out ------------------------------------------------
+
+func TestAggTerms_ListFieldFansOut(t *testing.T) {
+	is := is.New(t)
+	items := []map[string]any{
+		{"id": 1, "team_name": []string{"backend-team", "platform-team"}},
+		{"id": 2, "team_name": []string{"platform-team"}},
+	}
+	aggs := map[string]query.Aggregation{
+		"by_team": {Op: query.AggTerms, Field: "team_name"},
+	}
+	result, err := query.EvaluateAggs(items, aggs)
+	is.NoErr(err)
+	byTeam := result["by_team"]
+	is.Equal(len(byTeam.Buckets), 2)
+	is.Equal(byTeam.Buckets[0].Key, "backend-team")
+	is.Equal(byTeam.Buckets[0].DocCount, uint64(1)) // item 1 only
+	is.Equal(byTeam.Buckets[1].Key, "platform-team")
+	is.Equal(byTeam.Buckets[1].DocCount, uint64(2)) // items 1 and 2
+}
+
+func TestAggTerms_ListFieldDedupesWithinItem(t *testing.T) {
+	is := is.New(t)
+	// A duplicate element in one item's list must not double-count that item.
+	items := []map[string]any{
+		{"team_name": []string{"backend-team", "backend-team"}},
+	}
+	aggs := map[string]query.Aggregation{
+		"by_team": {Op: query.AggTerms, Field: "team_name"},
+	}
+	result, err := query.EvaluateAggs(items, aggs)
+	is.NoErr(err)
+	byTeam := result["by_team"]
+	is.Equal(len(byTeam.Buckets), 1)
+	is.Equal(byTeam.Buckets[0].DocCount, uint64(1))
+}
+
+func TestAggTerms_EmptyListFieldSkipsItem(t *testing.T) {
+	is := is.New(t)
+	// Unlike a missing/nil scalar (bucketed under "<nil>"), an empty []string
+	// has no owner to attribute the item to and is skipped entirely.
+	items := []map[string]any{
+		{"team_name": []string{"backend-team"}},
+		{"team_name": []string{}},
+	}
+	aggs := map[string]query.Aggregation{
+		"by_team": {Op: query.AggTerms, Field: "team_name"},
+	}
+	result, err := query.EvaluateAggs(items, aggs)
+	is.NoErr(err)
+	byTeam := result["by_team"]
+	is.Equal(len(byTeam.Buckets), 1)
+	is.Equal(byTeam.Buckets[0].Key, "backend-team")
+	is.Equal(byTeam.Buckets[0].DocCount, uint64(1))
+}
+
+// TestAggTerms_CorrelatedOwnerKeyAvoidsCrossProduct is a regression test for
+// the aggregation-pairing bug that motivates the combined "team|component"
+// owner field (see query.OwnerKey): nesting independently-fanned
+// team_name/component_name terms aggregations would place an item owned by
+// (alpha, svc-a) under every (team, component) combination reachable from its
+// separately-fanned fields, including pairs the item does not actually have.
+// Aggregating on the correlated key instead keeps each item's owner pairs intact.
+func TestAggTerms_CorrelatedOwnerKeyAvoidsCrossProduct(t *testing.T) {
+	is := is.New(t)
+	items := []map[string]any{
+		// Owned by two pairs: (alpha, svc-a) and (gamma, svc-c).
+		{"owner": []string{query.OwnerKey("alpha", "svc-a"), query.OwnerKey("gamma", "svc-c")}, "secs": 10.0},
+	}
+	aggs := map[string]query.Aggregation{
+		"by_owner": {
+			Op:    query.AggTerms,
+			Field: "owner",
+			Aggs: map[string]query.Aggregation{
+				"total": {Op: query.AggHistogram, Field: "secs", Buckets: []float64{100}},
+			},
+		},
+	}
+	result, err := query.EvaluateAggs(items, aggs)
+	is.NoErr(err)
+	byOwner := result["by_owner"]
+	is.Equal(len(byOwner.Buckets), 2) // exactly the two actual pairs, not the 2x2 cross product
+
+	seen := map[string]bool{}
+	for _, b := range byOwner.Buckets {
+		key := b.Key.(string)
+		seen[key] = true
+		is.Equal(b.Aggs["total"].DocCount, uint64(1))
+	}
+	is.True(seen[query.OwnerKey("alpha", "svc-a")])
+	is.True(seen[query.OwnerKey("gamma", "svc-c")])
+	is.True(!seen[query.OwnerKey("alpha", "svc-c")]) // cross-paired — must not appear
+	is.True(!seen[query.OwnerKey("gamma", "svc-a")]) // cross-paired — must not appear
+}
+
 // ---- date_histogram --------------------------------------------------------
 
 func TestAggDateHistogram_Month(t *testing.T) {

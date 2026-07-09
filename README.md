@@ -130,7 +130,7 @@ The metrics service (`dalikamata metrics`, port 2112 by default) exposes three P
 Workflow.RepoIDs  →  Component.RepoIDs (contains)  →  Component.TeamName
 ```
 
-A Jenkins build often checks out several repos (the application repo plus shared libraries), so a `Workflow` carries **all** of them. Ownership resolves to the first repo that a component claims, which naturally skips shared libraries that are not onboarded to any component. A workflow that cannot be resolved at any step is labelled `team_name="unknown"` / `component_name="unknown"`. Use the [ownership diagnostics endpoint](#ownership-diagnostics) to find out which arm fails.
+A Jenkins build often checks out several repos (the application repo plus shared libraries), so a `Workflow` carries **all** of them, and resolves to **all** of the components/teams they belong to — not just the first. `team_name`/`component_name` are therefore lists (e.g. `workflow_run_duration_seconds{team_name="platform",...}` and `{team_name="backend-team",...}` can both carry observations for the same run), and a doubly-owned run is counted once per owning team. A repo that no component claims is skipped; a workflow that cannot be resolved through any of its repos is labelled `team_name="unknown"` / `component_name="unknown"`. Use the [ownership diagnostics endpoint](#ownership-diagnostics) to find out which repo fails and why.
 
 Six Grafana dashboards are provisioned automatically when using the `--profile monitoring` Docker Compose flag:
 
@@ -170,21 +170,24 @@ GET/POST /api/v1/components
 GET /api/v1/ownership
 ```
 
-Returns a JSON array with one entry per known `Workflow`, reporting how it resolves through the `Workflow.RepoIDs → Component.RepoIDs → Component.TeamName` chain:
+Returns a JSON array with one entry per known `Workflow`. Because a workflow can reference several repos belonging to different components, there is no single resolution outcome — `owners` reports the per-repo breakdown through the `Workflow.RepoIDs → Component.RepoIDs → Component.TeamName` chain, and the top-level `reason` is `"ok"` as soon as at least one repo resolves fully:
 
 ```json
 [
-  { "workflow_id": "payments/build", "repo_ids": ["PROJ/payments", "PROJ/shared-lib"], "component_name": "payments-svc", "team_name": "payments", "reason": "ok" },
-  { "workflow_id": "old-job", "repo_ids": [], "component_name": "", "team_name": "", "reason": "missing_repo_id" }
+  { "workflow_id": "payments/build", "reason": "ok", "owners": [
+      { "repo_id": "PROJ/payments", "component_name": "payments-svc", "team_name": "payments", "reason": "ok" },
+      { "repo_id": "PROJ/shared-lib", "reason": "no_component_for_repo" }
+  ] },
+  { "workflow_id": "old-job", "reason": "missing_repo_id" }
 ]
 ```
 
 | `reason` | Meaning | Fix |
 |---|---|---|
-| `ok` | Chain resolved fully | — |
+| `ok` | At least one repo resolved fully | — |
 | `missing_repo_id` | `Workflow.RepoIDs` is empty — Jenkins BuildData not populated | Add `--jenkins-repo-override old-job=PROJ/my-repo` |
 | `no_component_for_repo` | No component YAML lists any of the workflow's repos | Add the repo ID to the matching component's `repo_ids` list |
-| `no_team_for_component` | Component found but `TeamName` is empty | Set `team:` in the component YAML file |
+| `no_team_for_component` | At least one repo reached a component, but none reached a team | Set `team:` in the component YAML file |
 
 Common GET parameters:
 

@@ -513,8 +513,9 @@ func (r *SQLiteRepository) QueryWorkflowRuns(ctx context.Context, q query.Query,
 	return queryEntities(ctx, snapshot, q, func(run model.WorkflowRun) map[string]any {
 		return projectWorkflowRun(run, lkp)
 	}, func(run model.WorkflowRun) error {
+		owners := lkp.owners(run.WorkflowID)
 		run.WorkflowName = lkp.workflowName(run.WorkflowID)
-		run.ComponentName, run.TeamName = lkp.ownership(run.WorkflowID)
+		run.ComponentNames, run.TeamNames = ownerComponents(owners), ownerTeams(owners)
 		return emit(run)
 	})
 }
@@ -542,8 +543,9 @@ func (r *SQLiteRepository) QueryWorkflowTasks(ctx context.Context, q query.Query
 		if run, ok := snapRuns[t.WorkflowRunID]; ok {
 			t.WorkflowID = run.WorkflowID
 		}
+		owners := lkp.owners(t.WorkflowID)
 		t.WorkflowName = lkp.workflowName(t.WorkflowID)
-		t.ComponentName, t.TeamName = lkp.ownership(t.WorkflowID)
+		t.ComponentNames, t.TeamNames = ownerComponents(owners), ownerTeams(owners)
 		return emit(t)
 	})
 }

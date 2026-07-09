@@ -170,10 +170,10 @@ func TestSQLite_OwnershipEnrichment(t *testing.T) {
 		enriched[run.ID] = run
 		return nil
 	}))
-	is.Equal(enriched["run1"].TeamName, "team-alpha")
-	is.Equal(enriched["run1"].ComponentName, "svc-a")
+	is.Equal(enriched["run1"].TeamNames, []string{"team-alpha"})
+	is.Equal(enriched["run1"].ComponentNames, []string{"svc-a"})
 	is.Equal(enriched["run1"].WorkflowName, "Build Pipeline")
-	is.Equal(enriched["run2"].TeamName, "team-alpha")
+	is.Equal(enriched["run2"].TeamNames, []string{"team-alpha"})
 
 	// Re-ingest the component with a shrunk repo list: wf2 (via r2) is now orphaned.
 	is.NoErr(r.AddComponent(ctx, model.Component{
@@ -185,9 +185,32 @@ func TestSQLite_OwnershipEnrichment(t *testing.T) {
 		enriched[run.ID] = run
 		return nil
 	}))
-	is.Equal(enriched["run1"].TeamName, "team-alpha")
-	is.Equal(enriched["run2"].TeamName, "unknown")
-	is.Equal(enriched["run2"].ComponentName, "unknown")
+	is.Equal(enriched["run1"].TeamNames, []string{"team-alpha"})
+	is.Equal(enriched["run2"].TeamNames, []string{"unknown"})
+	is.Equal(enriched["run2"].ComponentNames, []string{"unknown"})
+}
+
+// TestSQLite_OwnershipEnrichment_MultiOwner verifies SQLite parity with
+// MemoryRepository for a workflow whose repos belong to different components:
+// all owners are surfaced, not just the first.
+func TestSQLite_OwnershipEnrichment_MultiOwner(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	r := newSQLite(t)
+
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "svc-app", TeamName: "team-app", RepoIDs: []string{"r-app"}}))
+	is.NoErr(r.AddComponent(ctx, model.Component{Name: "svc-lib", TeamName: "team-lib", RepoIDs: []string{"r-lib"}}))
+	is.NoErr(r.AddWorkflow(ctx, model.Workflow{ID: "wf-multi", Name: "Multi", RepoIDs: []string{"r-app", "r-lib"}}))
+	is.NoErr(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run-multi", WorkflowID: "wf-multi", Status: "SUCCESS"}))
+
+	var runs []model.WorkflowRun
+	is.NoErr(r.QueryWorkflowRuns(ctx, query.Query{Entity: query.EntityWorkflowRun}, func(run model.WorkflowRun) error {
+		runs = append(runs, run)
+		return nil
+	}))
+	is.Equal(len(runs), 1)
+	is.Equal(runs[0].ComponentNames, []string{"svc-app", "svc-lib"})
+	is.Equal(runs[0].TeamNames, []string{"team-app", "team-lib"})
 }
 
 // TestSQLite_ComponentRoundTrip verifies the JSON-encoded nested slices survive
@@ -236,7 +259,9 @@ func TestSQLite_OwnershipDiagnostics(t *testing.T) {
 	}
 
 	is.Equal(byWF["wf-ok"].Reason, "ok")
-	is.Equal(byWF["wf-ok"].TeamName, "team-ok")
+	is.Equal(byWF["wf-ok"].Owners, []model.RepoOwnership{
+		{RepoID: "repo-ok", ComponentName: "svc-ok", TeamName: "team-ok", Reason: "ok"},
+	})
 
 	is.Equal(byWF["wf-no-repo"].Reason, "missing_repo_id")
 	is.Equal(byWF["wf-no-comp"].Reason, "no_component_for_repo")

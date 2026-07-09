@@ -132,6 +132,44 @@ q := query.Query{
 }
 ```
 
+### List fields — membership match
+
+A few fields hold **multiple** values instead of one: `Workflow.repo_ids`, and
+the enriched `component_name`/`team_name` on `WorkflowRun`/`WorkflowTask`. A
+workflow can reference several repos (an app repo plus a shared library, say),
+and those repos can belong to different components — so a workflow can have
+more than one owner. These fields behave like Elasticsearch multi-valued
+fields:
+
+- `term`/`terms` match if **any** element equals a given value.
+- `exists` means the list is non-empty.
+- `range` and `sort` are **not supported** — filtering/sorting on a list field
+  returns an error.
+
+```go
+// Workflow runs owned (in whole or in part) by backend-team.
+q := query.Query{
+    Entity: query.EntityWorkflowRun,
+    Filter: query.Ptr(query.TermFilter(query.RunTeamName, query.StringValue("backend-team"))),
+}
+
+// Workflows that check out a specific repo.
+q = query.Query{
+    Entity: query.EntityWorkflow,
+    Filter: query.Ptr(query.TermFilter(query.WorkflowRepoIDs, query.StringValue("PROJ/shared-lib"))),
+}
+```
+
+**Aggregating on a list field** fans each item out into one bucket per
+distinct element (so a doubly-owned run counts in both its teams' buckets —
+`sum` across all buckets double-counts jointly-owned items). To aggregate on
+**correlated** (team, component) pairs without mixing up which component
+belongs to which team, aggregate on the combined pivot fields
+`query.RunOwner`/`query.TaskOwner` instead of nesting independent terms
+aggregations on `team_name` and `component_name` — see
+`query.OwnerKey`/`query.SplitOwnerKey` and the metrics service
+(`internal/metrics/service.go`) for the pattern.
+
 ---
 
 ## Combining filters
@@ -429,8 +467,10 @@ rather than bare strings — they are stable across refactors.
 |---|---|---|
 | `query.WorkflowID` | `id` | string |
 | `query.WorkflowName` | `name` | string |
+| `query.WorkflowRepoIDs` | `repo_ids` | []string — membership match (see [List fields](#list-fields--membership-match)) |
 
-A workflow carries `repo_ids` (a list of every repo checked out — app repo plus shared libraries), but it is not a filterable query field: the scalar query engine cannot match against a list (the same reason a Component's `repo_ids` is not filterable).
+A workflow may reference several repos (app repo plus shared libraries), which
+can belong to different components — see `component_name`/`team_name` below.
 
 ### WorkflowRun
 
@@ -445,8 +485,9 @@ A workflow carries `repo_ids` (a list of every repo checked out — app repo plu
 | `query.RunCommitSHA` | `commit_sha` | string |
 | `query.RunStartedAt` | `started_at` | time |
 | `query.RunDuration` | `duration` | float (seconds) |
-| `query.RunComponentName` | `component_name` | string — enriched at query time |
-| `query.RunTeamName` | `team_name` | string — enriched at query time |
+| `query.RunComponentName` | `component_name` | []string — enriched, ALL owning components (`["unknown"]` if none resolve) |
+| `query.RunTeamName` | `team_name` | []string — enriched, ALL owning teams (`["unknown"]` if none resolve) |
+| `query.RunOwner` | *(not on the model)* | []string — computed pivot field, `"team\|component"` per owner pair; aggregation-only, not filterable |
 
 ### WorkflowTask
 
@@ -460,8 +501,9 @@ A workflow carries `repo_ids` (a list of every repo checked out — app repo plu
 | `query.TaskDuration` | `duration` | float (seconds) |
 | `query.TaskWorkflowID` | `workflow_id` | string — enriched at query time |
 | `query.TaskWorkflowName` | `workflow_name` | string — enriched at query time |
-| `query.TaskComponentName` | `component_name` | string — enriched at query time |
-| `query.TaskTeamName` | `team_name` | string — enriched at query time |
+| `query.TaskComponentName` | `component_name` | []string — enriched, ALL owning components (`["unknown"]` if none resolve) |
+| `query.TaskTeamName` | `team_name` | []string — enriched, ALL owning teams (`["unknown"]` if none resolve) |
+| `query.TaskOwner` | *(not on the model)* | []string — computed pivot field, mirrors `query.RunOwner` |
 | `query.TaskBranch` | `branch` | string — enriched at query time |
 
 ### Team

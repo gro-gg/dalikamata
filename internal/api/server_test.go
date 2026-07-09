@@ -151,6 +151,22 @@ func TestParseQueryParams_TermsFilter(t *testing.T) {
 	}
 }
 
+func TestParseQueryParams_WorkflowRepoIDsFilter(t *testing.T) {
+	q, err := parseQueryParams(url.Values{"filter.repo_ids": {"PROJ/shared-lib"}}, query.EntityWorkflow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Filter == nil {
+		t.Fatal("filter is nil")
+	}
+	if q.Filter.Op != query.OpTerm {
+		t.Errorf("op = %v, want %v", q.Filter.Op, query.OpTerm)
+	}
+	if q.Filter.Field != "repo_ids" {
+		t.Errorf("field = %v, want repo_ids", q.Filter.Field)
+	}
+}
+
 func TestParseQueryParams_RangeFilter(t *testing.T) {
 	params := url.Values{
 		"filter.started_at.gte": {"2026-01-01T00:00:00Z"},

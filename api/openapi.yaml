@@ -34,6 +34,18 @@ info:
     Time values must be RFC 3339 (`2006-01-02T15:04:05Z`).  Integer and float
     strings are coerced automatically; everything else is treated as a string.
 
+    ### List-valued fields
+    A few fields (`Workflow.repo_ids`, and the enriched `component_name` /
+    `team_name` on WorkflowRun/WorkflowTask) hold **multiple** values — a
+    workflow can reference several repos, which may belong to different
+    components/teams, so it can have more than one owner. For these fields:
+    - `filter.<field>=<value>` and the terms form match if **any** element
+      equals a given value (e.g. `filter.team_name=backend-team` returns runs
+      of any workflow owned, in whole or in part, by `backend-team`).
+    - `filter.<field>.exists=true` means the list is non-empty.
+    - Range filters (`.gte`/`.lte`/`.gt`/`.lt`) and `sort` are not supported on
+      these fields.
+
     ### GET sort parameter
     `sort` accepts a comma-separated list of field names.  Prefix a field with
     `-` for descending order (e.g. `sort=-started_at,workflow_name`).
@@ -282,8 +294,9 @@ paths:
           in: query
           schema:
             type: string
-        - name: filter.repo_id
+        - name: filter.repo_ids
           in: query
+          description: List field — membership match, returns workflows whose repo list contains the value
           schema:
             type: string
       responses:
@@ -376,12 +389,12 @@ paths:
             type: string
         - name: filter.component_name
           in: query
-          description: Enriched field — owning component name
+          description: Enriched, list field — matches if any of the workflow's owning components equals the value
           schema:
             type: string
         - name: filter.team_name
           in: query
-          description: Enriched field — owning team name
+          description: Enriched, list field — matches if any of the workflow's owning teams equals the value
           schema:
             type: string
       responses:
@@ -471,12 +484,12 @@ paths:
             type: string
         - name: filter.component_name
           in: query
-          description: Enriched field — owning component name
+          description: Enriched, list field — matches if any of the parent workflow's owning components equals the value
           schema:
             type: string
         - name: filter.team_name
           in: query
-          description: Enriched field — owning team name
+          description: Enriched, list field — matches if any of the parent workflow's owning teams equals the value
           schema:
             type: string
         - name: filter.branch
@@ -614,10 +627,12 @@ paths:
       operationId: ownershipDiagnostics
       summary: Ownership resolution report
       description: >
-        Returns one entry per known Workflow showing how it resolves (or fails
-        to resolve) via the chain Workflow.RepoID → Component.RepoIDs →
-        Component.TeamName. Use this to diagnose why a workflow shows
-        team_name="unknown" in metrics or query results.
+        Returns one entry per known Workflow with a per-repo breakdown of how
+        each of its RepoIDs resolves (or fails to resolve) via the chain
+        Workflow.RepoIDs → Component.RepoIDs → Component.TeamName. A workflow
+        with repos in different components resolves to multiple owners; use
+        this to diagnose why a workflow shows team_name=["unknown"] in metrics
+        or query results, or why an expected owner is missing.
       tags: [platform]
       responses:
         "200":
@@ -1175,14 +1190,21 @@ components:
 
     Workflow:
       type: object
-      required: [id, name, repo_id]
+      required: [id, name, repo_ids]
       properties:
         id:
           type: string
         name:
           type: string
-        repo_id:
-          type: string
+        repo_ids:
+          type: array
+          items:
+            type: string
+          description: >
+            The repos this workflow builds. May reference several repos
+            (e.g. an app repo plus a shared library), which can belong to
+            different components — see WorkflowRun/WorkflowTask
+            component_name/team_name.
 
     BuildStatus:
       type: string
@@ -1215,11 +1237,20 @@ components:
           type: string
           description: Enriched at query time — resolved workflow name
         component_name:
-          type: string
-          description: Enriched at query time — owning component name
+          type: array
+          items:
+            type: string
+          description: >
+            Enriched at query time — ALL components owning the parent
+            workflow (one workflow can reference repos in several
+            components). `["unknown"]` when none resolve.
         team_name:
-          type: string
-          description: Enriched at query time — owning team name
+          type: array
+          items:
+            type: string
+          description: >
+            Enriched at query time — ALL teams owning the parent workflow
+            (via component_name). `["unknown"]` when none resolve.
 
     WorkflowTask:
       type: object
@@ -1247,11 +1278,19 @@ components:
           type: string
           description: Enriched at query time — parent workflow name
         component_name:
-          type: string
-          description: Enriched at query time — owning component name
+          type: array
+          items:
+            type: string
+          description: >
+            Enriched at query time — ALL components owning the parent
+            workflow. `["unknown"]` when none resolve.
         team_name:
-          type: string
-          description: Enriched at query time — owning team name
+          type: array
+          items:
+            type: string
+          description: >
+            Enriched at query time — ALL teams owning the parent workflow.
+            `["unknown"]` when none resolve.
         branch:
           type: string
           description: Enriched at query time — git branch from parent WorkflowRun
@@ -1276,15 +1315,13 @@ components:
           items:
             type: string
 
-    OwnershipDiagnostics:
+    RepoOwnership:
       type: object
-      required: [workflow_id, repo_id, component_name, team_name, reason]
+      required: [repo_id, reason]
+      description: The resolution outcome for a single repo of a Workflow's repo_ids.
       properties:
-        workflow_id:
-          type: string
         repo_id:
           type: string
-          description: Empty if the workflow has no RepoID set (extraction failed at ingest).
         component_name:
           type: string
           description: Empty if no component claims the repo.
@@ -1293,9 +1330,32 @@ components:
           description: Empty if the component has no team mapping.
         reason:
           type: string
-          enum: [ok, missing_repo_id, no_component_for_repo, no_team_for_component]
+          enum: [ok, no_component_for_repo, no_team_for_component]
           description: >
-            ok — chain resolved fully.
-            missing_repo_id — Workflow.RepoID is empty (Jenkins BuildData not populated).
+            ok — this repo resolved fully.
             no_component_for_repo — no Component lists this RepoID.
             no_team_for_component — Component found but TeamName is missing.
+
+    OwnershipDiagnostics:
+      type: object
+      required: [workflow_id, reason]
+      description: >
+        A workflow may reference several repos belonging to different
+        components, so it does not have a single owner: owners lists the
+        resolution outcome for every one of the workflow's repos.
+      properties:
+        workflow_id:
+          type: string
+        reason:
+          type: string
+          enum: [ok, missing_repo_id, no_component_for_repo, no_team_for_component]
+          description: >
+            ok — at least one repo resolved fully to a team.
+            missing_repo_id — the workflow has no repo_ids (Jenkins BuildData not populated).
+            no_team_for_component — at least one repo reached a component but none reached a team.
+            no_component_for_repo — no repo maps to any component.
+        owners:
+          type: array
+          items:
+            $ref: "#/components/schemas/RepoOwnership"
+          description: One entry per repo_id, in Workflow.repo_ids order. Absent when reason is missing_repo_id.

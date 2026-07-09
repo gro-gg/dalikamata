@@ -220,6 +220,73 @@ func TestCollect_WorkflowRunDurationHistogram(t *testing.T) {
 	}
 }
 
+// newMultiOwnerWorkflowFixtureAggregator builds a MemoryRepository with a
+// single workflow whose two repos belong to two different (team, component)
+// pairs, to verify the by_owner aggregation pivot keeps pairs correlated
+// instead of producing the cross product of all teams x all components.
+func newMultiOwnerWorkflowFixtureAggregator(t *testing.T) *stubAggregator {
+	t.Helper()
+	r := repo.NewMemory()
+	ctx := context.Background()
+
+	mustAdd := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mustAdd(r.AddTeam(ctx, model.Team{Name: "alpha"}))
+	mustAdd(r.AddComponent(ctx, model.Component{Name: "svc-a", TeamName: "alpha", RepoIDs: []string{"r1"}}))
+	mustAdd(r.AddTeam(ctx, model.Team{Name: "gamma"}))
+	mustAdd(r.AddComponent(ctx, model.Component{Name: "svc-c", TeamName: "gamma", RepoIDs: []string{"r2"}}))
+	mustAdd(r.AddWorkflow(ctx, model.Workflow{ID: "wf-multi", Name: "Multi", RepoIDs: []string{"r1", "r2"}}))
+	mustAdd(r.AddWorkflowRun(ctx, model.WorkflowRun{ID: "run1", WorkflowID: "wf-multi", Status: "SUCCESS", Branch: "main", Duration: 300}))
+
+	return &stubAggregator{r: r}
+}
+
+// TestCollect_WorkflowRunDurationHistogram_MultiOwnerPairing verifies that a
+// run owned by two (team, component) pairs produces exactly those two paired
+// series — not the cross product (alpha/svc-c, gamma/svc-a must NOT appear).
+// This pins the correlated "owner" pivot field against the bug it exists to
+// prevent: nesting independently-fanned team_name/component_name would mix up
+// pairings across a multi-owner workflow's owners.
+func TestCollect_WorkflowRunDurationHistogram_MultiOwnerPairing(t *testing.T) {
+	is := is.New(t)
+	agg := newMultiOwnerWorkflowFixtureAggregator(t)
+	svc := metrics.NewMetricsService(agg, discardLogger(), "")
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(svc)
+	must(t, svc.Refresh(context.Background()))
+
+	families, err := reg.Gather()
+	is.NoErr(err)
+
+	var wfFam *dto.MetricFamily
+	for _, f := range families {
+		if f.GetName() == "workflow_run_duration_seconds" {
+			wfFam = f
+			break
+		}
+	}
+	is.True(wfFam != nil)
+	is.Equal(len(wfFam.GetMetric()), 2) // exactly one series per owner pair, no cross product
+
+	type pair struct{ team, component string }
+	seen := map[pair]bool{}
+	for _, m := range wfFam.GetMetric() {
+		labels := labelMap(m)
+		seen[pair{labels["team_name"], labels["component_name"]}] = true
+		is.Equal(m.GetHistogram().GetSampleCount(), uint64(1))
+		is.Equal(m.GetHistogram().GetSampleSum(), float64(300))
+	}
+	is.True(seen[pair{"alpha", "svc-a"}])
+	is.True(seen[pair{"gamma", "svc-c"}])
+	is.True(!seen[pair{"alpha", "svc-c"}]) // cross-paired — must not appear
+	is.True(!seen[pair{"gamma", "svc-a"}]) // cross-paired — must not appear
+}
+
 // TestCollect_WorkflowTaskDurationHistogram verifies that workflow_task_duration_seconds
 // is emitted per task name, order, and status.
 func TestCollect_WorkflowTaskDurationHistogram(t *testing.T) {

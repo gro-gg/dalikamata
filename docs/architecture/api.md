@@ -42,7 +42,11 @@ calls.
 
 All responses include enriched fields from the domain projection layer
 (`team_name`, `component_name`, `workflow_name`) without any join code in the
-API layer.
+API layer. `team_name`/`component_name` on `workflowRuns`/`workflowTasks` are
+JSON arrays — see [ADR-007, Part 2](ADR-007-repo-self-onboarding.md#part-2-multi-owner-workflow-resolution) — because a
+workflow can reference several repos belonging to different components/teams;
+`filter.team_name=platform` matches if `platform` is any element, not the sole
+owner.
 
 ### GET — URL query parameters
 

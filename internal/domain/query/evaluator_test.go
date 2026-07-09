@@ -174,6 +174,70 @@ func TestMatchExists(t *testing.T) {
 	is.True(!ok)
 }
 
+// ---- []string (list-valued) fields -----------------------------------------
+
+func TestMatchTermListField(t *testing.T) {
+	is := is.New(t)
+	f := query.Filter{Op: query.OpTerm, Field: "team_name", Value: query.Ptr(query.StringValue("backend-team"))}
+
+	ok, err := query.Match(&f, fields("team_name", []string{"backend-team", "platform-team"}))
+	is.NoErr(err)
+	is.True(ok) // matches: at least one element equals the filter value
+
+	ok, err = query.Match(&f, fields("team_name", []string{"platform-team"}))
+	is.NoErr(err)
+	is.True(!ok)
+
+	ok, err = query.Match(&f, fields("team_name", []string{}))
+	is.NoErr(err)
+	is.True(!ok)
+}
+
+func TestMatchTermsListField(t *testing.T) {
+	is := is.New(t)
+	f := query.Filter{
+		Op:     query.OpTerms,
+		Field:  "team_name",
+		Values: []query.Value{query.StringValue("backend-team"), query.StringValue("ui-team")},
+	}
+
+	ok, err := query.Match(&f, fields("team_name", []string{"platform-team", "ui-team"}))
+	is.NoErr(err)
+	is.True(ok)
+
+	ok, err = query.Match(&f, fields("team_name", []string{"platform-team"}))
+	is.NoErr(err)
+	is.True(!ok)
+}
+
+func TestMatchRangeListFieldErrors(t *testing.T) {
+	is := is.New(t)
+	f := query.Filter{
+		Op:    query.OpRange,
+		Field: "team_name",
+		Range: &query.Range{GTE: query.Ptr(query.StringValue("a"))},
+	}
+	_, err := query.Match(&f, fields("team_name", []string{"backend-team"}))
+	is.True(err != nil)
+}
+
+func TestMatchExistsListField(t *testing.T) {
+	is := is.New(t)
+	f := query.Filter{Op: query.OpExists, Field: "team_name"}
+
+	ok, err := query.Match(&f, fields("team_name", []string{"backend-team"}))
+	is.NoErr(err)
+	is.True(ok)
+
+	ok, err = query.Match(&f, fields("team_name", []string{}))
+	is.NoErr(err)
+	is.True(!ok) // empty list: field present but has no values
+
+	ok, err = query.Match(&f, fields())
+	is.NoErr(err)
+	is.True(!ok) // field absent entirely
+}
+
 // ---- OpBool ----------------------------------------------------------------
 
 func TestMatchBoolMust(t *testing.T) {

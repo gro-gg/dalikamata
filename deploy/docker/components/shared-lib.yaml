@@ -1,0 +1,5 @@
+version: "1"
+name: shared-lib
+team: platform-team
+repos:
+  - id: PROJ/shared-lib

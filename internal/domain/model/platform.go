@@ -21,17 +21,29 @@ type RepoOnboarding struct {
 	Team      string `json:"team"`
 }
 
-// OwnershipDiagnostics reports how a single Workflow resolves to a team via
-// the Workflow.RepoIDs → Component.RepoIDs → Component.TeamName chain. A
-// workflow may reference several repos (e.g. app repo plus shared libraries);
-// ownership resolves to the first repo that maps to a known component. Reason
-// is one of "ok", "missing_repo_id" (the workflow has no repos),
-// "no_component_for_repo" (none of the repos map to a component), or
-// "no_team_for_component".
+// RepoOwnership is the resolution result for a single repo of a Workflow's
+// RepoIDs, one arm of the Workflow.RepoIDs → Component.RepoIDs →
+// Component.TeamName chain. Reason is "ok" (ComponentName/TeamName set),
+// "no_component_for_repo" (the repo maps to no component), or
+// "no_team_for_component" (the component has no team).
+type RepoOwnership struct {
+	RepoID        string `json:"repo_id"`
+	ComponentName string `json:"component_name,omitempty"`
+	TeamName      string `json:"team_name,omitempty"`
+	Reason        string `json:"reason"`
+}
+
+// OwnershipDiagnostics reports how a single Workflow resolves to its owners
+// via the Workflow.RepoIDs → Component.RepoIDs → Component.TeamName chain. A
+// workflow may reference several repos (e.g. app repo plus shared libraries)
+// belonging to different components, so ownership is not a single pair: Owners
+// lists the resolution outcome for every one of the workflow's repos. The
+// top-level Reason is "ok" if at least one repo fully resolves to a team,
+// "missing_repo_id" if the workflow has no repos, "no_team_for_component" if
+// at least one repo reaches a component but none reach a team, or
+// "no_component_for_repo" if no repo maps to any component.
 type OwnershipDiagnostics struct {
-	WorkflowID    string   `json:"workflow_id"`
-	RepoIDs       []string `json:"repo_ids"`
-	ComponentName string   `json:"component_name"`
-	TeamName      string   `json:"team_name"`
-	Reason        string   `json:"reason"`
+	WorkflowID string          `json:"workflow_id"`
+	Reason     string          `json:"reason"`
+	Owners     []RepoOwnership `json:"owners,omitempty"`
 }
