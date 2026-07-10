@@ -35,6 +35,9 @@ services:
       - "--bitbucket-projects=PROJ,INFRA"
       - "--component-config-enabled"
       - "--component-config-file=.dalikamata.yaml"
+      - "--jenkins-url=http://dalikamata-fake-jenkins:17991"
+      - "--jenkins-user=any"
+      - "--jenkins-token=any"
       - "--dir=/components"
     depends_on:
       - dalikamata-fake-bitbucket
@@ -44,20 +47,6 @@ services:
       - "12113:12113"
     volumes:
       - ./components:/components:ro
-
-  dalikamata-ingest-jenkins:
-    image: dalikamata:latest
-    command:
-      - "--nats-host=dalikamata"
-      - "--nats-port=14222"
-      - "ingest"
-      - "jenkins"
-      - "--jenkins-url=http://dalikamata-fake-jenkins:17991"
-      - "--jenkins-user=any"
-      - "--jenkins-token=any"
-    depends_on:
-      - dalikamata-fake-jenkins
-      - dalikamata
 
   prometheus:
     image: prom/prometheus:latest
