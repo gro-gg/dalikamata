@@ -1,12 +1,18 @@
 package component_test
 
 import (
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"codeberg.org/aeforged/dalikamata/internal/config/component"
 )
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
 
 const goldenYAML = `version: "1"
 name: payment-service
@@ -100,7 +106,7 @@ func TestLoadDir_Dedup(t *testing.T) {
 	writeFile(t, dir, "a.yaml", goldenYAML)
 	writeFile(t, dir, "b.yaml", goldenYAML) // same name
 
-	_, err := component.LoadDir(dir)
+	_, err := component.LoadDir(dir, discardLogger())
 	if err == nil {
 		t.Fatal("expected duplicate-name error, got nil")
 	}
@@ -120,7 +126,28 @@ repos:
 	writeFile(t, dir, "payment-service.yaml", goldenYAML)
 	writeFile(t, dir, "checkout-api.yaml", secondYAML)
 
-	files, err := component.LoadDir(dir)
+	files, err := component.LoadDir(dir, discardLogger())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(files) != 2 {
+		t.Errorf("got %d files, want 2", len(files))
+	}
+}
+
+func TestLoadDir_SkipsInvalidFile(t *testing.T) {
+	const secondYAML = `version: "1"
+name: checkout-api
+team: payments
+repos:
+  - id: PLAT/checkout-api
+`
+	dir := t.TempDir()
+	writeFile(t, dir, "payment-service.yaml", goldenYAML)
+	writeFile(t, dir, "checkout-api.yaml", secondYAML)
+	writeFile(t, dir, "broken.yaml", "version: \"1\"\nname: \"\"\nteam: t\nrepos:\n  - id: r\n")
+
+	files, err := component.LoadDir(dir, discardLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

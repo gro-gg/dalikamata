@@ -143,15 +143,19 @@ repos:
 	}
 }
 
-func TestCrawler_InvalidFileReturnsError(t *testing.T) {
+func TestCrawler_InvalidFileSkippedNotFatal(t *testing.T) {
 	dir := t.TempDir()
 	writeYAML(t, dir, "bad.yaml", "version: \"2\"\nname: x\nteam: t\nrepos: []\n")
+	writeYAML(t, dir, "a.yaml", compA)
 
 	pub := &fakePublisher{}
 	l := slog.New(slog.NewTextHandler(io.Discard, nil))
 	crawler := config.NewCrawler(pub, dir, l)
 
-	if err := crawler.Run(context.Background()); err == nil {
-		t.Fatal("expected error for invalid YAML, got nil")
+	if err := crawler.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(pub.components) != 1 {
+		t.Errorf("components published = %d, want 1 (invalid file skipped)", len(pub.components))
 	}
 }

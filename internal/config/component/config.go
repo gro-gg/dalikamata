@@ -2,6 +2,7 @@ package component
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,7 +43,9 @@ func Load(path string) (ComponentFile, error) {
 
 // LoadDir reads all *.yaml and *.yml files in dir, returning them in
 // filename-sorted order. Duplicate component names across files are rejected.
-func LoadDir(dir string) ([]ComponentFile, error) {
+// It is fail-soft on individual files: a file that fails to load (read, parse,
+// or validate) is logged and skipped, never aborting the rest of the directory.
+func LoadDir(dir string, logger *slog.Logger) ([]ComponentFile, error) {
 	entries, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
 	if err != nil {
 		return nil, err
@@ -58,7 +61,8 @@ func LoadDir(dir string) ([]ComponentFile, error) {
 	for _, path := range entries {
 		f, err := Load(path)
 		if err != nil {
-			return nil, err
+			logger.Error("invalid component config; skipping file", "path", path, "error", err)
+			continue
 		}
 		if prev, ok := seen[f.Name]; ok {
 			return nil, fmt.Errorf("duplicate component name %q in %s (already defined in %s)", f.Name, filepath.Base(path), filepath.Base(prev))

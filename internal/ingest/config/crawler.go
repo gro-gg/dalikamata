@@ -31,7 +31,7 @@ func NewCrawler(publisher domain.PlatformPublisher, dir string, logger *slog.Log
 // Run loads all component YAML files in the configured directory, converts them
 // to domain objects, deduplicates teams, and publishes all events.
 func (c *Crawler) Run(ctx context.Context) error {
-	files, err := component.LoadDir(c.dir)
+	files, err := component.LoadDir(c.dir, c.logger)
 	if err != nil {
 		return fmt.Errorf("loading component configs from %s: %w", c.dir, err)
 	}
