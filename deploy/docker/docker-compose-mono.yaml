@@ -26,19 +26,19 @@ services:
     command:
       - "--nats-port=14222"
       - "--metrics-addr=0.0.0.0:12112"
-      - "--metric-refresh-interval=1s"
+      - "--metrics-refresh-interval=1s"
       - "--api-addr=0.0.0.0:12113"
       - "mono"
       - "--nats-data=/tmp/nats"
       - "--bitbucket-url=http://dalikamata-fake-bitbucket:17990"
       - "--bitbucket-token=test-token"
       - "--bitbucket-projects=PROJ,INFRA"
-      - "--component-config-enabled"
-      - "--component-config-file=.dalikamata.yaml"
+      - "--bitbucket-component-config-enabled"
+      - "--bitbucket-component-config-file=.dalikamata.yaml"
       - "--jenkins-url=http://dalikamata-fake-jenkins:17991"
       - "--jenkins-user=any"
       - "--jenkins-token=any"
-      - "--dir=/components"
+      - "--component-config-dir=/components"
     depends_on:
       - dalikamata-fake-bitbucket
     ports:

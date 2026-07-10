@@ -48,8 +48,8 @@ Key flags (available on all commands via root):
 | `--bitbucket-token` | _(required)_ | Bitbucket personal access token |
 | `--bitbucket-projects` | _(required)_ | Comma-separated list of Bitbucket project keys to crawl |
 | `--bitbucket-interval` | `5m` | How often to re-crawl for new commits and pull requests |
-| `--component-config-enabled` | `false` | Enable per-repo self-onboarding: fetch an in-repo config file from each repo root |
-| `--component-config-file` | `dalikamata.yaml,...` | Candidate in-repo config paths tried per repo (comma-separated, first match wins; requires `--component-config-enabled`) |
+| `--bitbucket-component-config-enabled` | `false` | Enable per-repo self-onboarding: fetch an in-repo config file from each repo root |
+| `--bitbucket-component-config-file` | `dalikamata.yaml,...` | Candidate in-repo config paths tried per repo (comma-separated, first match wins; requires `--bitbucket-component-config-enabled`) |
 
 The Bitbucket ingestor runs on a repeating ticker loop. The first crawl fires immediately on startup; subsequent crawls are spaced by `--bitbucket-interval`. Each repo's newest published commit SHA is persisted in a JetStream KV bucket (`ingest-bitbucket-cursors`) so that restarts do not re-ingest already-published commits. Only new commits (those reachable from the default branch tip but not from the cursor SHA) are fetched on subsequent ticks; pull requests and repos are refetched in full on every tick (they are small and re-publish is idempotent).
 
@@ -70,15 +70,15 @@ The Jenkins ingestor runs on the same repeating ticker pattern as the Bitbucket 
 
 | Flag | Default | Description |
 |---|---|---|
-| `--dir` | _(required)_ | Directory of per-component YAML files (`*.yaml` / `*.yml`) |
+| `--component-config-dir` | _(required)_ | Directory of per-component YAML files (`*.yaml` / `*.yml`) |
 
 `dalikamata metrics` flags:
 
 | Flag | Default | Description |
 |---|---|---|
 | `--metrics-addr` | `0.0.0.0:2112` | Prometheus metrics listen address |
-| `--metric-refresh-interval` | `30s` | How often background loops recompute each metric |
-| `--metric-aggregate-timeout` | `30s` | Per-aggregation query timeout for metric refresh loops |
+| `--metrics-refresh-interval` | `30s` | How often background loops recompute each metric |
+| `--metrics-aggregate-timeout` | `30s` | Per-aggregation query timeout for metric refresh loops |
 
 `dalikamata api` flags:
 
@@ -116,7 +116,7 @@ Add `--profile monitoring` to either command to also start Prometheus (port 9090
 
 ## Metrics
 
-The metrics service (`dalikamata metrics`, port 2112 by default) exposes three Prometheus histograms on `/metrics`. Each metric is computed by its own background goroutine loop; Prometheus scrapes are served from the last cached values and never block on live aggregation queries. The cache is updated every `--metric-refresh-interval` (default `30s`).
+The metrics service (`dalikamata metrics`, port 2112 by default) exposes three Prometheus histograms on `/metrics`. Each metric is computed by its own background goroutine loop; Prometheus scrapes are served from the last cached values and never block on live aggregation queries. The cache is updated every `--metrics-refresh-interval` (default `30s`).
 
 | Metric | Labels | Description |
 |---|---|---|

@@ -46,7 +46,7 @@ services:
       - "--nats-port=24222"
       - "--metrics-addr=0.0.0.0:22112"
       - "metrics"
-      - "--metric-refresh-interval=1s"
+      - "--metrics-refresh-interval=1s"
     depends_on:
       - dalikamata-nats
     ports:
@@ -74,8 +74,8 @@ services:
       - "--bitbucket-url=http://dalikamata-fake-bitbucket:27990"
       - "--bitbucket-token=test-token"
       - "--bitbucket-projects=PROJ,INFRA"
-      - "--component-config-enabled"
-      - "--component-config-file=.dalikamata.yaml"
+      - "--bitbucket-component-config-enabled"
+      - "--bitbucket-component-config-file=.dalikamata.yaml"
     depends_on:
       - dalikamata-fake-bitbucket
       - dalikamata-domain
@@ -87,7 +87,7 @@ services:
       - "--nats-port=24222"
       - "ingest"
       - "config"
-      - "--dir=/components"
+      - "--component-config-dir=/components"
     depends_on:
       - dalikamata-domain
     volumes:

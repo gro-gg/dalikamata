@@ -68,6 +68,6 @@ func addBitbucketFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&bitbucketToken, "bitbucket-token", "", "Bitbucket personal access token")
 	cmd.Flags().StringSliceVar(&bitbucketProjects, "bitbucket-projects", nil, "Bitbucket project keys to crawl (comma-separated)")
 	cmd.Flags().DurationVar(&bitbucketInterval, "bitbucket-interval", 5*time.Minute, "how often to re-crawl Bitbucket for new commits and pull requests")
-	cmd.Flags().BoolVar(&bitbucketComponentCfgEnabled, "component-config-enabled", false, "enable per-repo self-onboarding: fetch an in-repo config file from each repo root")
-	cmd.Flags().StringSliceVar(&bitbucketComponentCfgFiles, "component-config-file", []string{"dalikamata.yaml", "dalikamata.yml", ".dalikamata.yaml", ".dalikamata.yml"}, "in-repo config path(s) tried per repo for self-onboarding, first match wins (comma-separated; requires --component-config-enabled)")
+	cmd.Flags().BoolVar(&bitbucketComponentCfgEnabled, "bitbucket-component-config-enabled", false, "enable per-repo self-onboarding: fetch an in-repo config file from each repo root")
+	cmd.Flags().StringSliceVar(&bitbucketComponentCfgFiles, "bitbucket-component-config-file", []string{"dalikamata.yaml", "dalikamata.yml", ".dalikamata.yaml", ".dalikamata.yml"}, "in-repo config path(s) tried per repo for self-onboarding, first match wins (comma-separated; requires --bitbucket-component-config-enabled)")
 }

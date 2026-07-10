@@ -11,13 +11,13 @@
 
 ### Context
 
-ADR-005 introduced Team and Component declarations as platform events, ingested from a central directory of YAML files (`dalikamata ingest config --dir <path>`). This central model requires a platform operator to maintain ownership mappings out-of-band from the repositories themselves.
+ADR-005 introduced Team and Component declarations as platform events, ingested from a central directory of YAML files (`dalikamata ingest config --component-config-dir <path>`). This central model requires a platform operator to maintain ownership mappings out-of-band from the repositories themselves.
 
 Teams that own a repository are best placed to declare its ownership, and want that declaration to live *with the code* — reviewed, versioned, and moved alongside the repo. A central directory cannot be edited by repo owners without cross-team coordination, and drifts as repos are created, renamed, or archived.
 
 ### Decision
 
-Allow a repository to **self-onboard** by committing a config file to its root. When the Bitbucket ingestor is started with `--component-config-enabled` (default `false`), it fetches the path given by `--component-config-file` (default `dalikamata.yaml`) from each crawled repository and, when present, publishes a single new `ingest.platform.repo` event per onboarded repo. That event carries the containing repo together with the declared `team` and `component`; the domain upserts the Team and the Component from it and records the repo's membership. Self-onboarding does **not** publish `ingest.platform.team` or `ingest.platform.component` events — that remains the central crawler's job, and the central crawler's behaviour (ADR-005) is unchanged.
+Allow a repository to **self-onboard** by committing a config file to its root. When the Bitbucket ingestor is started with `--bitbucket-component-config-enabled` (default `false`), it fetches the path given by `--bitbucket-component-config-file` (default `dalikamata.yaml`) from each crawled repository and, when present, publishes a single new `ingest.platform.repo` event per onboarded repo. That event carries the containing repo together with the declared `team` and `component`; the domain upserts the Team and the Component from it and records the repo's membership. Self-onboarding does **not** publish `ingest.platform.team` or `ingest.platform.component` events — that remains the central crawler's job, and the central crawler's behaviour (ADR-005) is unchanged.
 
 **Schema** — the in-repo file omits the `repos:` list of the central schema, because the repository that contains the file *is* the implied sole member of the component:
 
@@ -29,7 +29,7 @@ component: payment-service
 
 The `version` field is validated identically to ADR-005 (`"1"`); `team` and `component` are required. Parsing and validation reuse `internal/config/component` rather than duplicating the schema.
 
-**Discovery** — an ordered list of candidate paths at the repo root (`--component-config-file`, comma-separated, default `dalikamata.yaml,dalikamata.yml,.dalikamata.yaml,.dalikamata.yml`), each fetched via the Bitbucket raw endpoint (`/rest/api/1.0/projects/{key}/repos/{slug}/raw/{path}`). The candidates are tried in order and the **first one present wins**; a `404` means "this candidate is absent" and is not an error. Bitbucket's raw API resolves one concrete path and has no glob/wildcard support, so the accepted extensions/locations are enumerated explicitly rather than matched by pattern. Cost is up to one request per candidate per repo, stopping at the first hit.
+**Discovery** — an ordered list of candidate paths at the repo root (`--bitbucket-component-config-file`, comma-separated, default `dalikamata.yaml,dalikamata.yml,.dalikamata.yaml,.dalikamata.yml`), each fetched via the Bitbucket raw endpoint (`/rest/api/1.0/projects/{key}/repos/{slug}/raw/{path}`). The candidates are tried in order and the **first one present wins**; a `404` means "this candidate is absent" and is not an error. Bitbucket's raw API resolves one concrete path and has no glob/wildcard support, so the accepted extensions/locations are enumerated explicitly rather than matched by pattern. Cost is up to one request per candidate per repo, stopping at the first hit.
 
 > Supporting true patterns (e.g. `*.yaml`) would require listing repo directories via the Bitbucket **browse** API (`/rest/api/1.0/projects/{key}/repos/{slug}/browse/{path}`) and a matching fake-server route. Deferred; the candidate list covers the `.yaml`/`.yml` and alternate-location cases without it.
 
@@ -37,7 +37,7 @@ The `version` field is validated identically to ADR-005 (`"1"`); `team` and `com
 
 **Fail-soft** — a missing, malformed, or unfetchable config file is logged and skipped. Self-onboarding must never abort a crawl: commit/PR ingestion for the repo continues regardless.
 
-**Off by default** — without `--component-config-enabled`, the Bitbucket crawler never fetches file contents and behaves exactly as before. The platform publisher is only created when the flag is set.
+**Off by default** — without `--bitbucket-component-config-enabled`, the Bitbucket crawler never fetches file contents and behaves exactly as before. The platform publisher is only created when the flag is set.
 
 ### Consequences
 

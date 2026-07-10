@@ -73,7 +73,7 @@ func TestIngestBitbucketIntegration(t *testing.T) {
 	is.Equal(len(prs), 11)
 }
 
-// TestIngestBitbucketSelfOnboarding verifies that, with --component-config-enabled set,
+// TestIngestBitbucketSelfOnboarding verifies that, with --bitbucket-component-config-enabled set,
 // the crawler fetches the in-repo config from each repo and publishes a
 // RepoOnboarding event for the two repos that ship one (backend-api,
 // frontend-app), while the config-less repos are silently skipped.

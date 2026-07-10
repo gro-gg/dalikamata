@@ -18,7 +18,7 @@ var configIngestCmd = &cobra.Command{
 events to the NATS platform ingest subjects.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if componentsDir == "" {
-			return fmt.Errorf("--dir is required")
+			return fmt.Errorf("--component-config-dir is required")
 		}
 
 		a := app.NewIngestConfigApp(slog.Default())
@@ -36,5 +36,5 @@ func init() {
 }
 
 func addConfigFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&componentsDir, "dir", "", "directory containing component YAML files")
+	cmd.Flags().StringVar(&componentsDir, "component-config-dir", "", "directory containing component YAML files")
 }

@@ -31,7 +31,7 @@ spec:
             - "--nats-port={{ .Values.nats.port }}"
             - "ingest"
             - "config"
-            - "--dir=/components"
+            - "--component-config-dir=/components"
             {{- if .Values.ingest.config.debug }}
             - "--debug"
             {{- end }}

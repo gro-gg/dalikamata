@@ -66,7 +66,7 @@ graph TB
 
 | Channel | Notes |
 |---|---|
-| Prometheus → Metrics | Scrape responses served from a pre-computed cache, updated every `--metric-refresh-interval` (default 30s); scrapes never block on live aggregation queries. |
+| Prometheus → Metrics | Scrape responses served from a pre-computed cache, updated every `--metrics-refresh-interval` (default 30s); scrapes never block on live aggregation queries. |
 | Grafana → API | Grafana Infinity datasource; supports filter, sort, pagination, and enriched `team_name` / `component_name` / `workflow_name` labels on workflow entities. |
 | Query reply wire format | `Daka-Query-Status: data` (one entity per message) → `done` sentinel. Aggregation requests use `query.aggregate` subject and return a single `aggregation` message then `done`. |
 

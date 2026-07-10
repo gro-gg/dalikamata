@@ -60,10 +60,10 @@ ingest:
     # Per-repo self-onboarding (ADR-007): fetch an in-repo config file from each
     # crawled repo and publish Team + Component ownership from it.
     componentConfig:
-      # Enable self-onboarding (maps to --component-config-enabled).
+      # Enable self-onboarding (maps to --bitbucket-component-config-enabled).
       enabled: false
       # In-repo candidate path(s) tried per repo, comma-separated, first match
-      # wins (maps to --component-config-file). Bitbucket's raw API has no glob
+      # wins (maps to --bitbucket-component-config-file). Bitbucket's raw API has no glob
       # support, so list the accepted paths explicitly.
       file: "dalikamata.yaml,dalikamata.yml,.dalikamata.yaml,.dalikamata.yml"
     # Extra volumes to attach to the Bitbucket ingest pod (e.g. CA certificate ConfigMaps).
