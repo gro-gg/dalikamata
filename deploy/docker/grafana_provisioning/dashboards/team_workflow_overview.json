@@ -73,15 +73,20 @@
                             "selector": "workflow_name",
                             "text": "workflow_name",
                             "type": "string"
+                          },
+                          {
+                            "selector": "branch",
+                            "text": "branch",
+                            "type": "string"
                           }
                         ],
                         "computed_columns": [],
-                        "filterExpression": "workflow_name == \"missing\" || workflow_name in (${workflow:singlequote})",
+                        "filterExpression": "workflow_name in (${workflow:singlequote}) && branch in (${branch:singlequote})",
                         "filters": [],
                         "format": "table",
                         "global_query_id": "",
                         "parser": "backend",
-                        "root_selector": "(\n    $makeRow := function($run, $wf, $idx) {\n        $run ? {\n            \"workflow\": $wf,\n            \"started_at\": $run.started_at,\n            \"status\": $run.status,\n            \"duration\": $run.duration,\n            \"index\": $idx,\n            \"workflow_name\": $run.workflow_name\n        } : {\n           \"index\": $idx,\n           \"workflow\": $wf,\n           \"workflow_name\": \"missing\"\n        }\n    };\n\n  $h := hits;\n  $d := hits ? $distinct(hits.($join([workflow_id,branch],'/'))) : null;\n  $d = null ? [] : ( $type($d) = \"string\" ? [$d] : $d );\n\n  $d.(\n      $wf := $;\n\n      $sorted := $h[$join([workflow_id, branch],'/') = $wf] ^(>number);\n  $sorted ?\n            [\n            $makeRow($sorted[9],$wf,9),\n            $makeRow($sorted[8],$wf,8),\n            $makeRow($sorted[7],$wf,7),\n            $makeRow($sorted[6],$wf,6),\n            $makeRow($sorted[3],$wf,5),\n            $makeRow($sorted[4],$wf,4),\n            $makeRow($sorted[5],$wf,3),\n            $makeRow($sorted[2],$wf,2),\n            $makeRow($sorted[1],$wf,1),\n            $makeRow($sorted[0],$wf,0)\n        ][ $ != null] : []\n  );\n)",
+                        "root_selector": "(\n    $makeRow := function($run, $wf, $idx) {\n        $run ? {\n            \"workflow\": $wf,\n            \"started_at\": $run.started_at,\n            \"status\": $run.status,\n            \"duration\": $run.duration,\n            \"index\": $idx,\n            \"workflow_name\": $run.workflow_name,\n            \"branch\": $run.branch\n        } : {\n           \"index\": $idx,\n           \"workflow\": $wf,\n           \"workflow_name\": \"missing\"\n        }\n    };\n\n  $h := hits;\n  $d := hits ? $distinct(hits.($join([workflow_id,branch],'/'))) : null;\n  $d = null ? [] : ( $type($d) = \"string\" ? [$d] : $d );\n\n  $d.(\n      $wf := $;\n\n      $sorted := $h[$join([workflow_id, branch],'/') = $wf] ^(>number);\n  $sorted ?\n            [\n            $makeRow($sorted[9],$wf,9),\n            $makeRow($sorted[8],$wf,8),\n            $makeRow($sorted[7],$wf,7),\n            $makeRow($sorted[6],$wf,6),\n            $makeRow($sorted[3],$wf,5),\n            $makeRow($sorted[4],$wf,4),\n            $makeRow($sorted[5],$wf,3),\n            $makeRow($sorted[2],$wf,2),\n            $makeRow($sorted[1],$wf,1),\n            $makeRow($sorted[0],$wf,0)\n        ][ $ != null] : []\n  );\n)",
                         "source": "url",
                         "type": "json",
                         "url": "/api/v1/workflowRuns?filter.team_name=${team}&sort=-started_at&size=200",
