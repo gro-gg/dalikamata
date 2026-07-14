@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/matryer/is v1.4.1
 	github.com/nats-io/nats-server/v2 v2.14.3
-	github.com/nats-io/nats.go v1.51.0
+	github.com/nats-io/nats.go v1.52.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/spf13/cobra v1.10.2
