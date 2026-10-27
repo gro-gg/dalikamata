@@ -89,6 +89,17 @@ func runE2E(t *testing.T, project, file string, metricsPort, natsPort int) {
 	checkNATSStream(t, ctx, natsURL)
 }
 
+// composeCommand returns the command and leading arguments to invoke Docker
+// Compose. It prefers the standalone `docker-compose` binary (older Docker
+// versions lack the `compose` subcommand) and falls back to `docker compose`
+// where only the plugin is installed (e.g. GitHub Actions runners).
+func composeCommand() (string, []string) {
+	if _, err := exec.LookPath("docker-compose"); err == nil {
+		return "docker-compose", nil
+	}
+	return "docker", []string{"compose"}
+}
+
 // dockerComposeUp runs `docker-compose up --detach` and registers cleanup to bring
 // the stack down. It uses a named project to isolate parallel test runs.
 //
@@ -98,24 +109,28 @@ func runE2E(t *testing.T, project, file string, metricsPort, natsPort int) {
 func dockerComposeUp(t *testing.T, project, file string) {
 	t.Helper()
 
+	name, prefix := composeCommand()
+	compose := func(args ...string) []string {
+		base := append(prefix, "--project-name", project, "--file", file)
+		return append(base, args...)
+	}
+
 	// Pre-run teardown: remove any containers/volumes left over from a prior
 	// crashed run.  Errors are intentionally ignored — there may be nothing to
 	// tear down, and a non-zero exit here should not abort the test.
-	teardown := exec.Command("docker-compose", "--project-name", project, "--file", file,
-		"down", "--volumes", "--remove-orphans", "--timeout", "10")
+	teardown := exec.Command(name, compose("down", "--volumes", "--remove-orphans", "--timeout", "10")...)
 	teardown.Stdout = os.Stderr
 	teardown.Stderr = os.Stderr
 	_ = teardown.Run()
 
-	run(t, "docker-compose", "--project-name", project, "--file", file, "up", "--detach")
+	run(t, name, compose("up", "--detach")...)
 
 	t.Cleanup(func() {
 		// --timeout gives containers up to 30 s to shut down gracefully before
 		// Docker kills them; --volumes removes all anonymous and named volumes
 		// (including any Grafana/Prometheus storage) so nothing persists between
 		// test runs.
-		run(t, "docker-compose", "--project-name", project, "--file", file,
-			"down", "--volumes", "--remove-orphans", "--timeout", "30")
+		run(t, name, compose("down", "--volumes", "--remove-orphans", "--timeout", "30")...)
 	})
 }
 
