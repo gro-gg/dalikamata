@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 			{"dalikamata:latest", "deploy/docker/Dockerfile"},
 			{"dalifakes:latest", "deploy/docker/Dockerfile.fakes"},
 		} {
-			cmd := exec.Command("docker", "build", "-t", img.tag, "-f", img.dockerfile, ".")
+			cmd := exec.Command("docker", "build", "--tag", img.tag, "--file", img.dockerfile, ".")
 			cmd.Dir = root
 			cmd.Stdout = os.Stderr
 			cmd.Stderr = os.Stderr
@@ -89,7 +89,7 @@ func runE2E(t *testing.T, project, file string, metricsPort, natsPort int) {
 	checkNATSStream(t, ctx, natsURL)
 }
 
-// dockerComposeUp runs `docker compose up -d` and registers cleanup to bring
+// dockerComposeUp runs `docker-compose up --detach` and registers cleanup to bring
 // the stack down. It uses a named project to isolate parallel test runs.
 //
 // Before starting, it tears down any leftover stack from a previous (possibly
@@ -101,20 +101,20 @@ func dockerComposeUp(t *testing.T, project, file string) {
 	// Pre-run teardown: remove any containers/volumes left over from a prior
 	// crashed run.  Errors are intentionally ignored — there may be nothing to
 	// tear down, and a non-zero exit here should not abort the test.
-	teardown := exec.Command("docker", "compose", "-p", project, "-f", file,
+	teardown := exec.Command("docker-compose", "--project-name", project, "--file", file,
 		"down", "--volumes", "--remove-orphans", "--timeout", "10")
 	teardown.Stdout = os.Stderr
 	teardown.Stderr = os.Stderr
 	_ = teardown.Run()
 
-	run(t, "docker", "compose", "-p", project, "-f", file, "up", "-d")
+	run(t, "docker-compose", "--project-name", project, "--file", file, "up", "--detach")
 
 	t.Cleanup(func() {
 		// --timeout gives containers up to 30 s to shut down gracefully before
 		// Docker kills them; --volumes removes all anonymous and named volumes
 		// (including any Grafana/Prometheus storage) so nothing persists between
 		// test runs.
-		run(t, "docker", "compose", "-p", project, "-f", file,
+		run(t, "docker-compose", "--project-name", project, "--file", file,
 			"down", "--volumes", "--remove-orphans", "--timeout", "30")
 	})
 }
